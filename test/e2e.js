@@ -103,6 +103,11 @@ const login = async (who, email) => {
   ok(db.prepare(`SELECT COUNT(*) c FROM slots WHERE mentor_id=? AND type='hr'`).get(techOnly.id).c === before,
      'a Technical-only mentor cannot be given HR slots');
 
+  await post('admin', '/admin/slots', {
+    type: 'technical', mentor_id: String(tm.id), slot_date: date, start_time: '09:15', duration: '30', count: '1' });
+  ok(db.prepare(`SELECT COUNT(*) c FROM slots WHERE mentor_id=? AND slot_date=? AND start_time='09:15'`).get(tm.id, date).c === 0,
+     'overlapping slots are rejected during creation');
+
   section('Student — booking rules');
   await login('newstudent', 'test.student@student.in');
   const slotA = made[0], slotB = made[1];
