@@ -1,0 +1,51 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Interviews</h1><p class="sub"><%= list.length %> record(s) — schedule, mentor assignment, completion and scores.</p></div>
+</div>
+<div class="card">
+  <div class="card-head">
+    <h2>All interviews</h2>
+    <form method="get" class="btn-row">
+      <select name="type" onchange="this.form.submit()">
+        <option value="">All types</option>
+        <option value="technical" <%= filters.type==='technical'?'selected':'' %>>Technical</option>
+        <option value="hr" <%= filters.type==='hr'?'selected':'' %>>HR</option>
+      </select>
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        <option value="booked" <%= filters.status==='booked'?'selected':'' %>>Booked</option>
+        <option value="completed" <%= filters.status==='completed'?'selected':'' %>>Completed</option>
+      </select>
+      <select name="mentor" onchange="this.form.submit()">
+        <option value="">All mentors</option>
+        <% mentors.forEach(function(m){ %>
+          <option value="<%= m.id %>" <%= String(filters.mentor)===String(m.id)?'selected':'' %>><%= m.name %></option>
+        <% }); %>
+      </select>
+    </form>
+  </div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor</th><th>Status</th><th>Marks</th><th class="num">Score</th></tr></thead>
+      <tbody>
+      <% list.forEach(function(i){ %>
+        <tr>
+          <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %></span></td>
+          <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
+          <td><a href="/admin/students/<%= i.student_id %>"><%= i.student_name %></a><br><span class="faint"><%= i.roll_no || '' %></span></td>
+          <td><%= i.mentor_name %></td>
+          <td><span class="pill p-<%= i.status %>"><%= i.status %></span>
+            <% if (i.status === 'completed' && !i.eval_id) { %><br><span class="faint">awaiting score</span><% } %></td>
+          <td><% if (i.eval_id) { RUBRIC[i.type].criteria.forEach(function(c){ %>
+                <span class="pill p-muted"><%= c.label.split(' ')[0] %> <%= i[c.key] %>/<%= c.max %></span>
+              <% }); } else { %><span class="faint">—</span><% } %></td>
+          <td class="num"><% if (i.eval_id) { %><strong><%= i.score %></strong><span class="faint">/<%= RUBRIC[i.type].total %></span>
+            <% } else { %><span class="faint">—</span><% } %></td>
+        </tr>
+      <% }); %>
+      <% if (!list.length) { %><tr><td colspan="7" class="empty">No interviews match.</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

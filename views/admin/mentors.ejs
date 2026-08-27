@@ -1,0 +1,67 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Mentors</h1><p class="sub">Mentors are assigned by you — students can never change their mentor.</p></div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Add a mentor</h2></div>
+  <div class="card-body">
+    <form method="post" action="/admin/mentors">
+      <div class="row">
+        <div class="field"><label>Full name *</label><input name="name" required></div>
+        <div class="field"><label>Email *</label><input type="email" name="email" required></div>
+        <div class="field"><label>Password *</label><input name="password" required minlength="6" value="pass123"></div>
+        <div class="field"><label>Phone</label><input name="phone"></div>
+      </div>
+      <label class="check"><input type="checkbox" name="can_technical" value="1" checked> Can take Technical interviews</label>
+      <label class="check"><input type="checkbox" name="can_hr" value="1"> Can take HR interviews</label>
+      <button class="btn primary" style="margin-top:8px">Add mentor</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>All mentors</h2></div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead><tr><th>Mentor</th><th>Conducts</th><th class="num">Slots</th><th class="num">Upcoming</th>
+        <th class="num">Completed</th><th></th></tr></thead>
+      <tbody>
+      <% mentors.forEach(function(m){ %>
+        <tr>
+          <td><strong><%= m.name %></strong><br><span class="faint"><%= m.email %></span>
+            <% if (!m.active) { %> <span class="pill p-cancelled">inactive</span><% } %></td>
+          <td><% if (m.can_technical) { %><span class="pill p-technical">Technical</span> <% } %>
+              <% if (m.can_hr) { %><span class="pill p-hr">HR</span><% } %>
+              <% if (!m.can_technical && !m.can_hr) { %><span class="faint">—</span><% } %></td>
+          <td class="num"><%= m.slot_count %></td>
+          <td class="num"><%= m.upcoming %></td>
+          <td class="num"><%= m.done %></td>
+          <td>
+            <details class="inline"><summary>Edit</summary>
+              <div class="panel">
+                <form method="post" action="/admin/mentors/<%= m.id %>/update">
+                  <div class="row">
+                    <div class="field"><label>Name</label><input name="name" value="<%= m.name %>" required></div>
+                    <div class="field"><label>Phone</label><input name="phone" value="<%= m.phone || '' %>"></div>
+                  </div>
+                  <label class="check"><input type="checkbox" name="can_technical" value="1" <%= m.can_technical ? 'checked' : '' %>> Technical</label>
+                  <label class="check"><input type="checkbox" name="can_hr" value="1" <%= m.can_hr ? 'checked' : '' %>> HR</label>
+                  <label class="check"><input type="checkbox" name="active" value="1" <%= m.active ? 'checked' : '' %>> Active</label>
+                  <button class="btn primary sm">Save</button>
+                </form>
+                <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:10px">
+                  <input name="password" placeholder="New password" minlength="6" required style="max-width:180px">
+                  <button class="btn sm">Reset password</button>
+                </form>
+              </div>
+            </details>
+          </td>
+        </tr>
+      <% }); %>
+      <% if (!mentors.length) { %><tr><td colspan="6" class="empty">No mentors yet.</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

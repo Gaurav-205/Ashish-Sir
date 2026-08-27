@@ -1,0 +1,64 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Admin dashboard</h1><p class="sub">Full visibility over slots, bookings, mentors and results.</p></div>
+  <div class="btn-row"><a class="btn" href="/admin/slots">Create slots</a><a class="btn primary" href="/admin/reports">View reports</a></div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="n"><%= stats.students %></div><div class="l">Students</div></div>
+  <div class="stat"><div class="n"><%= stats.mentors %></div><div class="l">Mentors</div></div>
+  <div class="stat"><div class="n"><%= stats.openSlots %><small class="faint"> / <%= stats.slots %></small></div><div class="l">Open slots</div></div>
+  <div class="stat"><div class="n"><%= stats.fullyBooked %><small class="faint"> / <%= stats.students %></small></div><div class="l">Fully booked</div></div>
+  <div class="stat"><div class="n"><%= stats.booked %></div><div class="l">Upcoming</div></div>
+  <div class="stat"><div class="n"><%= stats.completed %></div><div class="l">Completed</div></div>
+  <div class="stat"><div class="n"><%= stats.evaluated %></div><div class="l">Evaluated</div></div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <div class="card-head"><h2>Upcoming interviews</h2><a class="faint" href="/admin/interviews?status=booked">See all</a></div>
+    <div class="card-body tight">
+      <% if (!upcoming.length) { %><div class="empty">Nothing booked yet.</div><% } else { %>
+      <div class="table-scroll"><table>
+        <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor</th></tr></thead>
+        <tbody><% upcoming.forEach(function(i){ %>
+          <tr>
+            <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %></span></td>
+            <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
+            <td><%= i.student_name %></td><td><%= i.mentor_name %></td>
+          </tr><% }); %></tbody>
+      </table></div><% } %>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Awaiting evaluation</h2></div>
+    <div class="card-body tight">
+      <% if (!pendingEval.length) { %><div class="empty">Every completed interview has been scored.</div><% } else { %>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Student</th><th>Type</th><th>Mentor</th><th>Date</th></tr></thead>
+        <tbody><% pendingEval.forEach(function(i){ %>
+          <tr><td><%= i.student_name %></td>
+            <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
+            <td><%= i.mentor_name %></td><td class="faint"><%= h.fmtDate(i.slot_date) %></td></tr>
+        <% }); %></tbody>
+      </table></div><% } %>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Students yet to finish booking</h2>
+    <span class="faint">Each student needs 1 Technical + 1 HR within the week</span></div>
+  <div class="card-body tight">
+    <% if (!notBooked.length) { %><div class="empty">Every student has booked both interviews. 🎉</div><% } else { %>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Roll no</th><th>Student</th><th>Booked</th><th></th></tr></thead>
+      <tbody><% notBooked.forEach(function(s){ %>
+        <tr><td class="mono"><%= s.roll_no || '—' %></td><td><%= s.name %></td>
+          <td><span class="pill <%= s.booked === 0 ? 'p-cancelled' : 'p-booked' %>"><%= s.booked %> of 2</span></td>
+          <td class="num"><a class="btn sm" href="/admin/students/<%= s.id %>">View</a></td></tr>
+      <% }); %></tbody>
+    </table></div><% } %>
+  </div>
+</div>
+<%- include('../partials/foot') %>

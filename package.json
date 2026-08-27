@@ -1,0 +1,24 @@
+{
+  "name": "konfident-interview-2025",
+  "version": "1.0.0",
+  "description": "Interview management system for Konfident Interview 2025 - students book slots, mentors evaluate, admin manages everything.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node src/seed.js",
+    "test": "node test/e2e.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-sqlite3": "^0.9.18",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

@@ -1,0 +1,52 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Students</h1><p class="sub"><%= summaries.length %> registered · each needs one Technical and one HR interview.</p></div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Add a student</h2></div>
+  <div class="card-body">
+    <form method="post" action="/admin/students">
+      <div class="row">
+        <div class="field"><label>Full name *</label><input name="name" required></div>
+        <div class="field"><label>Email *</label><input type="email" name="email" required></div>
+        <div class="field"><label>Password *</label><input name="password" required minlength="6" value="pass123"></div>
+        <div class="field"><label>Roll no</label><input name="roll_no"></div>
+        <div class="field"><label>Branch</label><input name="branch" placeholder="CSE"></div>
+        <div class="field"><label>Phone</label><input name="phone"></div>
+        <div class="field"><label>Resume link</label><input type="url" name="resume_url" placeholder="https://…"></div>
+      </div>
+      <button class="btn primary">Add student</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>All students</h2></div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead><tr><th>Roll no</th><th>Student</th><th>Technical</th><th>HR</th>
+        <th class="num">Score</th><th></th></tr></thead>
+      <tbody>
+      <% summaries.forEach(function(s){ %>
+        <tr>
+          <td class="mono"><%= s.student.roll_no || '—' %></td>
+          <td><strong><%= s.student.name %></strong><br><span class="faint"><%= s.student.email %><%= s.student.branch ? ' · ' + s.student.branch : '' %></span>
+            <% if (!s.student.active) { %> <span class="pill p-cancelled">inactive</span><% } %></td>
+          <td><% if (!s.technical) { %><span class="pill p-cancelled">not booked</span>
+              <% } else { %><span class="pill p-<%= s.technical.status %>"><%= s.technical.status %></span>
+              <div class="faint"><%= h.fmtDate(s.technical.slot_date) %> · <%= s.technical.mentor_name %></div><% } %></td>
+          <td><% if (!s.hr) { %><span class="pill p-cancelled">not booked</span>
+              <% } else { %><span class="pill p-<%= s.hr.status %>"><%= s.hr.status %></span>
+              <div class="faint"><%= h.fmtDate(s.hr.slot_date) %> · <%= s.hr.mentor_name %></div><% } %></td>
+          <td class="num"><% if (s.allEvaluated) { %><strong><%= s.total %></strong><span class="faint">/<%= GRAND_TOTAL %></span>
+            <% } else { %><span class="faint">—</span><% } %></td>
+          <td class="num"><a class="btn sm" href="/admin/students/<%= s.student.id %>">Open</a></td>
+        </tr>
+      <% }); %>
+      <% if (!summaries.length) { %><tr><td colspan="6" class="empty">No students yet.</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<%- include('../partials/foot') %>

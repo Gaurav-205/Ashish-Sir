@@ -1,0 +1,52 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Hello, <%= s.student.name.split(' ')[0] %></h1>
+    <p class="sub">You need to complete <strong>one Technical</strong> and <strong>one HR</strong> interview this week.</p></div>
+  <% if (s.allEvaluated) { %><a class="btn primary" href="/student/results">View my results</a><% } %>
+</div>
+
+<div class="card"><div class="card-body">
+  <div class="timeline">
+    <div class="step <%= s.allBooked ? 'done' : 'todo' %>"><div class="k">Step 1</div><strong>Book both slots</strong>
+      <div class="faint"><%= s.bookedCount %> of 2 booked</div></div>
+    <div class="step <%= s.completedCount === 2 ? 'done' : '' %>"><div class="k">Step 2</div><strong>Attend interviews</strong>
+      <div class="faint"><%= s.completedCount %> of 2 completed</div></div>
+    <div class="step <%= s.allEvaluated ? 'done' : '' %>"><div class="k">Step 3</div><strong>Get results</strong>
+      <div class="faint"><%= s.evaluatedCount %> of 2 evaluated</div></div>
+  </div>
+</div></div>
+
+<div class="grid two">
+<% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+  <div class="card">
+    <div class="card-head"><h2><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span> Interview</h2>
+      <span class="faint">out of <%= RUBRIC[t].total %> marks</span></div>
+    <div class="card-body">
+      <% if (!iv) { %>
+        <p class="muted">Not booked yet. <%= open[t] %> slot(s) currently available.</p>
+        <a class="btn primary" href="/student/slots?type=<%= t %>">Book <%= h.titleCase(t) %> slot</a>
+      <% } else { %>
+        <p><strong><%= h.fmtSlot(iv) %></strong><br>
+          <span class="muted">Mentor: <%= iv.mentor_name %></span><br>
+          <span class="muted"><%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></span></p>
+        <p><span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+          <% if (iv.status === 'completed' && !iv.eval_id) { %>
+            <span class="faint">— result will appear once your mentor submits the evaluation.</span><% } %></p>
+        <% if (iv.eval_id) { %>
+          <div class="big-score"><%= iv.score %><small>/<%= RUBRIC[t].total %></small></div>
+          <div class="bar"><span style="width:<%= (iv.score / RUBRIC[t].total * 100).toFixed(0) %>%"></span></div>
+          <p style="margin-top:12px"><a href="/student/results">See the full breakdown →</a></p>
+        <% } else if (iv.status === 'booked') { %>
+          <form method="post" action="/student/cancel/<%= iv.id %>"
+                onsubmit="return confirm('Cancel this booking? You will need to book another slot.')">
+            <button class="btn sm danger">Cancel booking</button>
+          </form>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+<% }); %>
+</div>
+
+<div class="note">You cannot choose or change your mentor — mentors are assigned by the admin to each slot.</div>
+<%- include('../partials/foot') %>

@@ -1,0 +1,52 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>My results</h1><p class="sub">Overall evaluation is out of <%= GRAND_TOTAL %> marks.</p></div>
+</div>
+
+<% if (!s.allEvaluated) { %>
+  <div class="note">Your final result appears here once <strong>both</strong> interviews are completed and your mentors submit their evaluations.
+    So far: <%= s.evaluatedCount %> of 2 evaluated.</div>
+<% } else { %>
+  <div class="card"><div class="card-body">
+    <div class="grid three">
+      <div><div class="l faint">Technical</div><div class="big-score"><%= s.techScore %><small>/<%= RUBRIC.technical.total %></small></div></div>
+      <div><div class="l faint">HR</div><div class="big-score"><%= s.hrScore %><small>/<%= RUBRIC.hr.total %></small></div></div>
+      <div><div class="l faint">Overall</div><div class="big-score"><%= s.total %><small>/<%= GRAND_TOTAL %></small></div>
+        <div style="margin-top:8px"><span class="pill <%= grade(s.percent).cls %>"><%= grade(s.percent).label %> · <%= s.percent %>%</span></div>
+        <div class="bar"><span style="width:<%= s.percent %>%"></span></div></div>
+    </div>
+  </div></div>
+<% } %>
+
+<div class="grid two">
+<% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+  <div class="card">
+    <div class="card-head"><h2><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span> Interview</h2>
+      <% if (iv && iv.eval_id) { %><strong><%= iv.score %>/<%= RUBRIC[t].total %></strong><% } %></div>
+    <div class="card-body">
+      <% if (!iv) { %><p class="muted">Not booked yet. <a href="/student/slots?type=<%= t %>">Book a slot →</a></p>
+      <% } else { %>
+        <p class="faint"><%= h.fmtSlot(iv) %> · Mentor: <%= iv.mentor_name %> ·
+          <span class="pill p-<%= iv.status %>"><%= iv.status %></span></p>
+        <% if (iv.eval_id) { %>
+          <div class="table-scroll"><table>
+            <thead><tr><th>Criteria</th><th class="num">Marks</th><th class="num">Max</th></tr></thead>
+            <tbody>
+            <% RUBRIC[t].criteria.forEach(function(c){ %>
+              <tr><td><%= c.label %></td><td class="num"><strong><%= iv[c.key] %></strong></td><td class="num faint"><%= c.max %></td></tr>
+            <% }); %>
+              <tr><td><strong>Total</strong></td><td class="num"><strong><%= iv.score %></strong></td><td class="num faint"><%= RUBRIC[t].total %></td></tr>
+            </tbody>
+          </table></div>
+          <% if (iv.feedback) { %>
+            <div style="margin-top:14px"><div class="l faint">Mentor feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div>
+          <% } %>
+        <% } else { %>
+          <p class="muted">Evaluation not submitted yet.</p>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+<% }); %>
+</div>
+<%- include('../partials/foot') %>

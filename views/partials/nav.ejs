@@ -1,0 +1,26 @@
+<%
+const links = {
+  admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
+          ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
+  mentor: [['/mentor','My interviews']],
+  student: [['/student','Dashboard'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
+}[user.role] || [];
+const initials = user.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+%>
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">Konfident <span>Interview 2025</span></div>
+    <nav class="nav">
+      <% links.forEach(function(l){ %>
+        <a href="<%= l[0] %>" class="<%= path === l[0].split('?')[0] ? 'on' : '' %>"><%= l[1] %></a>
+      <% }); %>
+    </nav>
+    <div class="who">
+      <a href="/profile" title="My profile"><span class="avatar"><%= initials %></span></a>
+      <span class="name"><%= user.name %> · <%= user.role %></span>
+      <form method="post" action="/logout"><button class="btn sm">Sign out</button></form>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+<% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.msg %></div><% } %>

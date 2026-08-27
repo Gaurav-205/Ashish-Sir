@@ -1,0 +1,24 @@
+<%- include('partials/head') %>
+<div class="login-page">
+  <div class="login-card">
+    <h1>Konfident Interview 2025</h1>
+    <p class="sub">Sign in to book, conduct or manage interviews.</p>
+    <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+    <form method="post" action="/login">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" value="<%= email %>" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required>
+      </div>
+      <button class="btn primary" style="width:100%;justify-content:center">Sign in</button>
+    </form>
+    <div class="demo-creds">
+      <strong>Demo accounts</strong> (all use password <code>pass123</code>)<br>
+      Admin <code>admin@konfident.in</code> · Mentor <code>arjun.mentor@konfident.in</code> · Student <code>aisha@student.in</code>
+    </div>
+  </div>
+</div>
+</body></html>

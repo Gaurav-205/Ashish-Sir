@@ -1,0 +1,133 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Interview slots</h1><p class="sub">Students can only book from slots you publish here. One slot = one student.</p></div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Create slots</h2><span class="faint">Generate several back-to-back slots at once</span></div>
+  <div class="card-body">
+    <form method="post" action="/admin/slots">
+      <div class="row">
+        <div class="field"><label>Interview type *</label>
+          <select name="type" id="typeSel" required>
+            <option value="technical">Technical</option>
+            <option value="hr">HR</option>
+          </select></div>
+        <div class="field"><label>Mentor *</label>
+          <select name="mentor_id" id="mentorSel" required>
+            <% techMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="technical"><%= m.name %></option><% }); %>
+            <% hrMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="hr" hidden><%= m.name %></option><% }); %>
+          </select>
+          <div class="hint">Only mentors enabled for that interview type are listed.</div></div>
+        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= defaultDate %>" required></div>
+        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" required></div>
+        <div class="field"><label>Slot length (min)</label><input type="number" name="duration" value="30" min="10" max="180"></div>
+        <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
+        <div class="field"><label>Mode</label>
+          <select name="mode"><option>Online</option><option>Offline</option></select></div>
+        <div class="field"><label>Link / room</label><input name="location" placeholder="https://meet… or Room 204"></div>
+      </div>
+      <button class="btn primary">Create slots</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>All slots (<%= slots.length %>)</h2>
+    <form method="get" class="btn-row">
+      <select name="when" onchange="this.form.submit()">
+        <option value="upcoming" <%= filter.when==='upcoming'?'selected':'' %>>Today &amp; upcoming</option>
+        <option value="past" <%= filter.when==='past'?'selected':'' %>>Past</option>
+        <option value="all" <%= filter.when==='all'?'selected':'' %>>All dates</option>
+      </select>
+      <input type="date" name="date" value="<%= filter.date %>" onchange="this.form.submit()" style="max-width:170px">
+      <select name="type" onchange="this.form.submit()">
+        <option value="">All types</option>
+        <option value="technical" <%= filter.type==='technical'?'selected':'' %>>Technical</option>
+        <option value="hr" <%= filter.type==='hr'?'selected':'' %>>HR</option>
+      </select>
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        <option value="open" <%= filter.status==='open'?'selected':'' %>>Open</option>
+        <option value="booked" <%= filter.status==='booked'?'selected':'' %>>Booked</option>
+        <option value="cancelled" <%= filter.status==='cancelled'?'selected':'' %>>Cancelled</option>
+      </select>
+    </form>
+  </div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead><tr><th>Date &amp; time</th><th>Type</th><th>Mentor</th><th>Status</th><th>Booked by</th><th></th></tr></thead>
+      <tbody>
+      <% slots.forEach(function(s){ %>
+        <tr>
+          <td><%= h.fmtDate(s.slot_date) %><br><span class="faint"><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></span></td>
+          <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
+          <td><%= s.mentor_name %><br><span class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></span></td>
+          <td><span class="pill p-<%= s.status %>"><%= s.status %></span>
+              <% if (s.interview_status === 'completed') { %><br><span class="pill p-completed">interview done</span><% } %></td>
+          <td><% if (s.student_name) { %><%= s.student_name %><br><span class="faint"><%= s.roll_no || '' %></span>
+              <% } else { %><span class="faint">—</span><% } %></td>
+          <td class="num">
+            <details class="inline"><summary>Manage</summary>
+              <div class="panel" style="text-align:left;min-width:280px">
+                <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
+                <form method="post" action="/admin/slots/<%= s.id %>/reschedule">
+                  <div class="row">
+                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" required></div>
+                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" required></div>
+                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" required></div>
+                  </div>
+                  <div class="field"><label>Mentor</label>
+                    <select name="mentor_id">
+                      <% (s.type === 'hr' ? hrMentors : techMentors).forEach(function(m){ %>
+                        <option value="<%= m.id %>" <%= m.id === s.mentor_id ? 'selected' : '' %>><%= m.name %></option>
+                      <% }); %>
+                    </select></div>
+                  <div class="row">
+                    <div class="field"><label>Mode</label><select name="mode">
+                      <option <%= s.mode==='Online'?'selected':'' %>>Online</option>
+                      <option <%= s.mode==='Offline'?'selected':'' %>>Offline</option></select></div>
+                    <div class="field"><label>Link / room</label><input name="location" value="<%= s.location || '' %>"></div>
+                  </div>
+                  <button class="btn primary sm">Save / reschedule</button>
+                </form>
+                <% } %>
+                <div class="btn-row" style="margin-top:10px">
+                  <% if (s.status === 'booked' && s.interview_status !== 'completed') { %>
+                    <form method="post" action="/admin/slots/<%= s.id %>/release"><button class="btn sm">Release booking</button></form>
+                  <% } %>
+                  <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
+                    <form method="post" action="/admin/slots/<%= s.id %>/cancel"><button class="btn sm danger">Cancel slot</button></form>
+                  <% } %>
+                  <% if (s.status === 'cancelled') { %>
+                    <form method="post" action="/admin/slots/<%= s.id %>/reopen"><button class="btn sm">Reopen</button></form>
+                  <% } %>
+                </div>
+              </div>
+            </details>
+          </td>
+        </tr>
+      <% }); %>
+      <% if (!slots.length) { %><tr><td colspan="6" class="empty">No slots match.</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<script>
+(function(){
+  var t = document.getElementById('typeSel'), m = document.getElementById('mentorSel');
+  if(!t||!m) return;
+  function sync(){
+    var v = t.value, first = null;
+    Array.prototype.forEach.call(m.options, function(o){
+      var match = o.dataset.type === v;
+      o.hidden = !match; o.disabled = !match;
+      if (match && !first) first = o;
+    });
+    if (first && (m.selectedOptions[0] || {}).hidden !== false) m.value = first.value;
+  }
+  t.addEventListener('change', sync); sync();
+})();
+</script>
+<%- include('../partials/foot') %>

@@ -1,0 +1,46 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1>Available <%= h.titleCase(type) %> slots</h1>
+    <p class="sub">Pick any open slot. Each slot can be taken by one student only.</p></div>
+  <div class="btn-row">
+    <a class="btn <%= type==='technical'?'primary':'' %>" href="/student/slots?type=technical">Technical</a>
+    <a class="btn <%= type==='hr'?'primary':'' %>" href="/student/slots?type=hr">HR</a>
+  </div>
+</div>
+
+<% if (already) { %>
+  <div class="note">You have already booked your <%= h.titleCase(type) %> interview —
+    <strong><%= h.fmtSlot(already) %></strong> with <%= already.mentor_name %>.
+    <% if (already.status === 'booked') { %> Cancel it from your <a href="/student">dashboard</a> if you need a different time.<% } %>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-head"><h2>Open slots</h2><span class="faint">Times shown are interview start times</span></div>
+  <div class="card-body tight">
+    <% if (!byDate.length) { %>
+      <div class="empty">No open <%= h.titleCase(type) %> slots right now. Please check back — the admin adds slots regularly.</div>
+    <% } %>
+    <% byDate.forEach(function(g){ %>
+      <div class="slot-day">
+        <h3><%= h.fmtDate(g.date) %></h3>
+        <div class="slot-list">
+          <% g.slots.forEach(function(sl){ %>
+            <div class="slot">
+              <div class="t"><%= h.fmtTime(sl.start_time) %> – <%= h.fmtTime(sl.end_time) %></div>
+              <div class="m"><%= sl.mentor_name %> · <%= sl.mode %></div>
+              <form method="post" action="/student/book">
+                <input type="hidden" name="slot_id" value="<%= sl.id %>">
+                <input type="hidden" name="type" value="<%= type %>">
+                <button class="btn primary sm" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
+                  <%= already ? 'Already booked' : 'Book this slot' %>
+                </button>
+              </form>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+</div>
+<%- include('../partials/foot') %>

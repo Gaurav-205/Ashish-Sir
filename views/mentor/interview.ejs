@@ -1,0 +1,78 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div><h1><%= iv.student_name %></h1>
+    <p class="sub"><span class="pill p-<%= iv.type %>"><%= h.titleCase(iv.type) %></span>
+      <%= h.fmtSlot(iv) %> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></p></div>
+  <a class="btn" href="/mentor">← Back</a>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <div class="card-head"><h2>Candidate</h2><span class="pill p-<%= iv.status %>"><%= iv.status %></span></div>
+    <div class="card-body">
+      <p><strong><%= iv.student_name %></strong><br>
+        <span class="muted"><%= iv.student_email %></span><br>
+        <span class="muted"><%= iv.roll_no || '—' %><%= iv.branch ? ' · ' + iv.branch : '' %></span></p>
+      <% if (iv.resume_url) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener">Open resume ↗</a></p>
+      <% } else { %><p class="faint">No resume link on file.</p><% } %>
+
+      <% if (iv.status === 'booked') { %>
+        <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+        <p class="muted">Mark the interview as completed once you have conducted it — then you can submit scores.</p>
+        <form method="post" action="/mentor/interview/<%= iv.id %>/complete">
+          <button class="btn primary">Mark interview as completed</button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Evaluation</h2><span class="faint">out of <%= RUBRIC[iv.type].total %> marks</span></div>
+    <div class="card-body">
+      <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+
+      <% if (iv.eval_id) { %>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Criteria</th><th class="num">Marks</th><th class="num">Max</th></tr></thead>
+          <tbody>
+          <% RUBRIC[iv.type].criteria.forEach(function(c){ %>
+            <tr><td><%= c.label %></td><td class="num"><strong><%= iv[c.key] %></strong></td><td class="num faint"><%= c.max %></td></tr>
+          <% }); %>
+            <tr><td><strong>Total</strong></td><td class="num"><strong><%= iv.score %></strong></td><td class="num faint"><%= RUBRIC[iv.type].total %></td></tr>
+          </tbody>
+        </table></div>
+        <% if (iv.feedback) { %><div style="margin-top:14px"><div class="l faint">Feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div><% } %>
+        <p class="faint" style="margin-top:12px">Submitted <%= iv.submitted_at %>. Evaluations are final — contact the admin for corrections.</p>
+
+      <% } else if (iv.status !== 'completed') { %>
+        <p class="muted">Scores can be entered only after the interview is marked completed.</p>
+
+      <% } else { %>
+        <form method="post" action="/mentor/interview/<%= iv.id %>/evaluate" id="evalForm">
+          <div class="row">
+            <% RUBRIC[iv.type].criteria.forEach(function(c){ %>
+              <div class="field">
+                <label><%= c.label %> (0–<%= c.max %>) *</label>
+                <input type="number" class="mark" name="<%= c.key %>" min="0" max="<%= c.max %>" step="1"
+                       value="<%= form[c.key] || '' %>" required>
+              </div>
+            <% }); %>
+          </div>
+          <div class="field"><label>Feedback (optional)</label>
+            <textarea name="feedback" placeholder="Strengths, areas to improve…"><%= form.feedback || '' %></textarea></div>
+          <p><strong>Total: <span id="tot">0</span> / <%= RUBRIC[iv.type].total %></strong></p>
+          <button class="btn primary" onclick="return confirm('Submit this evaluation? It cannot be edited afterwards.')">Submit evaluation</button>
+        </form>
+        <script>
+        (function(){
+          var f = document.getElementById('evalForm'); if(!f) return;
+          var ins = f.querySelectorAll('.mark'), out = document.getElementById('tot');
+          function calc(){ var t=0; ins.forEach(function(i){ var v=parseInt(i.value,10); if(!isNaN(v)) t+=v; }); out.textContent=t; }
+          ins.forEach(function(i){ i.addEventListener('input', calc); }); calc();
+        })();
+        </script>
+      <% } %>
+    </div>
+  </div>
+</div>
+<%- include('../partials/foot') %>
