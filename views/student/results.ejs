@@ -1,6 +1,14 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>My results</h1><p class="sub">Overall evaluation is out of <%= GRAND_TOTAL %> marks.</p></div>
+  <div>
+    <h1>My results &amp; scorecard</h1>
+    <p class="sub">Candidate: <strong><%= s.student.name %></strong> · Roll No: <strong><%= s.student.roll_no || '—' %></strong> · Branch: <strong><%= s.student.branch || '—' %></strong></p>
+  </div>
+  <% if (s.allEvaluated) { %>
+    <button class="btn sm" onclick="window.print()" style="display:inline-flex;align-items:center;gap:6px">
+      🖨️ Print scorecard / Save PDF
+    </button>
+  <% } %>
 </div>
 
 <% if (!s.allEvaluated) { %>

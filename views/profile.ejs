@@ -1,17 +1,49 @@
 <%- include('partials/head') %><%- include('partials/nav') %>
 <div class="page-head"><div><h1>My profile</h1></div></div>
 <div class="grid two">
-  <div class="card"><div class="card-head"><h2>Details</h2></div><div class="card-body">
-    <p><strong><%= me.name %></strong><br><span class="muted"><%= me.email %></span></p>
-    <p class="faint">Role: <%= me.role %><% if (me.roll_no) { %> · Roll no: <%= me.roll_no %><% } %><% if (me.branch) { %> · <%= me.branch %><% } %></p>
-    <% if (me.role === 'mentor') { %>
-      <p class="faint">Conducts:
-        <% if (me.can_technical) { %><span class="pill p-tech">Technical</span><% } %>
-        <% if (me.can_hr) { %><span class="pill p-hr">HR</span><% } %>
-        <% if (!me.can_technical && !me.can_hr) { %>—<% } %>
-      </p>
-    <% } %>
-  </div></div>
+  <div class="card">
+    <div class="card-head"><h2>My details</h2></div>
+    <div class="card-body">
+      <form method="post" action="/profile/update">
+        <div class="field">
+          <label>Full name</label>
+          <input name="name" value="<%= me.name %>" required>
+        </div>
+        <div class="field">
+          <label>Email (read-only)</label>
+          <input value="<%= me.email %>" disabled class="muted">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Phone number</label>
+            <input name="phone" value="<%= me.phone || '' %>" placeholder="+91 98765 43210">
+          </div>
+          <% if (me.role === 'student') { %>
+            <div class="field">
+              <label>Branch / Specialization</label>
+              <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE">
+            </div>
+          <% } %>
+        </div>
+        <% if (me.role === 'student') { %>
+          <div class="field">
+            <label>Resume link (Google Drive / Notion / Portfolio)</label>
+            <input type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…">
+          </div>
+        <% } %>
+        <p class="faint" style="margin-bottom:12px">
+          Role: <strong><%= me.role %></strong>
+          <% if (me.roll_no) { %> · Roll No: <strong><%= me.roll_no %></strong><% } %>
+          <% if (me.role === 'mentor') { %>
+            · Capabilities:
+            <% if (me.can_technical) { %><span class="pill p-technical">Technical</span><% } %>
+            <% if (me.can_hr) { %><span class="pill p-hr">HR</span><% } %>
+          <% } %>
+        </p>
+        <button class="btn primary sm">Save profile details</button>
+      </form>
+    </div>
+  </div>
   <div class="card"><div class="card-head"><h2>Change password</h2></div><div class="card-body">
     <% if (error) { %><div class="flash err"><%= error %></div><% } %>
     <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>

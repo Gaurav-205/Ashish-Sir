@@ -171,6 +171,20 @@ router.get('/profile', requireLogin, (req, res) => {
   });
 });
 
+router.post('/profile/update', requireLogin, (req, res) => {
+  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const name = String(req.body.name || '').trim() || me.name;
+  const phone = String(req.body.phone || '').trim() || null;
+  const branch = me.role === 'student' ? (String(req.body.branch || '').trim() || null) : me.branch;
+  const resume_url = me.role === 'student' ? (String(req.body.resume_url || '').trim() || null) : me.resume_url;
+
+  db.prepare('UPDATE users SET name=?, phone=?, branch=?, resume_url=? WHERE id=?')
+    .run(name, phone, branch, resume_url, me.id);
+  req.session.user.name = name;
+  req.session.flash = { type: 'ok', msg: 'Profile details updated successfully.' };
+  res.redirect('/profile');
+});
+
 router.post('/profile/google/disconnect', requireLogin, (req, res) => {
   db.prepare(`UPDATE users SET google_id=NULL, google_access_token=NULL, google_refresh_token=NULL,
               google_token_expiry=NULL, google_calendar_enabled=0 WHERE id=?`)

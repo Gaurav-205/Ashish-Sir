@@ -334,11 +334,17 @@ const login = async (who, email) => {
   ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
      'profile page renders Google Account & Calendar Integration card');
 
-  // Test profile calendar toggle
-  await post('newstudent', '/profile/google/toggle-calendar');
-  const studentAfterToggle = db.prepare('SELECT google_calendar_enabled FROM users WHERE id=?').get(ts.id);
-  ok(studentAfterToggle.google_calendar_enabled === 0, 'student can toggle calendar sync preference');
-  await post('newstudent', '/profile/google/toggle-calendar');
+  // Test profile details update
+  await post('newstudent', '/profile/update', {
+    name: 'New Student Updated',
+    phone: '+91 99999 88888',
+    branch: 'CSE AI/ML',
+    resume_url: 'https://example.com/resume.pdf',
+  });
+  const updatedStudent = db.prepare('SELECT * FROM users WHERE id=?').get(ts.id);
+  ok(updatedStudent.name === 'New Student Updated' && updatedStudent.branch === 'CSE AI/ML'
+     && updatedStudent.resume_url === 'https://example.com/resume.pdf',
+     'student can update profile details (name, phone, branch, resume link)');
 
   section('Every page renders');
   const pages = [

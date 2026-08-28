@@ -574,3 +574,12 @@ details.inline .panel {
   .nav { order: 3; width: 100%; justify-content: flex-start; gap: 14px; }
   .nav a { padding: 6px 0; }
 }
+
+/* ---- Print Scorecard Styles --------------------------- */
+@media print {
+  body { background: #ffffff !important; color: #000000 !important; }
+  .topbar, .btn, form, .note, details.inline { display: none !important; }
+  .wrap { padding: 0 !important; max-width: 100% !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+  .page-head h1 { font-size: 24px !important; color: #000 !important; }
+}
