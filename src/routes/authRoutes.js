@@ -4,8 +4,14 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireLogin } = require('../auth');
 const google = require('../services/googleService');
+const { createRateLimiter } = require('../middleware/security');
 
 const router = express.Router();
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many login attempts. Please wait 15 minutes before trying again.',
+});
 
 const HOME = { admin: '/admin', mentor: '/mentor', student: '/student' };
 
@@ -24,7 +30,7 @@ router.get('/login', (req, res) => {
   });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', authLimiter, (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   const row = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
@@ -45,14 +51,17 @@ router.post('/login', (req, res) => {
       googleConfigured: google.isConfigured(),
     });
   }
-  req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role };
+  
   let to = req.session.redirectTo;
-  delete req.session.redirectTo;
   if (to) {
     if (to.startsWith('/admin') && row.role !== 'admin') to = null;
     else if (to.startsWith('/student') && row.role !== 'student') to = null;
     else if (to.startsWith('/mentor') && row.role !== 'mentor') to = null;
   }
+
+  // Session fixation protection
+  req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role };
+  delete req.session.redirectTo;
   res.redirect(to || HOME[row.role]);
 });
 

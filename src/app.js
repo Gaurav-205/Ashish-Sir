@@ -6,21 +6,30 @@ const SQLiteStore = require('connect-sqlite3')(session);
 
 const helpers = require('./helpers');
 const { RUBRIC, GRAND_TOTAL, grade } = require('./rubric');
+const { securityHeaders } = require('./middleware/security');
 
 const app = express();
 
+app.disable('x-powered-by');
+app.use(securityHeaders);
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1d' }));
 
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, '..', 'data') }),
   secret: process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 8, httpOnly: true, sameSite: 'lax' },
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 8,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  },
 }));
 
 // flash messages
@@ -48,7 +57,10 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error(err);
-  res.status(500).render('error', { title: 'Something went wrong', message: err.message });
+  const message = process.env.NODE_ENV === 'production'
+    ? 'An unexpected error occurred. Please contact the administrator.'
+    : err.message;
+  res.status(500).render('error', { title: 'Something went wrong', message });
 });
 
 module.exports = app;

@@ -297,14 +297,28 @@ router.post('/slots/:id/reopen', (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/release', (req, res) => {
+router.post('/slots/:id/release', async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
   if (!iv) { flash(req, 'err', 'That slot is not booked.'); return res.redirect('/admin/slots'); }
   if (iv.status === 'completed') { flash(req, 'err', 'Completed interviews cannot be released.'); return res.redirect('/admin/slots'); }
-  db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
-  db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(id);
-  flash(req, 'ok', 'Booking released — the slot is open again.');
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
+    db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(id);
+    db.exec('COMMIT');
+
+    if (iv.google_event_id) {
+      const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
+      const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(iv.mentor_id);
+      google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
+    }
+
+    flash(req, 'ok', 'Booking released — the slot is open again.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not release slot: ' + e.message);
+  }
   res.redirect('/admin/slots');
 });
 

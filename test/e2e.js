@@ -37,7 +37,7 @@ async function req(who, method, url, form) {
   const set = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
   if (set.length) jars[who] = set.map((c) => c.split(';')[0]).join('; ');
   const body = await res.text();
-  return { status: res.status, location: res.headers.get('location'), body };
+  return { status: res.status, location: res.headers.get('location'), headers: res.headers, body };
 }
 const get = (w, u) => req(w, 'GET', u);
 const post = (w, u, f) => req(w, 'POST', u, f);
@@ -50,6 +50,12 @@ const login = async (who, email) => {
   const server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = 'http://127.0.0.1:' + server.address().port;
+
+  section('Security & HTTP headers');
+  const homeResp = await get('anon', '/login');
+  ok(homeResp.headers.get('x-content-type-options') === 'nosniff', 'X-Content-Type-Options is nosniff');
+  ok(homeResp.headers.get('x-frame-options') === 'SAMEORIGIN', 'X-Frame-Options is SAMEORIGIN');
+  ok(homeResp.headers.get('content-security-policy') != null, 'Content-Security-Policy is set');
 
   section('Authentication & access control');
   ok((await post('x', '/login', { email: 'admin@konfident.in', password: 'wrong' })).status === 401,
