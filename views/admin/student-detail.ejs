@@ -44,7 +44,7 @@
 
           <% if (iv) { %>
             <div class="faint" style="margin-top:5px;font-size:13px">
-              <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %>
+              <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
             </div>
             <% if (iv.eval_id) { %>
               <div style="margin-top:10px">

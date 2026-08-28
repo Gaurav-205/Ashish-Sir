@@ -25,7 +25,7 @@
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
-        <div class="field"><label>Link / room</label><input name="location" placeholder="https://meet… or Room 204"></div>
+        <div class="field"><label>Link / room *</label><input name="location" placeholder="https://meet… or Room 204" required></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Create slots</button>
@@ -69,7 +69,7 @@
         <tr>
           <td><%= h.fmtDate(s.slot_date) %><br><span class="faint"><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></span></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td><%= s.mentor_name %><br><span class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></span></td>
+          <td><%= s.mentor_name %><br><span class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify ? h.linkify(s.location) : s.location %><% } %></span></td>
           <td><span class="pill p-<%= s.status %>"><%= s.status %></span>
               <% if (s.interview_status === 'completed') { %><br><span class="pill p-completed">interview done</span><% } %></td>
           <td><% if (s.student_name) { %><%= s.student_name %><br><span class="faint"><%= s.roll_no || '' %></span>

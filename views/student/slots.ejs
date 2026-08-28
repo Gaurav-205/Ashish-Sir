@@ -95,7 +95,7 @@
           <% g.slots.forEach(function(sl){ %>
             <div class="slot" id="slot-card-<%= sl.id %>">
               <div class="t"><%= h.fmtTime(sl.start_time) %> – <%= h.fmtTime(sl.end_time) %></div>
-              <div class="m">Mentor: <strong><%= sl.mentor_name %></strong><br><%= sl.mode %><%= sl.location ? ' · ' + sl.location : '' %></div>
+              <div class="m">Mentor: <strong><%= sl.mentor_name %></strong><br><%= sl.mode %><% if (sl.location) { %> · <%- h.linkify ? h.linkify(sl.location) : sl.location %><% } %></div>
               <form method="post" action="/student/book" style="margin:0">
                 <input type="hidden" name="slot_id" value="<%= sl.id %>">
                 <input type="hidden" name="type" value="<%= type %>">

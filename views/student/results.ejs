@@ -58,6 +58,55 @@
   </div>
 <% } %>
 
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head"><h2>Completed &amp; Booked Interviews Table</h2><span class="faint">Your interview timeline &amp; meeting details</span></div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Date</th>
+          <th>Start &amp; End Time</th>
+          <th>Mentor Name / Meet Link</th>
+          <th>Status</th>
+          <th class="num">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+      <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+        <tr>
+          <td><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span></td>
+          <td><%= iv ? h.fmtDate(iv.slot_date) : '—' %></td>
+          <td><%= iv ? h.fmtTime(iv.start_time) + ' – ' + h.fmtTime(iv.end_time) : '—' %></td>
+          <td>
+            <% if (iv) { %>
+              <strong><%= iv.mentor_name %></strong>
+              <% if (iv.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(iv.location) : iv.location %></span><% } %>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (!iv) { %>
+              <span class="pill p-cancelled">Not Booked</span>
+            <% } else { %>
+              <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+            <% } %>
+          </td>
+          <td class="num">
+            <% if (iv && iv.eval_id) { %>
+              <strong><%= iv.score %></strong><span class="faint">/<%= RUBRIC[t].total %></span>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
+        </tr>
+      <% }); %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
 <div class="grid two">
 <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
   <div class="card">
@@ -76,7 +125,7 @@
       <% } else { %>
         <div style="margin-bottom:14px">
           <p class="faint" style="margin-bottom:6px">
-            <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong>
+            <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
           </p>
           <div style="display:flex;gap:6px;align-items:center">
             <span class="pill p-<%= iv.status %>"><%= iv.status %></span>

@@ -2,7 +2,7 @@
 <div class="page-head">
   <div><h1><%= iv.student_name %></h1>
     <p class="sub"><span class="pill p-<%= iv.type %>"><%= h.titleCase(iv.type) %></span>
-      <%= h.fmtSlot(iv) %> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></p></div>
+      <%= h.fmtSlot(iv) %> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %></p></div>
   <a class="btn" href="/mentor">← Back</a>
 </div>
 
