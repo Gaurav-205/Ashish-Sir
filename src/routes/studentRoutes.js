@@ -72,6 +72,56 @@ router.get('/slots', (req, res) => {
   });
 });
 
+router.get('/api/slots/available', (req, res) => {
+  const type = req.query.type === 'hr' ? 'hr' : 'technical';
+  const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
+  const s = q.studentSummary(req.session.user.id);
+  const already = type === 'hr' ? s.hr : s.technical;
+
+  const where = [
+    's.type = ?',
+    "s.status = 'open'",
+    'm.active = 1',
+    "datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')",
+  ];
+  const args = [type];
+  if (mentorId) {
+    where.push('s.mentor_id = ?');
+    args.push(mentorId);
+  }
+
+  const slots = db.prepare(`
+    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email, m.phone AS mentor_phone
+      FROM slots s JOIN users m ON m.id = s.mentor_id
+     WHERE ${where.join(' AND ')}
+     ORDER BY s.slot_date, s.start_time`).all(...args);
+
+  const formattedSlots = slots.map(sl => ({
+    ...sl,
+    dateFormatted: h.fmtDate(sl.slot_date),
+    timeFormatted: `${h.fmtTime(sl.start_time)} – ${h.fmtTime(sl.end_time)}`,
+    slotFormatted: h.fmtSlot(sl),
+  }));
+
+  const byDate = [];
+  for (const slot of formattedSlots) {
+    let g = byDate.find((x) => x.date === slot.slot_date);
+    if (!g) { g = { date: slot.slot_date, dateFormatted: slot.dateFormatted, slots: [] }; byDate.push(g); }
+    g.slots.push(slot);
+  }
+
+  res.json({
+    ok: true,
+    type,
+    already: already ? { id: already.id, status: already.status, mentor_name: already.mentor_name, slotFormatted: h.fmtSlot(already) } : null,
+    count: slots.length,
+    earliest: formattedSlots[0] || null,
+    byDate,
+    slots: formattedSlots,
+    fetchedAt: new Date().toISOString(),
+  });
+});
+
 router.post('/book', async (req, res) => {
   const slotId = Number(req.body.slot_id);
   const studentId = req.session.user.id;

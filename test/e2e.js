@@ -160,6 +160,13 @@ const login = async (who, email) => {
   const filteredSlots = await get('newstudent', `/student/slots?type=technical&mentor=${tm.id}`);
   ok(filteredSlots.status === 200, 'student can filter slots by specific mentor');
 
+  // Auto-fetch slots JSON API
+  const apiSlots = await get('newstudent', `/student/api/slots/available?type=technical`);
+  ok(apiSlots.status === 200, 'platform auto-fetches available slots via API');
+  const apiData = JSON.parse(apiSlots.body);
+  ok(apiData.ok === true && Array.isArray(apiData.slots) && apiData.already !== undefined,
+     'auto-fetch API returns structured available slots payload');
+
   const dash = await get('newstudent', '/student');
   ok(dash.body.includes('Test Mentor'), 'student dashboard shows the assigned mentor');
   ok(dash.body.includes('2 of 2 booked'), 'student dashboard shows booking progress');
