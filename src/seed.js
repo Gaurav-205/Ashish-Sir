@@ -1,14 +1,16 @@
 'use strict';
 /**
- * Konfident Interview 2025 — Database Initializer
+ * Konfident Interview 2025 — Database Initializer & Seeder
  * 
- * Default (Production Clean):
- *   npm run init
- *   -> Initializes clean database schema with only the Root Administrator. Zero mock records.
+ * 1. Development Mode (npm run seed / npm run seed:dev):
+ *    -> Seeds exactly 1 account of each type (Admin, Technical Mentor, HR Mentor, Dual Mentor, Student)
+ *       plus fresh upcoming calendar slots.
  * 
- * Demo / Testing Mode:
- *   npm run seed:demo
- *   -> Seeds demo dataset for local testing.
+ * 2. Clean Production Mode (npm run init / npm run clean-db):
+ *    -> Initializes pristine database with only the Root Administrator account. Zero mock records.
+ * 
+ * 3. Test Mode (npm test):
+ *    -> Populates automated test cohort.
  */
 const bcrypt = require('bcryptjs');
 const db = require('./db');
@@ -27,13 +29,13 @@ const addUser = db.prepare(`INSERT INTO users
   (name,email,password_hash,role,phone,roll_no,branch,resume_url,can_technical,can_hr)
   VALUES (?,?,?,?,?,?,?,?,?,?)`);
 
-// Create Root Administrator
-addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', null, null, null, null, 0, 0);
+// 1. Root Admin Account
+addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, 0, 0);
 
-const isTest = process.env.DB_PATH && process.env.DB_PATH.includes('test.db');
-const seedMock = isTest || process.env.SEED_MOCK === 'true';
+const mode = process.env.SEED_MODE || (process.env.DB_PATH && process.env.DB_PATH.includes('test.db') ? 'test' : 'dev');
 
-if (seedMock) {
+if (mode === 'test') {
+  // Test suite fixture
   const mentors = [
     ['Arjun Mehta',    'arjun.mentor@konfident.in',  1, 0],
     ['Priya Nair',     'priya.mentor@konfident.in',  1, 0],
@@ -109,37 +111,24 @@ if (seedMock) {
     return db.prepare('SELECT * FROM interviews WHERE slot_id=?').get(slot.id);
   }
 
-  const techFeedback = [
-    'Strong fundamentals; explain time complexity more confidently.',
-    'Good project depth. Practise writing clean code under time pressure.',
-    'Resume is well structured. Revise trees and graphs before placements.',
-    'Clear communication. Needs more practice with DP problems.',
-  ];
-  const hrFeedback = [
-    'Confident and articulate. Prepare sharper answers on long-term goals.',
-    'Good attitude and clarity. Work on structuring the "tell me about yourself" answer.',
-    'Polite and composed throughout. Add concrete examples of teamwork.',
-  ];
-  const pick = (arr, i) => arr[i % arr.length];
   const rnd = (min, max, i) => min + ((i * 7 + 3) % (max - min + 1));
-
   students.forEach((st, i) => {
     if (i < 6) {
       const t = book(st, 'technical', true);
       const hr = book(st, 'hr', true);
       if (t) {
         const a = rnd(6, 10, i), b = rnd(5, 10, i + 1), c = rnd(4, 10, i + 2);
-        addEval.run(t.id, t.mentor_id, a, b, c, null, null, a + b + c, pick(techFeedback, i));
+        addEval.run(t.id, t.mentor_id, a, b, c, null, null, a + b + c, 'Strong performance in DSA.');
       }
       if (hr) {
         const a = rnd(6, 10, i + 3), b = rnd(6, 10, i + 4);
-        addEval.run(hr.id, hr.mentor_id, null, null, null, a, b, a + b, pick(hrFeedback, i));
+        addEval.run(hr.id, hr.mentor_id, null, null, null, a, b, a + b, 'Good communication and clarity.');
       }
     } else if (i < 8) {
       const t = book(st, 'technical', true);
       if (t) {
         const a = rnd(5, 10, i), b = rnd(5, 10, i + 2), c = rnd(3, 10, i + 4);
-        addEval.run(t.id, t.mentor_id, a, b, c, null, null, a + b + c, pick(techFeedback, i));
+        addEval.run(t.id, t.mentor_id, a, b, c, null, null, a + b + c, 'Good project depth.');
       }
       book(st, 'hr', false);
     } else if (i < 9) {
@@ -150,40 +139,98 @@ if (seedMock) {
       book(st, 'hr', false);
     }
   });
+} else if (mode === 'dev' || process.env.SEED_DEV === 'true') {
+  // Exactly 1 account of each role
+  // 2. Technical Mentor
+  addUser.run('Arjun Mehta (Tech Mentor)', 'tech.mentor@konfident.in', PW, 'mentor', '+91 98111 11111', null, null, null, 1, 0);
+
+  // 3. HR Mentor
+  addUser.run('Sneha Kulkarni (HR Mentor)', 'hr.mentor@konfident.in', PW, 'mentor', '+91 98222 22222', null, null, null, 0, 1);
+
+  // 4. Dual-Skill Mentor (Technical + HR)
+  addUser.run('Rohit Sharma (Tech & HR)', 'mentor@konfident.in', PW, 'mentor', '+91 98333 33333', null, null, null, 1, 1);
+
+  // 5. Student Account
+  addUser.run('Aisha Khan', 'student@konfident.in', PW, 'student', '+91 98444 44444', 'KON2025001', 'CSE',
+    'https://drive.google.com/sample-resume.pdf', 0, 0);
+
+  // Seed sample available slots for tomorrow and the upcoming week
+  const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
+                              VALUES (?,?,?,?,?,?,?)`);
+  
+  const techMentor = db.prepare('SELECT id FROM users WHERE email=?').get('tech.mentor@konfident.in');
+  const hrMentor = db.prepare('SELECT id FROM users WHERE email=?').get('hr.mentor@konfident.in');
+  const dualMentor = db.prepare('SELECT id FROM users WHERE email=?').get('mentor@konfident.in');
+
+  const tomorrow = h.addDays(h.today(), 1);
+  const dayAfter = h.addDays(h.today(), 2);
+  const day3 = h.addDays(h.today(), 3);
+
+  // Technical slots
+  if (techMentor) {
+    addSlot.run(techMentor.id, 'technical', tomorrow, '10:00', '10:30', 'Online', 'https://meet.google.com/tech-session-1');
+    addSlot.run(techMentor.id, 'technical', tomorrow, '10:30', '11:00', 'Online', 'https://meet.google.com/tech-session-2');
+    addSlot.run(techMentor.id, 'technical', dayAfter, '14:00', '14:30', 'Online', 'https://meet.google.com/tech-session-3');
+  }
+
+  // HR slots
+  if (hrMentor) {
+    addSlot.run(hrMentor.id, 'hr', tomorrow, '11:30', '12:00', 'Online', 'https://meet.google.com/hr-session-1');
+    addSlot.run(hrMentor.id, 'hr', tomorrow, '12:00', '12:30', 'Online', 'https://meet.google.com/hr-session-2');
+    addSlot.run(hrMentor.id, 'hr', dayAfter, '15:00', '15:30', 'Online', 'https://meet.google.com/hr-session-3');
+  }
+
+  // Dual slots
+  if (dualMentor) {
+    addSlot.run(dualMentor.id, 'technical', day3, '10:00', '10:30', 'Online', 'https://meet.google.com/dual-tech');
+    addSlot.run(dualMentor.id, 'hr', day3, '11:00', '11:30', 'Online', 'https://meet.google.com/dual-hr');
+  }
 }
 
 const c = (s) => db.prepare(s).get().c;
-if (seedMock) {
+if (mode === 'dev') {
   console.log(`
-  [Demo Seed Complete]
-    users:      ${c('SELECT COUNT(*) c FROM users')}
-    slots:      ${c('SELECT COUNT(*) c FROM slots')} (${c("SELECT COUNT(*) c FROM slots WHERE status='open'")} open)
-    interviews: ${c('SELECT COUNT(*) c FROM interviews')}
-    evaluations:${c('SELECT COUNT(*) c FROM evaluations')}
+  =============================================================
+  [Development Dataset Initialized — 1 Account of Each Role]
+  =============================================================
+  Password for all accounts: ${adminPassword}
 
-  Demo Credentials:
-    Admin:    admin@konfident.in
-    Mentor:   arjun.mentor@konfident.in
-    Student:  aisha@student.in
-    Password: pass123
+  1. Admin Account:
+     Email:    admin@konfident.in
+     Role:     Platform Administrator
+
+  2. Technical Mentor Account:
+     Email:    tech.mentor@konfident.in
+     Role:     Mentor (Technical Interviews)
+
+  3. HR Mentor Account:
+     Email:    hr.mentor@konfident.in
+     Role:     Mentor (HR Interviews)
+
+  4. Dual-Skill Mentor Account:
+     Email:    mentor@konfident.in
+     Role:     Mentor (Technical + HR Interviews)
+
+  5. Student Account:
+     Email:    student@konfident.in
+     Role:     Student (Candidate: Aisha Khan · Roll: KON2025001)
+
+  -------------------------------------------------------------
+  Open Slots Generated: ${c("SELECT COUNT(*) c FROM slots WHERE status='open'")} available slots
+  Total Accounts:       ${c('SELECT COUNT(*) c FROM users')}
+  =============================================================
   `);
-} else {
+} else if (mode === 'clean') {
   console.log(`
   =============================================================
   [Clean Production Database Initialized]
   =============================================================
-  The mock database has been completely removed.
-  
-  Users:       1 (Root Admin)
+  Users:       1 (Root Admin: ${adminEmail})
   Students:    0
   Mentors:     0
   Slots:       0
   Interviews:  0
   Evaluations: 0
-
-  Root Administrator Login:
-    Email:    ${adminEmail}
-    Password: ${adminPassword}
   =============================================================
   `);
 }
