@@ -13,6 +13,7 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 router.get('/', (req, res) => {
   const id = req.session.user.id;
+  const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(id);
   const all = q.interviewsForMentor(id);
   const upcoming = all.filter((i) => i.status === 'booked');
   const completed = all.filter((i) => i.status === 'completed');
@@ -20,7 +21,68 @@ router.get('/', (req, res) => {
   const slots = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND status='open'
                             AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime')
                             ORDER BY slot_date, start_time`).all(id);
-  res.render('mentor/dashboard', { title: 'My interviews', upcoming, completed, pending, slots });
+  res.render('mentor/dashboard', {
+    title: 'My interviews',
+    upcoming,
+    completed,
+    pending,
+    slots,
+    mentor,
+    defaultDate: h.addDays(h.today(), 1),
+  });
+});
+
+router.post('/slots', (req, res) => {
+  const mentorId = req.session.user.id;
+  const { type, slot_date, start_time, duration, count, mode, location } = req.body;
+  try {
+    const mentor = db.prepare(`SELECT * FROM users WHERE id=? AND role='mentor'`).get(mentorId);
+    if (!mentor) throw new Error('Mentor account not found.');
+    if (type === 'technical' && !mentor.can_technical) throw new Error('Your profile is not enabled for Technical interviews.');
+    if (type === 'hr' && !mentor.can_hr) throw new Error('Your profile is not enabled for HR interviews.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
+    if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
+
+    const mins = Number(duration) || 30;
+    const n = Math.min(Math.max(Number(count) || 1, 1), 20);
+    const [sh, sm] = start_time.split(':').map(Number);
+    let made = 0, skipped = 0;
+    const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
+                            VALUES (?,?,?,?,?,?,?)`);
+    const loc = (location && location.trim()) ? location.trim() : 'https://meet.konfident.in/room';
+
+    for (let k = 0; k < n; k++) {
+      const startMin = sh * 60 + sm + k * mins;
+      const endMin = startMin + mins;
+      if (endMin > 24 * 60) break;
+      const fmt = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      const s_time = fmt(startMin);
+      const e_time = fmt(endMin);
+
+      const overlap = db.prepare(`
+        SELECT 1 FROM slots
+         WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
+           AND start_time < ? AND end_time > ?
+      `).get(mentorId, slot_date, e_time, s_time);
+
+      if (overlap) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        ins.run(mentorId, type, slot_date, s_time, e_time, mode || 'Online', loc);
+        made++;
+      } catch (e) {
+        if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
+      }
+    }
+    flash(req, made ? 'ok' : 'err',
+      `${made} slot(s) published for your profile${skipped ? `, ${skipped} skipped (overlapping slot)` : ''}.`);
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/mentor');
 });
 
 router.get('/interview/:id', (req, res) => {
