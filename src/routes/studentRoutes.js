@@ -13,6 +13,9 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 router.get('/', (req, res) => {
   const s = q.studentSummary(req.session.user.id);
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
   const openCounts = db.prepare(`
     SELECT type, COUNT(*) c FROM slots
      WHERE status='open' AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime')
@@ -24,6 +27,9 @@ router.get('/', (req, res) => {
 
 router.get('/mentors', (req, res) => {
   const s = q.studentSummary(req.session.user.id);
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
   const mentors = q.mentorsWithOpenSlots();
   res.render('student/mentors', { title: 'Mentors directory', mentors, s });
 });
@@ -32,6 +38,9 @@ router.get('/slots', (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
   const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
   const s = q.studentSummary(req.session.user.id);
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
   const already = type === 'hr' ? s.hr : s.technical;
 
   const where = [
@@ -202,6 +211,9 @@ router.post('/cancel/:id', async (req, res) => {
 
 router.get('/results', (req, res) => {
   const s = q.studentSummary(req.session.user.id);
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
   res.render('student/results', { title: 'My results', s });
 });
 
