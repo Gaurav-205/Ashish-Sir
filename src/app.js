@@ -46,6 +46,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint for uptime and orchestrator probes
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    node: process.version,
+    memory: process.memoryUsage(),
+  });
+});
+
 app.use('/', require('./routes/authRoutes'));
 app.use('/admin', require('./routes/adminRoutes'));
 app.use('/student', require('./routes/studentRoutes'));

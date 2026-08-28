@@ -11,6 +11,10 @@ const db = new DatabaseSync(DB_PATH);
 
 db.exec('PRAGMA foreign_keys = ON');
 db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA synchronous = NORMAL');
+db.exec('PRAGMA busy_timeout = 5000');
+db.exec('PRAGMA cache_size = -64000');
+db.exec('PRAGMA temp_store = MEMORY');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -90,6 +94,13 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- High-concurrency composite indexes
+CREATE INDEX IF NOT EXISTS idx_slots_type_date ON slots (type, status, slot_date, start_time);
+CREATE INDEX IF NOT EXISTS idx_slots_mentor ON slots (mentor_id, status);
+CREATE INDEX IF NOT EXISTS idx_interviews_student ON interviews (student_id, status);
+CREATE INDEX IF NOT EXISTS idx_interviews_mentor ON interviews (mentor_id, status);
+CREATE INDEX IF NOT EXISTS idx_evaluations_interview ON evaluations (interview_id);
 `);
 
 // Safe migrations for existing databases

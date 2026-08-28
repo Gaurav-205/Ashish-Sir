@@ -367,6 +367,8 @@ const login = async (who, email) => {
     const r = await get(who, url);
     ok(r.status === 200 && !/Something went wrong/.test(r.body), `GET ${url} → 200`);
   }
+  const healthRes = await get('anon', '/health');
+  ok(healthRes.status === 200 && JSON.parse(healthRes.body).status === 'healthy', 'GET /health returns healthy status');
   ok((await get('admin', '/no-such-page')).status === 404, 'unknown URL returns 404');
 
   server.close();
