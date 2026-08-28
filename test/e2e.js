@@ -428,6 +428,24 @@ const login = async (who, email) => {
   const boundarySubmit = await post('testmentor', '/mentor/interview/' + bndIv.id + '/evaluate',
     { resume_marks: '0', project_marks: '10', dsa_marks: '10', feedback: 'Extreme boundaries handled cleanly.' });
   ok(boundarySubmit.status === 302, 'boundary marks (0 and max) are accepted');
+
+  section('Mentor Slot Creation');
+  await login('mentor', 'arjun.mentor@konfident.in');
+  const arjunMentor = db.prepare("SELECT * FROM users WHERE email='arjun.mentor@konfident.in'").get();
+  const futureDate = h.addDays(h.today(), 5);
+  const mentorSlotRes = await post('mentor', '/mentor/slots', {
+    type: 'technical',
+    slot_date: futureDate,
+    start_time: '14:00',
+    duration: '30',
+    count: '2',
+    mode: 'Online',
+    location: 'https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ1ZEbSjw7ves5IQuLwdkuEzfQ4_7k4Wn7DKxEm2yx8qrSYL-S5Th1vtbYuIBQxzU4zU_DLYJBC6',
+  });
+  ok(mentorSlotRes.status === 302, 'mentor can create interview slots');
+  const createdMentorSlots = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND slot_date=? ORDER BY start_time`).all(arjunMentor.id, futureDate);
+  ok(createdMentorSlots.length === 2, 'created 2 contiguous slots for mentor');
+  ok(createdMentorSlots[0] && createdMentorSlots[0].location.includes('calendar.google.com'), 'slot stores Google Calendar appointment link');
   const bndEval = db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(bndIv.id);
   ok(bndEval && bndEval.resume_marks === 0 && bndEval.total === 20, 'boundary evaluation stored with correct zero and max sum');
 

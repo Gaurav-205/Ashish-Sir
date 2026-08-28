@@ -43,6 +43,36 @@
 
 <div class="card" style="margin-bottom:24px">
   <div class="card-head">
+    <h2>Create interview slots for your profile</h2>
+    <span class="faint">Publish available time slots for students to book</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/mentor/slots">
+      <div class="row">
+        <div class="field"><label>Interview domain *</label>
+          <select name="type" required>
+            <% if (mentor && mentor.can_technical) { %><option value="technical">Technical</option><% } %>
+            <% if (mentor && mentor.can_hr) { %><option value="hr">HR (Non-Technical)</option><% } %>
+            <% if (mentor && !mentor.can_technical && !mentor.can_hr) { %><option value="technical">Technical</option><% } %>
+          </select></div>
+        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" required></div>
+        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" required></div>
+        <div class="field"><label>Slot length (min)</label><input type="number" name="duration" value="30" min="10" max="180"></div>
+        <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
+        <div class="field"><label>Mode</label>
+          <select name="mode"><option>Online</option><option>Offline</option></select></div>
+        <div class="field"><label>Meeting link / room / calendar schedule *</label>
+          <input name="location" placeholder="https://meet.google.com/… or Google Calendar link" required></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <button class="btn primary">Publish slots →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head">
     <h2>Upcoming Interview Sessions (<%= upcoming.length %>)</h2>
   </div>
   <div class="card-body tight">

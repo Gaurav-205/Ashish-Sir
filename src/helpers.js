@@ -48,7 +48,15 @@ function linkify(str) {
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
   if (!urlRegex.test(str)) return str;
   return str.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${url} ↗</a>`;
+    let label = `${url} ↗`;
+    if (url.includes('calendar.google.com') || url.includes('appointments/schedules')) {
+      label = 'Google Calendar Appointment ↗';
+    } else if (url.includes('meet.google.com') || url.includes('meet.konfident')) {
+      label = 'Google Meet ↗';
+    } else if (url.includes('zoom.us')) {
+      label = 'Zoom Meeting ↗';
+    }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
   });
 }
 module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify };

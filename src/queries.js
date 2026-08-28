@@ -44,6 +44,8 @@ function studentSummary(studentId) {
   const student = db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'student'`).get(studentId);
   if (!student) return null;
   const list = interviewsForStudent(studentId);
+  const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
+                               ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);
   const byType = { technical: null, hr: null };
   for (const iv of list) byType[iv.type] = iv;
 
@@ -57,6 +59,7 @@ function studentSummary(studentId) {
     student,
     technical: byType.technical,
     hr: byType.hr,
+    history,
     techScore, hrScore, total,
     percent: done ? Math.round((total / GRAND_TOTAL) * 1000) / 10 : null,
     bookedCount: list.length,
