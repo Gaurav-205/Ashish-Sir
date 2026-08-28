@@ -16,7 +16,19 @@
 <% } %>
 
 <div class="card">
-  <div class="card-head"><h2>Open slots</h2><span class="faint">Times shown are interview start times</span></div>
+  <div class="card-head">
+    <h2>Open slots</h2>
+    <form method="get" class="btn-row" style="margin:0">
+      <input type="hidden" name="type" value="<%= type %>">
+      <select name="mentor" onchange="this.form.submit()" style="font-size:13px;padding:6px 10px">
+        <option value="">All mentors</option>
+        <% (mentors || []).forEach(function(m){ %>
+          <option value="<%= m.id %>" <%= selectedMentor === m.id ? 'selected' : '' %>><%= m.name %></option>
+        <% }); %>
+      </select>
+      <a class="btn sm" href="/student/mentors">View mentors directory →</a>
+    </form>
+  </div>
   <div class="card-body tight">
     <% if (!byDate.length) { %>
       <div class="empty">No open <%= h.titleCase(type) %> slots right now. Please check back — the admin adds slots regularly.</div>

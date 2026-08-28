@@ -22,24 +22,54 @@ router.get('/', (req, res) => {
   res.render('student/dashboard', { title: 'My interviews', s, open });
 });
 
+router.get('/mentors', (req, res) => {
+  const s = q.studentSummary(req.session.user.id);
+  const mentors = q.mentorsWithOpenSlots();
+  res.render('student/mentors', { title: 'Mentors directory', mentors, s });
+});
+
 router.get('/slots', (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
+  const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
   const s = q.studentSummary(req.session.user.id);
   const already = type === 'hr' ? s.hr : s.technical;
+
+  const where = [
+    's.type = ?',
+    "s.status = 'open'",
+    'm.active = 1',
+    "datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')",
+  ];
+  const args = [type];
+  if (mentorId) {
+    where.push('s.mentor_id = ?');
+    args.push(mentorId);
+  }
+
   const slots = db.prepare(`
-    SELECT s.*, m.name AS mentor_name
+    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email, m.phone AS mentor_phone
       FROM slots s JOIN users m ON m.id = s.mentor_id
-     WHERE s.type = ? AND s.status = 'open' AND m.active = 1
-       AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')
-     ORDER BY s.slot_date, s.start_time`).all(type);
-  // group by date for readability
+     WHERE ${where.join(' AND ')}
+     ORDER BY s.slot_date, s.start_time`).all(...args);
+
+  // Group by date for scannability
   const byDate = [];
   for (const slot of slots) {
     let g = byDate.find((x) => x.date === slot.slot_date);
     if (!g) { g = { date: slot.slot_date, slots: [] }; byDate.push(g); }
     g.slots.push(slot);
   }
-  res.render('student/slots', { title: `Book ${h.titleCase(type)} interview`, type, byDate, already, s });
+
+  const mentors = q.mentorsList(type);
+  res.render('student/slots', {
+    title: `Book ${h.titleCase(type)} interview`,
+    type,
+    byDate,
+    already,
+    s,
+    mentors,
+    selectedMentor: mentorId,
+  });
 });
 
 router.post('/book', async (req, res) => {

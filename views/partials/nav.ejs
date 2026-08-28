@@ -3,7 +3,7 @@ const links = {
   admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
           ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
   mentor: [['/mentor','My interviews']],
-  student: [['/student','Dashboard'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
+  student: [['/student','Dashboard'],['/student/mentors','Mentors'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
 }[user ? user.role : ''] || [];
 const userName = (user && user.name) ? String(user.name).trim() : '';
 const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?';

@@ -82,8 +82,8 @@ if (seedMock) {
   }
 
   /* ------------------------------ bookings ------------------------------ */
-  const addInterview = db.prepare(`INSERT INTO interviews (student_id,mentor_id,slot_id,type,status,completed_at)
-                                   VALUES (?,?,?,?,?,?)`);
+  const addInterview = db.prepare(`INSERT INTO interviews (student_id,mentor_id,slot_id,type,status,attendance,completed_at,attendance_marked_at)
+                                   VALUES (?,?,?,?,?,?,?,?)`);
   const addEval = db.prepare(`INSERT INTO evaluations
     (interview_id,mentor_id,resume_marks,project_marks,dsa_marks,behaviour_marks,hr_perf_marks,total,feedback)
     VALUES (?,?,?,?,?,?,?,?,?)`);
@@ -97,8 +97,9 @@ if (seedMock) {
     if (!slot) return null;
     db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
     const status = past ? 'completed' : 'booked';
+    const attendance = past ? 'attended' : 'pending';
     const completedAt = past ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
-    addInterview.run(student.id, slot.mentor_id, slot.id, type, status, completedAt);
+    addInterview.run(student.id, slot.mentor_id, slot.id, type, status, attendance, completedAt, completedAt);
     return db.prepare('SELECT * FROM interviews WHERE slot_id=?').get(slot.id);
   }
 

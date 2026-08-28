@@ -148,6 +148,12 @@ const login = async (who, email) => {
   ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND status<>'cancelled'`).get(ts.id).c === 2,
      'student books the HR interview too (1 technical + 1 HR)');
 
+  // Mentors directory and mentor-filtered slot booking
+  const mentorsDir = await get('newstudent', '/student/mentors');
+  ok(mentorsDir.status === 200 && mentorsDir.body.includes('Test Mentor'), 'student can view the mentors directory');
+  const filteredSlots = await get('newstudent', `/student/slots?type=technical&mentor=${tm.id}`);
+  ok(filteredSlots.status === 200, 'student can filter slots by specific mentor');
+
   const dash = await get('newstudent', '/student');
   ok(dash.body.includes('Test Mentor'), 'student dashboard shows the assigned mentor');
   ok(dash.body.includes('2 of 2 booked'), 'student dashboard shows booking progress');
@@ -163,14 +169,20 @@ const login = async (who, email) => {
       { resume_marks: '9', project_marks: '9', dsa_marks: '9' })).status === 403,
      'a mentor cannot score an interview assigned to someone else');
 
-  const early = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
-    { resume_marks: '8', project_marks: '8', dsa_marks: '8' });
-  ok(early.status === 400 && !db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(techIv.id),
-     'scores are refused before the interview is marked completed');
+  // Attendance tracking: test marking absent then attended
+  await post('testmentor', '/mentor/interview/' + techIv.id + '/attendance', { attendance: 'absent' });
+  ok(db.prepare('SELECT attendance FROM interviews WHERE id=?').get(techIv.id).attendance === 'absent',
+     'mentor marks candidate absent');
 
-  await post('testmentor', '/mentor/interview/' + techIv.id + '/complete');
-  ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(techIv.id).status === 'completed',
-     'mentor marks the interview completed');
+  const absentScoreAttempt = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
+    { resume_marks: '8', project_marks: '8', dsa_marks: '8' });
+  ok(absentScoreAttempt.status === 400, 'scoring is refused when candidate is marked absent');
+
+  // Mark candidate attended (present)
+  await post('testmentor', '/mentor/interview/' + techIv.id + '/attendance', { attendance: 'attended' });
+  ok(db.prepare('SELECT attendance, status FROM interviews WHERE id=?').get(techIv.id).attendance === 'attended'
+     && db.prepare('SELECT status FROM interviews WHERE id=?').get(techIv.id).status === 'completed',
+     'mentor marks candidate attended and interview completes');
 
   const bad = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
     { resume_marks: '12', project_marks: '5', dsa_marks: '5' });
@@ -327,7 +339,8 @@ const login = async (who, email) => {
     ['admin', '/admin'], ['admin', '/admin/students'], ['admin', '/admin/mentors'],
     ['admin', '/admin/slots'], ['admin', '/admin/interviews'], ['admin', '/admin/reports'],
     ['admin', '/profile'],
-    ['newstudent', '/student'], ['newstudent', '/student/slots?type=technical'],
+    ['newstudent', '/student'], ['newstudent', '/student/mentors'],
+    ['newstudent', '/student/slots?type=technical'],
     ['newstudent', '/student/slots?type=hr'], ['newstudent', '/student/results'],
     ['testmentor', '/mentor'], ['testmentor', '/mentor/interview/' + techIv.id],
   ];

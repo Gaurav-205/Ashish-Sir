@@ -16,6 +16,12 @@
         <option value="booked" <%= filters.status==='booked'?'selected':'' %>>Booked</option>
         <option value="completed" <%= filters.status==='completed'?'selected':'' %>>Completed</option>
       </select>
+      <select name="attendance" onchange="this.form.submit()">
+        <option value="">All attendance</option>
+        <option value="attended" <%= filters.attendance==='attended'?'selected':'' %>>Attended</option>
+        <option value="absent" <%= filters.attendance==='absent'?'selected':'' %>>Absent / No-Show</option>
+        <option value="pending" <%= filters.attendance==='pending'?'selected':'' %>>Attendance Pending</option>
+      </select>
       <select name="mentor" onchange="this.form.submit()">
         <option value="">All mentors</option>
         <% mentors.forEach(function(m){ %>
@@ -26,7 +32,7 @@
   </div>
   <div class="card-body tight">
     <div class="table-scroll"><table>
-      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor</th><th>Status</th><th>Marks</th><th class="num">Score</th></tr></thead>
+      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor</th><th>Status</th><th>Attendance</th><th>Marks</th><th class="num">Score</th></tr></thead>
       <tbody>
       <% list.forEach(function(i){ %>
         <tr>
@@ -36,6 +42,15 @@
           <td><%= i.mentor_name %></td>
           <td><span class="pill p-<%= i.status %>"><%= i.status %></span>
             <% if (i.status === 'completed' && !i.eval_id) { %><br><span class="faint">awaiting score</span><% } %></td>
+          <td>
+            <% if (i.attendance === 'attended') { %>
+              <span class="pill p-completed">Attended</span>
+            <% } else if (i.attendance === 'absent') { %>
+              <span class="pill p-cancelled">Absent</span>
+            <% } else { %>
+              <span class="pill p-booked">Pending</span>
+            <% } %>
+          </td>
           <td><% if (i.eval_id) { RUBRIC[i.type].criteria.forEach(function(c){ %>
                 <span class="pill p-muted"><%= c.label.split(' ')[0] %> <%= i[c.key] %>/<%= c.max %></span>
               <% }); } else { %><span class="faint">—</span><% } %></td>
@@ -43,7 +58,7 @@
             <% } else { %><span class="faint">—</span><% } %></td>
         </tr>
       <% }); %>
-      <% if (!list.length) { %><tr><td colspan="7" class="empty">No interviews match.</td></tr><% } %>
+      <% if (!list.length) { %><tr><td colspan="8" class="empty">No interviews match.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>

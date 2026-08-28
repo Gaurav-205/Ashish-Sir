@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS interviews (
   slot_id       INTEGER NOT NULL REFERENCES slots(id) ON DELETE CASCADE,
   type          TEXT    NOT NULL CHECK (type IN ('technical','hr')),
   status        TEXT    NOT NULL DEFAULT 'booked' CHECK (status IN ('booked','completed','cancelled')),
+  attendance    TEXT    NOT NULL DEFAULT 'pending' CHECK (attendance IN ('pending','attended','absent')),
+  attendance_marked_at TEXT,
   google_event_id TEXT,
   booked_at     TEXT    NOT NULL DEFAULT (datetime('now')),
   completed_at  TEXT
@@ -98,6 +100,8 @@ const migrations = [
   'ALTER TABLE users ADD COLUMN google_token_expiry INTEGER',
   'ALTER TABLE users ADD COLUMN google_calendar_enabled INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE interviews ADD COLUMN google_event_id TEXT',
+  "ALTER TABLE interviews ADD COLUMN attendance TEXT NOT NULL DEFAULT 'pending'",
+  'ALTER TABLE interviews ADD COLUMN attendance_marked_at TEXT',
 ];
 for (const m of migrations) {
   try { db.exec(m); } catch (_) {}

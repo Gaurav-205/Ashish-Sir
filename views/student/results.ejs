@@ -27,7 +27,13 @@
       <% if (!iv) { %><p class="muted">Not booked yet. <a href="/student/slots?type=<%= t %>">Book a slot →</a></p>
       <% } else { %>
         <p class="faint"><%= h.fmtSlot(iv) %> · Mentor: <%= iv.mentor_name %> ·
-          <span class="pill p-<%= iv.status %>"><%= iv.status %></span></p>
+          <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+          <% if (iv.attendance === 'attended') { %>
+            <span class="pill p-completed">Attended</span>
+          <% } else if (iv.attendance === 'absent') { %>
+            <span class="pill p-cancelled">Absent / No-Show</span>
+          <% } %>
+        </p>
         <% if (iv.eval_id) { %>
           <div class="table-scroll"><table>
             <thead><tr><th>Criteria</th><th class="num">Marks</th><th class="num">Max</th></tr></thead>

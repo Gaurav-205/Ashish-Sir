@@ -1,0 +1,67 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div>
+    <h1>Mentors directory</h1>
+    <p class="sub">Browse all verified mentors on the platform and book from their available calendar slots.</p>
+  </div>
+  <div class="btn-row">
+    <a class="btn primary" href="/student/slots?type=technical">Browse Technical slots</a>
+    <a class="btn" href="/student/slots?type=hr">Browse HR slots</a>
+  </div>
+</div>
+
+<div class="grid two">
+<% mentors.forEach(function(m){ %>
+  <div class="card">
+    <div class="card-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="avatar"><%= m.name.trim().split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() %></span>
+        <div>
+          <h2 style="margin:0"><%= m.name %></h2>
+          <span class="faint" style="font-size:12px"><%= m.email %></span>
+        </div>
+      </div>
+      <div>
+        <% if (m.can_technical) { %><span class="pill p-technical">Technical</span><% } %>
+        <% if (m.can_hr) { %><span class="pill p-hr">HR</span><% } %>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stats" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 16px;">
+        <div class="stat" style="padding:10px 14px">
+          <div class="n" style="font-size:18px"><%= m.total_open_slots %></div>
+          <div class="l">Open slots</div>
+        </div>
+        <div class="stat" style="padding:10px 14px">
+          <div class="n" style="font-size:18px"><%= m.tech_open_slots %></div>
+          <div class="l">Tech slots</div>
+        </div>
+        <div class="stat" style="padding:10px 14px">
+          <div class="n" style="font-size:18px"><%= m.hr_open_slots %></div>
+          <div class="l">HR slots</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <% if (m.can_technical && m.tech_open_slots > 0) { %>
+          <a class="btn sm primary" href="/student/slots?type=technical&mentor=<%= m.id %>">
+            Book Technical slot (<%= m.tech_open_slots %> open)
+          </a>
+        <% } %>
+        <% if (m.can_hr && m.hr_open_slots > 0) { %>
+          <a class="btn sm" href="/student/slots?type=hr&mentor=<%= m.id %>">
+            Book HR slot (<%= m.hr_open_slots %> open)
+          </a>
+        <% } %>
+        <% if (m.total_open_slots === 0) { %>
+          <span class="faint" style="font-size:12px;padding:6px 0">No open slots currently scheduled. Check back soon.</span>
+        <% } %>
+      </div>
+    </div>
+  </div>
+<% }); %>
+<% if (!mentors.length) { %>
+  <div class="card" style="grid-column: 1 / -1;"><div class="card-body empty">No mentors found.</div></div>
+<% } %>
+</div>
+<%- include('../partials/foot') %>

@@ -29,9 +29,17 @@
         <p><strong><%= h.fmtSlot(iv) %></strong><br>
           <span class="muted">Mentor: <%= iv.mentor_name %></span><br>
           <span class="muted"><%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></span></p>
-        <p><span class="pill p-<%= iv.status %>"><%= iv.status %></span>
-          <% if (iv.status === 'completed' && !iv.eval_id) { %>
-            <span class="faint">— result will appear once your mentor submits the evaluation.</span><% } %></p>
+        <p>
+          <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+          <% if (iv.attendance === 'attended') { %>
+            <span class="pill p-completed">Attended</span>
+          <% } else if (iv.attendance === 'absent') { %>
+            <span class="pill p-cancelled">Absent / No-Show</span>
+          <% } %>
+          <% if (iv.status === 'completed' && !iv.eval_id && iv.attendance === 'attended') { %>
+            <span class="faint">— evaluation in progress by mentor.</span>
+          <% } %>
+        </p>
         <% if (iv.eval_id) { %>
           <div class="big-score"><%= iv.score %><small>/<%= RUBRIC[t].total %></small></div>
           <div class="bar"><span style="width:<%= (iv.score / RUBRIC[t].total * 100).toFixed(0) %>%"></span></div>
@@ -48,5 +56,7 @@
 <% }); %>
 </div>
 
-<div class="note">You cannot choose or change your mentor — mentors are assigned by the admin to each slot.</div>
+<div class="note">
+  Want to view mentor backgrounds or slot availability by mentor? <a href="/student/mentors">Explore the Mentors Directory →</a>
+</div>
 <%- include('../partials/foot') %>

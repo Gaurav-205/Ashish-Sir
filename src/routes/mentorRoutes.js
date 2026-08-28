@@ -34,6 +34,26 @@ router.get('/interview/:id', (req, res) => {
   res.render('mentor/interview', { title: `${h.titleCase(iv.type)} — ${iv.student_name}`, iv, error: null, form: {} });
 });
 
+router.post('/interview/:id/attendance', (req, res) => {
+  const iv = q.interviewById(Number(req.params.id));
+  if (!iv || iv.mentor_id !== req.session.user.id) {
+    return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
+  }
+  const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
+
+  if (attendance === 'attended') {
+    db.prepare(`UPDATE interviews SET attendance='attended', status='completed',
+                completed_at=COALESCE(completed_at, datetime('now')),
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
+  } else {
+    db.prepare(`UPDATE interviews SET attendance='absent',
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'err', 'Candidate marked as Absent / No-Show.');
+  }
+  res.redirect('/mentor/interview/' + iv.id);
+});
+
 router.post('/interview/:id/complete', (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
@@ -41,8 +61,9 @@ router.post('/interview/:id/complete', (req, res) => {
   }
   if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
   else {
-    db.prepare(`UPDATE interviews SET status='completed', completed_at=datetime('now') WHERE id=?`).run(iv.id);
-    flash(req, 'ok', 'Marked as completed. You can now submit the evaluation.');
+    db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=datetime('now'),
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'ok', 'Marked as completed and attended. You can now submit the evaluation.');
   }
   res.redirect('/mentor/interview/' + iv.id);
 });
@@ -56,7 +77,8 @@ router.post('/interview/:id/evaluate', (req, res) => {
     title: 'Evaluate', iv, error, form: req.body,
   });
 
-  if (iv.status !== 'completed') return rerender('Mark the interview as completed before submitting scores.');
+  if (iv.attendance === 'absent') return rerender('Cannot submit scores for an absent candidate. Mark attendance as attended first.');
+  if (iv.status !== 'completed') return rerender('Mark candidate as attended and completed before submitting scores.');
   if (iv.eval_id) return rerender('An evaluation has already been submitted for this interview.');
 
   let total;

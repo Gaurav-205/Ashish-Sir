@@ -310,7 +310,12 @@ router.post('/slots/:id/release', (req, res) => {
 
 /* ------------------------------ interviews ----------------------------- */
 router.get('/interviews', (req, res) => {
-  const filters = { type: req.query.type || '', status: req.query.status || '', mentor: req.query.mentor || '' };
+  const filters = {
+    type: req.query.type || '',
+    status: req.query.status || '',
+    attendance: req.query.attendance || '',
+    mentor: req.query.mentor || '',
+  };
   const list = q.allInterviews(filters);
   res.render('admin/interviews', {
     title: 'Interviews', list, filters,
@@ -336,7 +341,7 @@ router.get('/reports.csv', (req, res) => {
   const head = ['Roll No', 'Student', 'Email', 'Branch',
     ...RUBRIC.technical.criteria.map((c) => c.label), 'Technical Total',
     ...RUBRIC.hr.criteria.map((c) => c.label), 'HR Total',
-    `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'HR Status'];
+    `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'Technical Attendance', 'HR Status', 'HR Attendance'];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [head.map(esc).join(',')];
   for (const s of rows) {
@@ -347,7 +352,9 @@ router.get('/reports.csv', (req, res) => {
       s.student.roll_no, s.student.name, s.student.email, s.student.branch,
       ...techMarks, s.techScore,
       ...hrMarks, s.hrScore,
-      s.total, s.percent, t ? t.status : 'not booked', hr ? hr.status : 'not booked',
+      s.total, s.percent,
+      t ? t.status : 'not booked', t ? t.attendance : '—',
+      hr ? hr.status : 'not booked', hr ? hr.attendance : '—',
     ].map(esc).join(','));
   }
   res.setHeader('Content-Type', 'text/csv');
