@@ -1,56 +1,92 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1><%= s.student.name %></h1>
-    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · ' + s.student.roll_no : '' %><%= s.student.branch ? ' · ' + s.student.branch : '' %></p></div>
-  <a class="btn" href="/admin/students">← All students</a>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Candidate Record · Profile &amp; Interview History
+    </div>
+    <h1><%= s.student.name %></h1>
+    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · Roll No: ' + s.student.roll_no : '' %><%= s.student.branch ? ' · Branch: ' + s.student.branch : '' %></p>
+  </div>
+  <div class="btn-row">
+    <% if (s.student.resume_url) { %>
+      <a class="btn sm" href="<%= s.student.resume_url %>" target="_blank" rel="noopener noreferrer">📄 View Resume Link</a>
+    <% } %>
+    <a class="btn sm" href="/admin/students">← All students</a>
+  </div>
 </div>
 
 <div class="grid two">
-  <div class="card"><div class="card-head"><h2>Interviews</h2></div><div class="card-body">
-    <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
-      <div style="margin-bottom:16px">
-        <span class="pill p-<%= t %>"><%= h.titleCase(t) %></span>
-        <% if (!iv) { %><span class="faint"> — not booked yet</span>
-        <% } else { %>
-          <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
-          <div class="faint" style="margin-top:5px"><%= h.fmtSlot(iv) %> · <%= iv.mentor_name %> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></div>
-          <% if (iv.eval_id) { %>
-            <div style="margin-top:7px">
-              <% RUBRIC[t].criteria.forEach(function(c){ %>
-                <span class="pill p-muted"><%= c.label %>: <%= iv[c.key] %>/<%= c.max %></span>
-              <% }); %>
-              <strong> = <%= iv.score %>/<%= RUBRIC[t].total %></strong>
-            </div>
-            <% if (iv.feedback) { %><p class="faint" style="margin-top:7px">“<%= iv.feedback %>”</p><% } %>
-          <% } else if (iv.status === 'completed') { %>
-            <div class="faint" style="margin-top:5px">Awaiting mentor evaluation.</div>
-          <% } %>
-        <% } %>
-      </div>
-    <% }); %>
-    <% if (s.allEvaluated) { %>
-      <div class="note" style="margin:0">Final: <strong><%= s.total %>/<%= GRAND_TOTAL %></strong> (<%= s.percent %>%) —
-        <%= grade(s.percent).label %></div>
-    <% } %>
-  </div></div>
+  <div class="card">
+    <div class="card-head"><h2>Interview History &amp; Scores</h2></div>
+    <div class="card-body">
+      <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+        <div style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--line-soft)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="pill p-<%= t %>"><%= h.titleCase(t) %></span>
+            <% if (!iv) { %>
+              <span class="faint"> — Not scheduled yet</span>
+            <% } else { %>
+              <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+              <% if (iv.attendance === 'attended') { %>
+                <span class="pill p-completed">Attended</span>
+              <% } else if (iv.attendance === 'absent') { %>
+                <span class="pill p-cancelled">Absent</span>
+              <% } %>
+            <% } %>
+          </div>
 
-  <div class="card"><div class="card-head"><h2>Edit details</h2></div><div class="card-body">
-    <form method="post" action="/admin/students/<%= s.student.id %>/update">
-      <div class="row">
-        <div class="field"><label>Name</label><input name="name" value="<%= s.student.name %>" required></div>
-        <div class="field"><label>Roll no</label><input name="roll_no" value="<%= s.student.roll_no || '' %>"></div>
-        <div class="field"><label>Branch</label><input name="branch" value="<%= s.student.branch || '' %>"></div>
-        <div class="field"><label>Phone</label><input name="phone" value="<%= s.student.phone || '' %>"></div>
-      </div>
-      <div class="field"><label>Resume link</label><input type="url" name="resume_url" value="<%= s.student.resume_url || '' %>"></div>
-      <label class="check"><input type="checkbox" name="active" value="1" <%= s.student.active ? 'checked' : '' %>> Account active</label>
-      <button class="btn primary">Save changes</button>
-    </form>
-    <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
-    <form method="post" action="/admin/students/<%= s.student.id %>/reset-password" class="btn-row">
-      <input name="password" placeholder="New password" minlength="6" required style="max-width:220px">
-      <button class="btn">Reset password</button>
-    </form>
-  </div></div>
+          <% if (iv) { %>
+            <div class="faint" style="margin-top:5px;font-size:13px">
+              <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %>
+            </div>
+            <% if (iv.eval_id) { %>
+              <div style="margin-top:10px">
+                <% RUBRIC[t].criteria.forEach(function(c){ %>
+                  <span class="pill p-muted" style="margin-right:4px;margin-bottom:4px"><%= c.label %>: <strong><%= iv[c.key] %></strong>/<%= c.max %></span>
+                <% }); %>
+                <strong style="font-family:var(--font-display);margin-left:6px">= <%= iv.score %> / <%= RUBRIC[t].total %></strong>
+              </div>
+              <% if (iv.feedback) { %>
+                <p class="muted" style="margin-top:10px;font-style:italic;background:var(--surface-alt);padding:10px 14px;border-radius:var(--radius-sm)">
+                  “<%= iv.feedback %>”
+                </p>
+              <% } %>
+            <% } else if (iv.status === 'completed') { %>
+              <div class="faint" style="margin-top:6px">Session completed · Awaiting mentor evaluation.</div>
+            <% } %>
+          <% } %>
+        </div>
+      <% }); %>
+
+      <% if (s.allEvaluated) { %>
+        <div class="note" style="margin:0">
+          Grand Aggregate Total: <strong style="font-size:16px"><%= s.total %> / <%= GRAND_TOTAL %></strong> (<%= s.percent %>%) —
+          <span class="pill <%= grade(s.percent).cls %>"><%= grade(s.percent).label %></span>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Edit Candidate Details</h2></div>
+    <div class="card-body">
+      <form method="post" action="/admin/students/<%= s.student.id %>/update">
+        <div class="row">
+          <div class="field"><label>Full Name</label><input name="name" value="<%= s.student.name %>" required></div>
+          <div class="field"><label>Roll Number</label><input name="roll_no" value="<%= s.student.roll_no || '' %>"></div>
+          <div class="field"><label>Branch / Major</label><input name="branch" value="<%= s.student.branch || '' %>"></div>
+          <div class="field"><label>Phone Number</label><input name="phone" value="<%= s.student.phone || '' %>"></div>
+        </div>
+        <div class="field"><label>Resume Link (Google Drive / Portfolio)</label><input type="url" name="resume_url" value="<%= s.student.resume_url || '' %>"></div>
+        <label class="check" style="margin-bottom:16px"><input type="checkbox" name="active" value="1" <%= s.student.active ? 'checked' : '' %>> Candidate account active</label>
+        <button class="btn primary">Save Changes</button>
+      </form>
+      <hr style="border:none;border-top:1px solid var(--line-soft);margin:20px 0">
+      <form method="post" action="/admin/students/<%= s.student.id %>/reset-password" class="btn-row">
+        <input name="password" placeholder="New password" minlength="6" required style="max-width:220px">
+        <button class="btn">Reset password</button>
+      </form>
+    </div>
+  </div>
 </div>
 <%- include('../partials/foot') %>
