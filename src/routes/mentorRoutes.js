@@ -39,7 +39,7 @@ router.post('/interview/:id/complete', (req, res) => {
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
-  if (iv.status !== 'booked') flash(req, 'err', 'This interview is not in a bookable state.');
+  if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
   else {
     db.prepare(`UPDATE interviews SET status='completed', completed_at=datetime('now') WHERE id=?`).run(iv.id);
     flash(req, 'ok', 'Marked as completed. You can now submit the evaluation.');
@@ -65,12 +65,19 @@ router.post('/interview/:id/evaluate', (req, res) => {
 
   const keys = RUBRIC[iv.type].criteria.map((c) => c.key);
   const val = (k) => (keys.includes(k) ? Number(req.body[k]) : null);
-  db.prepare(`INSERT INTO evaluations
-      (interview_id, mentor_id, resume_marks, project_marks, dsa_marks,
-       behaviour_marks, hr_perf_marks, total, feedback)
-      VALUES (?,?,?,?,?,?,?,?,?)`)
-    .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
-         val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
+  try {
+    db.prepare(`INSERT INTO evaluations
+        (interview_id, mentor_id, resume_marks, project_marks, dsa_marks,
+         behaviour_marks, hr_perf_marks, total, feedback)
+        VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
+           val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) {
+      return rerender('An evaluation has already been submitted for this interview.');
+    }
+    return rerender('Could not save evaluation: ' + e.message);
+  }
 
   flash(req, 'ok', `Evaluation submitted — ${total}/${RUBRIC[iv.type].total}. The student can now see the result.`);
   res.redirect('/mentor');

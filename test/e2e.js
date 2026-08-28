@@ -56,6 +56,11 @@ const login = async (who, email) => {
      'wrong password is rejected');
   ok((await get('anon', '/admin')).location === '/login', 'anonymous user is redirected to login');
 
+  // test role-aware redirect when a student logs in after an admin page was requested
+  await get('anon_admin_attempt', '/admin/reports');
+  const studentLoginAttempt = await post('anon_admin_attempt', '/login', { email: 'harsh@student.in', password: 'pass123' });
+  ok(studentLoginAttempt.location === '/student', 'student logging in after accessing admin URL is redirected to student dashboard');
+
   ok((await login('admin', 'admin@konfident.in')).location === '/admin', 'admin signs in');
   ok((await login('mentor', 'arjun.mentor@konfident.in')).location === '/mentor', 'mentor signs in');
   ok((await login('hrmentor', 'sneha.mentor@konfident.in')).location === '/mentor', 'HR mentor signs in');
@@ -210,6 +215,12 @@ const login = async (who, email) => {
   ok((await get('admin', '/admin/interviews?type=hr')).body.includes('HR'), 'admin can filter interviews by type');
   ok((await get('admin', '/admin/students/' + ts.id)).body.includes('Test Student'), 'admin can open a student record');
 
+  // admin updates student details
+  const updateRes = await post('admin', '/admin/students/' + ts.id + '/update', {
+    name: 'Test Student Updated', roll_no: 'KON2025099', branch: 'CSE', active: '1'
+  });
+  ok(updateRes.location === '/admin/students/' + ts.id, 'admin updating student details redirects back to student detail view');
+
   // reschedule an upcoming booking
   await login('student3', 'nikita@student.in');
   const nik = db.prepare(`SELECT * FROM users WHERE email='nikita@student.in'`).get();
@@ -234,12 +245,20 @@ const login = async (who, email) => {
      && db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(rel.id).c === 0,
      'admin releases a booking and the slot reopens');
 
-  // completed interviews are protected
+  // completed interviews are protected against cancel and reschedule
   const doneSlot = db.prepare(`SELECT s.id FROM slots s JOIN interviews i ON i.slot_id=s.id
                                WHERE i.status='completed' LIMIT 1`).get();
   await post('admin', '/admin/slots/' + doneSlot.id + '/cancel');
   ok(db.prepare('SELECT status FROM slots WHERE id=?').get(doneSlot.id).status !== 'cancelled',
      'a completed interview cannot be cancelled');
+
+  const beforeResched = db.prepare('SELECT * FROM slots WHERE id=?').get(doneSlot.id);
+  await post('admin', '/admin/slots/' + doneSlot.id + '/reschedule', {
+    slot_date: h.addDays(beforeResched.slot_date, 2), start_time: '10:00', end_time: '10:30',
+    mentor_id: String(beforeResched.mentor_id)
+  });
+  const afterResched = db.prepare('SELECT * FROM slots WHERE id=?').get(doneSlot.id);
+  ok(afterResched.slot_date === beforeResched.slot_date, 'a completed interview cannot be rescheduled');
 
   section('Student cancel & rebook');
   const cIv = db.prepare(`SELECT i.*, u.email FROM interviews i
@@ -284,6 +303,24 @@ const login = async (who, email) => {
   await post('pastcanceller', '/student/cancel/' + pIv.id);
   ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(pIv.id).status === 'booked',
      'student cannot cancel a past booking');
+
+  section('Google OAuth & Calendar Integration');
+  const google = require('../src/services/googleService');
+  ok(typeof google.isConfigured === 'function', 'googleService exports isConfigured check');
+  ok(typeof google.syncCalendarEvent === 'function', 'googleService exports syncCalendarEvent');
+
+  const gLogin = await get('anon', '/auth/google');
+  ok(gLogin.status === 200 || gLogin.status === 302, 'GET /auth/google handles request cleanly');
+
+  const prof = await get('newstudent', '/profile');
+  ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
+     'profile page renders Google Account & Calendar Integration card');
+
+  // Test profile calendar toggle
+  await post('newstudent', '/profile/google/toggle-calendar');
+  const studentAfterToggle = db.prepare('SELECT google_calendar_enabled FROM users WHERE id=?').get(ts.id);
+  ok(studentAfterToggle.google_calendar_enabled === 0, 'student can toggle calendar sync preference');
+  await post('newstudent', '/profile/google/toggle-calendar');
 
   section('Every page renders');
   const pages = [

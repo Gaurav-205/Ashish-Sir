@@ -22,7 +22,7 @@ const addUser = db.prepare(`INSERT INTO users
 addUser.run('Konfident Admin', 'admin@konfident.in', PW, 'admin', '9800000000', null, null, null, 0, 0);
 
 const isTest = process.env.DB_PATH && process.env.DB_PATH.includes('test.db');
-const seedMock = isTest || process.env.SEED_MOCK === 'true';
+const seedMock = isTest || process.env.SEED_MOCK !== 'false';
 
 if (seedMock) {
   const mentors = [

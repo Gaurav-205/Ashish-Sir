@@ -3,20 +3,25 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 function fmtDate(ymd) {
   if (!ymd) return '—';
-  const [y, m, d] = String(ymd).split('-').map(Number);
-  if (!y) return ymd;
+  const parts = String(ymd).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return ymd;
+  const [y, m, d] = parts;
+  if (!y || !m || !d) return ymd;
   const dt = new Date(Date.UTC(y, m - 1, d));
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return `${days[dt.getUTCDay()]}, ${d} ${MONTHS[m - 1]} ${y}`;
 }
 function fmtTime(hm) {
   if (!hm) return '';
-  const [h, m] = String(hm).split(':').map(Number);
+  const parts = String(hm).split(':').map(Number);
+  if (parts.length < 2 || parts.some(isNaN)) return hm;
+  const [h, m] = parts;
   const ap = h >= 12 ? 'PM' : 'AM';
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
 }
 function fmtSlot(s) {
+  if (!s) return '—';
   return `${fmtDate(s.slot_date)} · ${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}`;
 }
 function today() {
@@ -29,11 +34,13 @@ function addDays(ymd, n) {
 }
 function titleCase(s) {
   if (!s) return '';
-  return s === 'hr' ? 'HR' : s.charAt(0).toUpperCase() + s.slice(1);
+  return s.toLowerCase() === 'hr' ? 'HR' : s.charAt(0).toUpperCase() + s.slice(1);
 }
 function isPast(slot) {
+  if (!slot || !slot.slot_date) return false;
   const now = new Date();
-  const end = new Date(`${slot.slot_date}T${slot.end_time}:00`);
-  return end < now;
+  const timeStr = slot.end_time || slot.start_time || '23:59';
+  const end = new Date(`${slot.slot_date}T${timeStr}:00`);
+  return !isNaN(end.getTime()) && end < now;
 }
 module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast };

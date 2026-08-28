@@ -1,6 +1,6 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Hello, <%= s.student.name.split(' ')[0] %></h1>
+  <div><h1>Hello, <%= (s.student.name || '').trim().split(/\s+/)[0] || 'Student' %></h1>
     <p class="sub">You need to complete <strong>one Technical</strong> and <strong>one HR</strong> interview this week.</p></div>
   <% if (s.allEvaluated) { %><a class="btn primary" href="/student/results">View my results</a><% } %>
 </div>

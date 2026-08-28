@@ -6,6 +6,7 @@ const h = require('../helpers');
 const { requireRole } = require('../auth');
 
 const router = express.Router();
+const google = require('../services/googleService');
 router.use(requireRole('student'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
@@ -41,7 +42,7 @@ router.get('/slots', (req, res) => {
   res.render('student/slots', { title: `Book ${h.titleCase(type)} interview`, type, byDate, already, s });
 });
 
-router.post('/book', (req, res) => {
+router.post('/book', async (req, res) => {
   const slotId = Number(req.body.slot_id);
   const studentId = req.session.user.id;
   try {
@@ -65,10 +66,16 @@ router.post('/book', (req, res) => {
       .get(studentId, slot.slot_date, slot.end_time, slot.start_time);
     if (clash) throw new Error('You already have another interview at that time.');
 
-    db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
-                VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
+    const insert = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
+                               VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
     db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
     db.exec('COMMIT');
+
+    // Asynchronously sync to Google Calendar if enabled
+    const student = db.prepare('SELECT * FROM users WHERE id=?').get(studentId);
+    const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(slot.mentor_id);
+    google.syncCalendarEvent({ student, mentor, slot, interviewId: insert.lastInsertRowid }).catch(() => {});
+
     flash(req, 'ok', `${h.titleCase(slot.type)} interview booked for ${h.fmtSlot(slot)}.`);
     return res.redirect('/student');
   } catch (e) {
@@ -78,7 +85,7 @@ router.post('/book', (req, res) => {
   }
 });
 
-router.post('/cancel/:id', (req, res) => {
+router.post('/cancel/:id', async (req, res) => {
   const iv = db.prepare(`SELECT * FROM interviews WHERE id=? AND student_id=?`)
     .get(Number(req.params.id), req.session.user.id);
   if (!iv) {
@@ -90,11 +97,24 @@ router.post('/cancel/:id', (req, res) => {
     if (slot && h.isPast(slot)) {
       flash(req, 'err', 'Past slots cannot be cancelled.');
     } else {
-      db.exec('BEGIN IMMEDIATE');
-      db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
-      db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(iv.slot_id);
-      db.exec('COMMIT');
-      flash(req, 'ok', 'Booking cancelled. You can book another slot.');
+      try {
+        db.exec('BEGIN IMMEDIATE');
+        db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
+        db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(iv.slot_id);
+        db.exec('COMMIT');
+
+        // Remove Google Calendar event if synced
+        if (iv.google_event_id) {
+          const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
+          const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(iv.mentor_id);
+          google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
+        }
+
+        flash(req, 'ok', 'Booking cancelled. You can book another slot.');
+      } catch (e) {
+        try { db.exec('ROLLBACK'); } catch (_) {}
+        flash(req, 'err', 'Could not cancel booking: ' + e.message);
+      }
     }
   }
   res.redirect('/student');

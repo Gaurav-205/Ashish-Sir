@@ -4,8 +4,9 @@ const links = {
           ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
   mentor: [['/mentor','My interviews']],
   student: [['/student','Dashboard'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
-}[user.role] || [];
-const initials = user.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}[user ? user.role : ''] || [];
+const userName = (user && user.name) ? String(user.name).trim() : '';
+const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?';
 %>
 <header class="topbar">
   <div class="topbar-in">
