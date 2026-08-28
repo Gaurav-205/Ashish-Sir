@@ -37,13 +37,13 @@ function createRateLimiter(options = {}) {
   }, 60 * 1000).unref();
 
   return function rateLimitMiddleware(req, res, next) {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown-ip';
+    const key = (req.body && req.body.email) ? req.body.email.toLowerCase() : (req.ip || req.connection.remoteAddress || 'unknown-ip');
     const now = Date.now();
-    let record = hits.get(ip);
+    let record = hits.get(key);
 
     if (!record || now - record.resetTime > windowMs) {
       record = { count: 1, resetTime: now };
-      hits.set(ip, record);
+      hits.set(key, record);
     } else {
       record.count += 1;
     }
