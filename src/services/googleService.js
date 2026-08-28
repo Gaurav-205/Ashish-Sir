@@ -132,17 +132,25 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
       { email: student.email, displayName: student.name },
       { email: mentor.email, displayName: mentor.name },
     ],
+    conferenceData: {
+      createRequest: {
+        requestId: `konfident-${slot.id}-${Date.now()}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    },
   };
 
   // Attempt sync for student and mentor
   let createdEventId = null;
+  let meetUrl = null;
+
   for (const person of [student, mentor]) {
     if (!person.google_calendar_enabled) continue;
     const token = await getValidAccessToken(person.id);
     if (!token) continue;
 
     try {
-      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -153,6 +161,7 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
       const data = await res.json();
       if (res.ok && data.id && !createdEventId) {
         createdEventId = data.id;
+        meetUrl = data.hangoutLink || (data.conferenceData && data.conferenceData.entryPoints && data.conferenceData.entryPoints[0] ? data.conferenceData.entryPoints[0].uri : null);
       }
     } catch (err) {
       console.error(`Error adding calendar event for user ${person.id}:`, err);
@@ -162,6 +171,9 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   if (createdEventId && interviewId) {
     try {
       db.prepare('UPDATE interviews SET google_event_id=? WHERE id=?').run(createdEventId, interviewId);
+      if (meetUrl) {
+        db.prepare("UPDATE slots SET location=? WHERE id=? AND (location IS NULL OR location = '' OR location LIKE 'Online%')").run(meetUrl, slot.id);
+      }
     } catch (_) {}
   }
 
