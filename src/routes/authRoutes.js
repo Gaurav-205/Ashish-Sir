@@ -173,7 +173,16 @@ router.get('/profile', requireLogin, (req, res) => {
 
 router.post('/profile/update', requireLogin, (req, res) => {
   const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-  const name = String(req.body.name || '').trim() || me.name;
+  const name = String(req.body.name || '').trim();
+  if (!name) {
+    return res.status(400).render('profile', {
+      title: 'My profile',
+      me,
+      error: 'Name cannot be blank.',
+      ok: null,
+      googleConfigured: google.isConfigured(),
+    });
+  }
   const phone = String(req.body.phone || '').trim() || null;
   const branch = me.role === 'student' ? (String(req.body.branch || '').trim() || null) : me.branch;
   const resume_url = me.role === 'student' ? (String(req.body.resume_url || '').trim() || null) : me.resume_url;

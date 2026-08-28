@@ -367,6 +367,127 @@ const login = async (who, email) => {
     const r = await get(who, url);
     ok(r.status === 200 && !/Something went wrong/.test(r.body), `GET ${url} → 200`);
   }
+  section('Concurrency & Atomic Transactions');
+  // Create an open slot for concurrency race test
+  const raceDate = h.addDays(h.today(), 5);
+  db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+              VALUES (?, 'technical', ?, '11:00', '11:30', 'Online', 'https://meet.test/race', 'open')`)
+    .run(tm.id, raceDate);
+  const raceSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND slot_date=? AND start_time='11:00'`).get(tm.id, raceDate);
+
+  // Register 3 fresh students for the race test
+  for (let i = 1; i <= 3; i++) {
+    await post('admin', '/admin/students', {
+      name: `Racer ${i}`, email: `racer${i}@student.in`, password: 'pass123', roll_no: `KONRACE0${i}`, branch: 'CSE'
+    });
+    await login(`racer${i}`, `racer${i}@student.in`);
+  }
+
+  // Trigger 3 concurrent booking requests simultaneously using Promise.all
+  const raceResults = await Promise.all([
+    post('racer1', '/student/book', { slot_id: String(raceSlot.id), type: 'technical' }),
+    post('racer2', '/student/book', { slot_id: String(raceSlot.id), type: 'technical' }),
+    post('racer3', '/student/book', { slot_id: String(raceSlot.id), type: 'technical' }),
+  ]);
+
+  const raceBookings = db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(raceSlot.id).c;
+  ok(raceBookings === 1, 'atomic transaction prevents double booking under concurrent requests');
+  const finalSlotStatus = db.prepare('SELECT status FROM slots WHERE id=?').get(raceSlot.id).status;
+  ok(finalSlotStatus === 'booked', 'concurrent race leaves slot in booked state with single owner');
+
+  section('Input Validation & Boundary Testing');
+  // Register a dedicated candidate for boundary evaluations
+  await post('admin', '/admin/students', {
+    name: 'Boundary Candidate', email: 'boundary.candidate@student.in', password: 'pass123', roll_no: 'KONBND01', branch: 'IT'
+  });
+  const bc = db.prepare(`SELECT * FROM users WHERE email='boundary.candidate@student.in'`).get();
+  await login('bndstudent', 'boundary.candidate@student.in');
+
+  // Create slot, book, and mark attended
+  db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+              VALUES (?, 'technical', ?, '12:00', '12:30', 'Online', 'https://meet.test/bnd', 'open')`)
+    .run(tm.id, raceDate);
+  const bndSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND slot_date=? AND start_time='12:00'`).get(tm.id, raceDate);
+  await post('bndstudent', '/student/book', { slot_id: String(bndSlot.id), type: 'technical' });
+  const bndIv = db.prepare(`SELECT * FROM interviews WHERE slot_id=?`).get(bndSlot.id);
+  await post('testmentor', '/mentor/interview/' + bndIv.id + '/attendance', { attendance: 'attended' });
+
+  // Negative marks rejected
+  const negMarks = await post('testmentor', '/mentor/interview/' + bndIv.id + '/evaluate',
+    { resume_marks: '-2', project_marks: '8', dsa_marks: '8' });
+  ok(negMarks.status === 400 && !db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(bndIv.id),
+     'negative marks are rejected');
+
+  // Non-numeric marks rejected
+  const nonNumMarks = await post('testmentor', '/mentor/interview/' + bndIv.id + '/evaluate',
+    { resume_marks: 'abc', project_marks: '8', dsa_marks: '8' });
+  ok(nonNumMarks.status === 400 && !db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(bndIv.id),
+     'non-numeric marks are rejected');
+
+  // Boundary marks (0/10 and 10/10) accepted cleanly
+  const boundarySubmit = await post('testmentor', '/mentor/interview/' + bndIv.id + '/evaluate',
+    { resume_marks: '0', project_marks: '10', dsa_marks: '10', feedback: 'Extreme boundaries handled cleanly.' });
+  ok(boundarySubmit.status === 302, 'boundary marks (0 and max) are accepted');
+  const bndEval = db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(bndIv.id);
+  ok(bndEval && bndEval.resume_marks === 0 && bndEval.total === 20, 'boundary evaluation stored with correct zero and max sum');
+
+  section('Security & Edge Cases');
+  // Unauthenticated API request rejected
+  const unauthApi = await get('anon_api', '/student/api/slots/available?type=technical');
+  ok(unauthApi.status === 302 && unauthApi.location === '/login', 'unauthenticated call to /student/api/slots/available redirects to login');
+
+  // Deactivated user is logged out immediately
+  db.prepare('UPDATE users SET active=0 WHERE id=?').run(bc.id);
+  const deactivatedAttempt = await get('bndstudent', '/student');
+  ok(deactivatedAttempt.status === 302 && deactivatedAttempt.location === '/login',
+     'deactivated user is immediately logged out and redirected to login');
+  db.prepare('UPDATE users SET active=1 WHERE id=?').run(bc.id);
+
+  // Profile update with whitespace-only name rejected
+  const blankNameUpdate = await post('newstudent', '/profile/update', { name: '   ', branch: 'CSE' });
+  ok(blankNameUpdate.status === 400, 'blank or whitespace-only name update is rejected');
+
+  // Password change validation
+  const wrongOldPass = await post('newstudent', '/profile/password', {
+    current: 'wrongpass', next1: 'newpass123', next2: 'newpass123'
+  });
+  ok(wrongOldPass.body.includes('Current password is incorrect'), 'password update with incorrect current password is rejected');
+
+  const shortPass = await post('newstudent', '/profile/password', {
+    current: 'pass123', next1: '123', next2: '123'
+  });
+  ok(shortPass.body.includes('at least 6 characters'), 'password update with short password is rejected');
+
+  const mismatchPass = await post('newstudent', '/profile/password', {
+    current: 'pass123', next1: 'newpass123', next2: 'mismatch456'
+  });
+  ok(mismatchPass.body.includes('passwords do not match'), 'password update with mismatched confirmation is rejected');
+
+  const validPass = await post('newstudent', '/profile/password', {
+    current: 'pass123', next1: 'newpass123', next2: 'newpass123'
+  });
+  ok(validPass.body.includes('Password updated'), 'valid password update succeeds');
+
+  // Verify login with new password and reset back
+  const newPassLogin = await post('newstudent', '/login', { email: 'test.student@student.in', password: 'newpass123' });
+  ok(newPassLogin.location === '/student', 'student can log in with newly updated password');
+  await post('newstudent', '/profile/password', {
+    current: 'newpass123', next1: 'pass123', next2: 'pass123'
+  });
+
+  // Duplicate student email registration rejected
+  await post('admin', '/admin/students', {
+    name: 'Dup Student', email: 'test.student@student.in', password: 'pass123', roll_no: 'KON99999', branch: 'CSE'
+  });
+  const studentsPageAfterDup = await get('admin', '/admin/students');
+  ok(studentsPageAfterDup.body.includes('already registered'), 'admin registering duplicate student email is rejected');
+
+  // Admin filter checks
+  const bookedFilter = await get('admin', '/admin/interviews?status=booked');
+  ok(bookedFilter.status === 200 && bookedFilter.body.includes('Booked'), 'admin can filter interviews by booked status');
+  const completedFilter = await get('admin', '/admin/interviews?status=completed');
+  ok(completedFilter.status === 200 && completedFilter.body.includes('Completed'), 'admin can filter interviews by completed status');
+
   const healthRes = await get('anon', '/health');
   ok(healthRes.status === 200 && JSON.parse(healthRes.body).status === 'healthy', 'GET /health returns healthy status');
   ok((await get('admin', '/no-such-page')).status === 404, 'unknown URL returns 404');
