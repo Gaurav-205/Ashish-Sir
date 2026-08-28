@@ -57,6 +57,23 @@ body {
 a { color: var(--tech); text-decoration: none; font-weight: 500; }
 a:hover { color: var(--brand-dark); text-decoration: underline; }
 
+a.meet-link {
+  color: var(--tech);
+  font-weight: 600;
+  text-decoration: underline;
+  word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+a.meet-link:hover {
+  color: var(--brand-dark);
+  background: var(--tech-soft);
+  border-radius: 4px;
+  padding: 0 4px;
+  text-decoration: none;
+}
+
 h1, h2, h3 {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 500;

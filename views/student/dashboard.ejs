@@ -28,7 +28,7 @@
       <% } else { %>
         <p><strong><%= h.fmtSlot(iv) %></strong><br>
           <span class="muted">Mentor: <%= iv.mentor_name %></span><br>
-          <span class="muted"><%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></span></p>
+          <span class="muted"><%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %></span></p>
         <p><span class="pill p-<%= iv.status %>"><%= iv.status %></span>
           <% if (iv.status === 'completed' && !iv.eval_id) { %>
             <span class="faint">— result will appear once your mentor submits the evaluation.</span><% } %></p>

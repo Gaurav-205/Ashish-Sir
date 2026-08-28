@@ -21,41 +21,42 @@ const addUser = db.prepare(`INSERT INTO users
 // Default admin
 addUser.run('Konfident Admin', 'admin@konfident.in', PW, 'admin', '9800000000', null, null, null, 0, 0);
 
+// Demo mentors & students (created for RBAC role access)
+const mentors = [
+  ['Arjun Mehta',    'arjun.mentor@konfident.in',  1, 0],
+  ['Priya Nair',     'priya.mentor@konfident.in',  1, 0],
+  ['Rohit Sharma',   'rohit.mentor@konfident.in',  1, 1],
+  ['Sneha Kulkarni', 'sneha.mentor@konfident.in',  0, 1],
+  ['Imran Qureshi',  'imran.mentor@konfident.in',  0, 1],
+].map(([name, email, t, hr]) => {
+  addUser.run(name, email, PW, 'mentor', null, null, null, null, t, hr);
+  return db.prepare('SELECT * FROM users WHERE email=?').get(email);
+});
+
+const studentData = [
+  ['Aisha Khan',        'aisha@student.in',    'KON2025001', 'CSE'],
+  ['Rahul Verma',       'rahul@student.in',    'KON2025002', 'CSE'],
+  ['Meera Iyer',        'meera@student.in',    'KON2025003', 'IT'],
+  ['Karan Singh',       'karan@student.in',    'KON2025004', 'ECE'],
+  ['Divya Rao',         'divya@student.in',    'KON2025005', 'CSE'],
+  ['Sahil Gupta',       'sahil@student.in',    'KON2025006', 'IT'],
+  ['Nikita Joshi',      'nikita@student.in',   'KON2025007', 'CSE'],
+  ['Aman Tiwari',       'aman@student.in',     'KON2025008', 'ECE'],
+  ['Pooja Deshmukh',    'pooja@student.in',    'KON2025009', 'IT'],
+  ['Vikram Chauhan',    'vikram@student.in',   'KON2025010', 'CSE'],
+  ['Fatima Sheikh',     'fatima@student.in',   'KON2025011', 'CSE'],
+  ['Harsh Patel',       'harsh@student.in',    'KON2025012', 'IT'],
+];
+const students = studentData.map(([name, email, roll, branch]) => {
+  addUser.run(name, email, PW, 'student', null, roll, branch,
+    `https://example.com/resumes/${roll}.pdf`, 0, 0);
+  return db.prepare('SELECT * FROM users WHERE email=?').get(email);
+});
+
 const isTest = process.env.DB_PATH && process.env.DB_PATH.includes('test.db');
-const seedMock = isTest || process.env.SEED_MOCK === 'true';
+const seedMockData = isTest || process.env.SEED_MOCK_DATA === 'true';
 
-if (seedMock) {
-  const mentors = [
-    ['Arjun Mehta',    'arjun.mentor@konfident.in',  1, 0],
-    ['Priya Nair',     'priya.mentor@konfident.in',  1, 0],
-    ['Rohit Sharma',   'rohit.mentor@konfident.in',  1, 1],
-    ['Sneha Kulkarni', 'sneha.mentor@konfident.in',  0, 1],
-    ['Imran Qureshi',  'imran.mentor@konfident.in',  0, 1],
-  ].map(([name, email, t, hr]) => {
-    addUser.run(name, email, PW, 'mentor', null, null, null, null, t, hr);
-    return db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  });
-
-  const studentData = [
-    ['Aisha Khan',        'aisha@student.in',    'KON2025001', 'CSE'],
-    ['Rahul Verma',       'rahul@student.in',    'KON2025002', 'CSE'],
-    ['Meera Iyer',        'meera@student.in',    'KON2025003', 'IT'],
-    ['Karan Singh',       'karan@student.in',    'KON2025004', 'ECE'],
-    ['Divya Rao',         'divya@student.in',    'KON2025005', 'CSE'],
-    ['Sahil Gupta',       'sahil@student.in',    'KON2025006', 'IT'],
-    ['Nikita Joshi',      'nikita@student.in',   'KON2025007', 'CSE'],
-    ['Aman Tiwari',       'aman@student.in',     'KON2025008', 'ECE'],
-    ['Pooja Deshmukh',    'pooja@student.in',    'KON2025009', 'IT'],
-    ['Vikram Chauhan',    'vikram@student.in',   'KON2025010', 'CSE'],
-    ['Fatima Sheikh',     'fatima@student.in',   'KON2025011', 'CSE'],
-    ['Harsh Patel',       'harsh@student.in',    'KON2025012', 'IT'],
-  ];
-  const students = studentData.map(([name, email, roll, branch]) => {
-    addUser.run(name, email, PW, 'student', null, roll, branch,
-      `https://example.com/resumes/${roll}.pdf`, 0, 0);
-    return db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  });
-
+if (seedMockData) {
   /* ------------------------------- slots -------------------------------- */
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                               VALUES (?,?,?,?,?,?,?)`);
@@ -152,11 +153,10 @@ if (seedMock) {
 }
 
 const c = (s) => db.prepare(s).get().c;
-if (seedMock) {
-  console.log(`
-  Seed complete (with mock data).
-    users:      ${c('SELECT COUNT(*) c FROM users')}
-    slots:      ${c('SELECT COUNT(*) c FROM slots')} (${c("SELECT COUNT(*) c FROM slots WHERE status='open'")} open)
+console.log(`
+  Database seed complete.
+    users:      ${c('SELECT COUNT(*) c FROM users')} (Admin, Mentors, Students)
+    slots:      ${c('SELECT COUNT(*) c FROM slots')}
     interviews: ${c('SELECT COUNT(*) c FROM interviews')}
     evaluations:${c('SELECT COUNT(*) c FROM evaluations')}
 
@@ -164,16 +164,4 @@ if (seedMock) {
     Admin:    admin@konfident.in
     Mentor:   arjun.mentor@konfident.in
     Student:  aisha@student.in
-  `);
-} else {
-  console.log(`
-  Clean database setup complete (no mock data).
-    users:      ${c('SELECT COUNT(*) c FROM users')} (Admin only)
-    slots:      ${c('SELECT COUNT(*) c FROM slots')}
-    interviews: ${c('SELECT COUNT(*) c FROM interviews')}
-    evaluations:${c('SELECT COUNT(*) c FROM evaluations')}
-
-  Sign in with password: pass123
-    Admin: admin@konfident.in
-  `);
-}
+`);

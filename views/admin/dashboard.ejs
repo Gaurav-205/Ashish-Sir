@@ -19,12 +19,13 @@
     <div class="card-body tight">
       <% if (!upcoming.length) { %><div class="empty">Nothing booked yet.</div><% } else { %>
       <div class="table-scroll"><table>
-        <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor</th></tr></thead>
+        <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor / Meet Link</th></tr></thead>
         <tbody><% upcoming.forEach(function(i){ %>
           <tr>
             <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %></span></td>
             <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-            <td><%= i.student_name %></td><td><%= i.mentor_name %></td>
+            <td><%= i.student_name %></td>
+            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(i.location) : i.location %></span><% } %></td>
           </tr><% }); %></tbody>
       </table></div><% } %>
     </div>
@@ -35,11 +36,12 @@
     <div class="card-body tight">
       <% if (!pendingEval.length) { %><div class="empty">Every completed interview has been scored.</div><% } else { %>
       <div class="table-scroll"><table>
-        <thead><tr><th>Student</th><th>Type</th><th>Mentor</th><th>Date</th></tr></thead>
+        <thead><tr><th>Student</th><th>Type</th><th>Mentor / Meet Link</th><th>Date</th></tr></thead>
         <tbody><% pendingEval.forEach(function(i){ %>
           <tr><td><%= i.student_name %></td>
             <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-            <td><%= i.mentor_name %></td><td class="faint"><%= h.fmtDate(i.slot_date) %></td></tr>
+            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(i.location) : i.location %></span><% } %></td>
+            <td class="faint"><%= h.fmtDate(i.slot_date) %></td></tr>
         <% }); %></tbody>
       </table></div><% } %>
     </div>
@@ -47,17 +49,68 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>Students yet to finish booking</h2>
-    <span class="faint">Each student needs 1 Technical + 1 HR within the week</span></div>
+  <div class="card-head">
+    <h2>Student Interview Breakdown (Technical &amp; HR Lists)</h2>
+    <span class="faint">Separate Technical and HR interview records for every registered student</span>
+  </div>
   <div class="card-body tight">
-    <% if (!notBooked.length) { %><div class="empty">Every student has booked both interviews. 🎉</div><% } else { %>
+    <% if (typeof studentSummaries === 'undefined' || !studentSummaries || !studentSummaries.length) { %><div class="empty">No students registered yet.</div><% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>Roll no</th><th>Student</th><th>Booked</th><th></th></tr></thead>
-      <tbody><% notBooked.forEach(function(s){ %>
-        <tr><td class="mono"><%= s.roll_no || '—' %></td><td><%= s.name %></td>
-          <td><span class="pill <%= s.booked === 0 ? 'p-cancelled' : 'p-booked' %>"><%= s.booked %> of 2</span></td>
-          <td class="num"><a class="btn sm" href="/admin/students/<%= s.id %>">View</a></td></tr>
-      <% }); %></tbody>
+      <thead>
+        <tr>
+          <th>Roll No</th>
+          <th>Student</th>
+          <th>Technical Interview</th>
+          <th>HR Interview</th>
+          <th class="num">Score</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      <% studentSummaries.forEach(function(s){ %>
+        <tr>
+          <td class="mono"><%= s.student.roll_no || '—' %></td>
+          <td>
+            <strong><%= s.student.name %></strong><br>
+            <span class="faint"><%= s.student.email %><%= s.student.branch ? ' · ' + s.student.branch : '' %></span>
+          </td>
+          <td>
+            <% if (!s.technical) { %>
+              <span class="pill p-cancelled">Not Booked</span>
+            <% } else { %>
+              <span class="pill p-<%= s.technical.status %>"><%= h.titleCase(s.technical.status) %></span>
+              <div class="faint" style="margin-top:4px">
+                <%= h.fmtDate(s.technical.slot_date) %> · <%= h.fmtTime(s.technical.start_time) %><br>
+                Mentor: <%= s.technical.mentor_name %>
+                <% if (s.technical.location) { %><br><%- h.linkify ? h.linkify(s.technical.location) : s.technical.location %><% } %>
+              </div>
+            <% } %>
+          </td>
+          <td>
+            <% if (!s.hr) { %>
+              <span class="pill p-cancelled">Not Booked</span>
+            <% } else { %>
+              <span class="pill p-<%= s.hr.status %>"><%= h.titleCase(s.hr.status) %></span>
+              <div class="faint" style="margin-top:4px">
+                <%= h.fmtDate(s.hr.slot_date) %> · <%= h.fmtTime(s.hr.start_time) %><br>
+                Mentor: <%= s.hr.mentor_name %>
+                <% if (s.hr.location) { %><br><%- h.linkify ? h.linkify(s.hr.location) : s.hr.location %><% } %>
+              </div>
+            <% } %>
+          </td>
+          <td class="num">
+            <% if (s.allEvaluated) { %>
+              <strong><%= s.total %></strong><span class="faint">/<%= GRAND_TOTAL %></span>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
+          <td class="num">
+            <a class="btn sm" href="/admin/students/<%= s.student.id %>">View</a>
+          </td>
+        </tr>
+      <% }); %>
+      </tbody>
     </table></div><% } %>
   </div>
 </div>

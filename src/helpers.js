@@ -36,4 +36,14 @@ function isPast(slot) {
   const end = new Date(`${slot.slot_date}T${slot.end_time}:00`);
   return end < now;
 }
-module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast };
+function linkify(str) {
+  if (!str) return '';
+  const s = String(str);
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  if (!urlRegex.test(s)) return s;
+  return s.replace(urlRegex, (url) => {
+    const cleanUrl = url.replace(/[.,;)]+$/, '');
+    return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="meet-link">${cleanUrl} ↗</a>`;
+  });
+}
+module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify };

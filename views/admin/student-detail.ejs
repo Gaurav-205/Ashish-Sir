@@ -6,33 +6,65 @@
 </div>
 
 <div class="grid two">
-  <div class="card"><div class="card-head"><h2>Interviews</h2></div><div class="card-body">
-    <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
-      <div style="margin-bottom:16px">
-        <span class="pill p-<%= t %>"><%= h.titleCase(t) %></span>
-        <% if (!iv) { %><span class="faint"> — not booked yet</span>
-        <% } else { %>
-          <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
-          <div class="faint" style="margin-top:5px"><%= h.fmtSlot(iv) %> · <%= iv.mentor_name %> · <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %></div>
-          <% if (iv.eval_id) { %>
-            <div style="margin-top:7px">
-              <% RUBRIC[t].criteria.forEach(function(c){ %>
-                <span class="pill p-muted"><%= c.label %>: <%= iv[c.key] %>/<%= c.max %></span>
-              <% }); %>
-              <strong> = <%= iv.score %>/<%= RUBRIC[t].total %></strong>
-            </div>
-            <% if (iv.feedback) { %><p class="faint" style="margin-top:7px">“<%= iv.feedback %>”</p><% } %>
-          <% } else if (iv.status === 'completed') { %>
-            <div class="faint" style="margin-top:5px">Awaiting mentor evaluation.</div>
+  <div class="card">
+    <div class="card-head"><h2>Interviews</h2></div>
+    <div class="card-body tight">
+      <div class="table-scroll"><table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Mentor Name</th>
+            <th>Status / Score</th>
+          </tr>
+        </thead>
+        <tbody>
+        <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+          <tr>
+            <td><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span></td>
+            <td><%= iv ? h.fmtDate(iv.slot_date) : '—' %></td>
+            <td><%= iv ? h.fmtTime(iv.start_time) + ' – ' + h.fmtTime(iv.end_time) : '—' %></td>
+            <td>
+              <% if (iv) { %>
+                <%= iv.mentor_name %>
+                <% if (iv.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(iv.location) : iv.location %></span><% } %>
+              <% } else { %>
+                <span class="faint">—</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (!iv) { %>
+                <span class="pill p-cancelled">Not Booked</span>
+              <% } else { %>
+                <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+                <% if (iv.eval_id) { %>
+                  <br><strong><%= iv.score %>/<%= RUBRIC[t].total %></strong>
+                <% } %>
+              <% } %>
+            </td>
+          </tr>
+          <% if (iv && (iv.eval_id || iv.feedback)) { %>
+            <tr>
+              <td colspan="5" class="faint" style="background:var(--surface-hover);padding:8px 16px">
+                <% if (iv.eval_id) { %>
+                  <% RUBRIC[t].criteria.forEach(function(c){ %>
+                    <span class="pill p-muted" style="margin-right:6px"><%= c.label %>: <%= iv[c.key] %>/<%= c.max %></span>
+                  <% }); %>
+                <% } %>
+                <% if (iv.feedback) { %> <em>“<%= iv.feedback %>”</em><% } %>
+              </td>
+            </tr>
           <% } %>
-        <% } %>
-      </div>
-    <% }); %>
-    <% if (s.allEvaluated) { %>
-      <div class="note" style="margin:0">Final: <strong><%= s.total %>/<%= GRAND_TOTAL %></strong> (<%= s.percent %>%) —
-        <%= grade(s.percent).label %></div>
-    <% } %>
-  </div></div>
+        <% }); %>
+        </tbody>
+      </table></div>
+      <% if (s.allEvaluated) { %>
+        <div class="note" style="margin:16px 20px">Final: <strong><%= s.total %>/<%= GRAND_TOTAL %></strong> (<%= s.percent %>%) —
+          <%= grade(s.percent).label %></div>
+      <% } %>
+    </div>
+  </div>
 
   <div class="card"><div class="card-head"><h2>Edit details</h2></div><div class="card-body">
     <form method="post" action="/admin/students/<%= s.student.id %>/update">
@@ -42,7 +74,13 @@
         <div class="field"><label>Branch</label><input name="branch" value="<%= s.student.branch || '' %>"></div>
         <div class="field"><label>Phone</label><input name="phone" value="<%= s.student.phone || '' %>"></div>
       </div>
-      <div class="field"><label>Resume link</label><input type="url" name="resume_url" value="<%= s.student.resume_url || '' %>"></div>
+      <div class="field">
+        <label>Resume link</label>
+        <input type="url" name="resume_url" value="<%= s.student.resume_url || '' %>">
+        <% if (s.student.resume_url) { %>
+          <div style="margin-top:6px"><a class="btn sm" href="<%= s.student.resume_url %>" target="_blank" rel="noopener noreferrer">Open resume ↗</a></div>
+        <% } %>
+      </div>
       <label class="check"><input type="checkbox" name="active" value="1" <%= s.student.active ? 'checked' : '' %>> Account active</label>
       <button class="btn primary">Save changes</button>
     </form>

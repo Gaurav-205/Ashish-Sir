@@ -16,7 +16,7 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 router.get('/', (req, res) => {
   const stats = q.adminStats();
   const upcoming = db.prepare(`
-    SELECT i.id, i.type, i.status, s.slot_date, s.start_time, s.end_time,
+    SELECT i.id, i.type, i.status, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
            st.name AS student_name, m.name AS mentor_name
       FROM interviews i
       JOIN slots s ON s.id = i.slot_id
@@ -25,7 +25,7 @@ router.get('/', (req, res) => {
      WHERE i.status = 'booked'
      ORDER BY s.slot_date, s.start_time LIMIT 8`).all();
   const pendingEval = db.prepare(`
-    SELECT i.id, i.type, s.slot_date, st.name AS student_name, m.name AS mentor_name
+    SELECT i.id, i.type, s.slot_date, s.mode, s.location, st.name AS student_name, m.name AS mentor_name
       FROM interviews i
       JOIN slots s ON s.id = i.slot_id
       JOIN users st ON st.id = i.student_id
@@ -33,13 +33,14 @@ router.get('/', (req, res) => {
       LEFT JOIN evaluations e ON e.interview_id = i.id
      WHERE i.status = 'completed' AND e.id IS NULL
      ORDER BY s.slot_date LIMIT 8`).all();
+  const studentSummaries = q.allStudentSummaries();
   const notBooked = db.prepare(`
     SELECT * FROM (
       SELECT u.id, u.name, u.roll_no,
         (SELECT COUNT(*) FROM interviews i WHERE i.student_id=u.id AND i.status<>'cancelled') AS booked
         FROM users u WHERE u.role='student'
     ) WHERE booked < 2 ORDER BY booked, name LIMIT 10`).all();
-  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked });
+  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked, studentSummaries, GRAND_TOTAL });
 });
 
 /* ------------------------------- students ------------------------------ */
@@ -177,6 +178,7 @@ router.post('/slots', (req, res) => {
     if (type === 'hr' && !mentor.can_hr) throw new Error(`${mentor.name} is not enabled for HR interviews.`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
     if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
+    const loc = (location && location.trim()) ? location.trim() : 'https://meet.konfident.in/room';
 
     const mins = Number(duration) || 30;
     const n = Math.min(Math.max(Number(count) || 1, 1), 20);
@@ -204,7 +206,7 @@ router.post('/slots', (req, res) => {
       }
 
       try {
-        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', location || null);
+        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', loc);
         made++;
       } catch (e) {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;

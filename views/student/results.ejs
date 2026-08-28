@@ -18,15 +18,64 @@
   </div></div>
 <% } %>
 
+<div class="card">
+  <div class="card-head"><h2>Completed &amp; Booked Interviews Table</h2><span class="faint">Your interview timeline &amp; meeting details</span></div>
+  <div class="card-body tight">
+    <div class="table-scroll"><table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Date</th>
+          <th>Start &amp; End Time</th>
+          <th>Mentor Name / Meet Link</th>
+          <th>Status</th>
+          <th class="num">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+      <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
+        <tr>
+          <td><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span></td>
+          <td><%= iv ? h.fmtDate(iv.slot_date) : '—' %></td>
+          <td><%= iv ? h.fmtTime(iv.start_time) + ' – ' + h.fmtTime(iv.end_time) : '—' %></td>
+          <td>
+            <% if (iv) { %>
+              <strong><%= iv.mentor_name %></strong>
+              <% if (iv.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(iv.location) : iv.location %></span><% } %>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (!iv) { %>
+              <span class="pill p-cancelled">Not Booked</span>
+            <% } else { %>
+              <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
+            <% } %>
+          </td>
+          <td class="num">
+            <% if (iv && iv.eval_id) { %>
+              <strong><%= iv.score %></strong><span class="faint">/<%= RUBRIC[t].total %></span>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
+        </tr>
+      <% }); %>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
 <div class="grid two">
 <% ['technical','hr'].forEach(function(t){ const iv = s[t]; %>
   <div class="card">
-    <div class="card-head"><h2><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span> Interview</h2>
+    <div class="card-head"><h2><span class="pill p-<%= t %>"><%= h.titleCase(t) %></span> Evaluation Breakdown</h2>
       <% if (iv && iv.eval_id) { %><strong><%= iv.score %>/<%= RUBRIC[t].total %></strong><% } %></div>
     <div class="card-body">
       <% if (!iv) { %><p class="muted">Not booked yet. <a href="/student/slots?type=<%= t %>">Book a slot →</a></p>
       <% } else { %>
-        <p class="faint"><%= h.fmtSlot(iv) %> · Mentor: <%= iv.mentor_name %> ·
+        <p class="faint"><%= h.fmtSlot(iv) %> · Mentor: <%= iv.mentor_name %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %> ·
           <span class="pill p-<%= iv.status %>"><%= iv.status %></span></p>
         <% if (iv.eval_id) { %>
           <div class="table-scroll"><table>

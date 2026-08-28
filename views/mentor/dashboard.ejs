@@ -24,7 +24,7 @@
           <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td><strong><%= i.student_name %></strong><br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span></td>
-          <td class="faint"><%= i.mode %><%= i.location ? ' · ' + i.location : '' %></td>
+          <td class="faint"><%= i.mode %><% if (i.location) { %> · <%- h.linkify ? h.linkify(i.location) : i.location %><% } %></td>
           <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open</a></td>
         </tr>
       <% }); %></tbody>
@@ -37,12 +37,12 @@
   <div class="card-body tight">
     <% if (!completed.length) { %><div class="empty">Nothing completed yet.</div><% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Evaluation</th><th class="num">Score</th><th></th></tr></thead>
+      <thead><tr><th>Date &amp; Time</th><th>Type</th><th>Student Name</th><th>Evaluation</th><th class="num">Score</th><th></th></tr></thead>
       <tbody><% completed.forEach(function(i){ %>
         <tr>
-          <td><%= h.fmtDate(i.slot_date) %></td>
+          <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-          <td><%= i.student_name %></td>
+          <td><strong><%= i.student_name %></strong></td>
           <td><% if (i.eval_id) { %><span class="pill p-completed">submitted</span>
               <% } else { %><span class="pill p-booked">pending</span><% } %></td>
           <td class="num"><% if (i.eval_id) { %><strong><%= i.score %></strong><span class="faint">/<%= RUBRIC[i.type].total %></span>
@@ -65,7 +65,7 @@
         <tr><td><%= h.fmtDate(s.slot_date) %></td>
           <td><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></td></tr>
+          <td class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify ? h.linkify(s.location) : s.location %><% } %></td></tr>
       <% }); %></tbody>
     </table></div><% } %>
   </div>
