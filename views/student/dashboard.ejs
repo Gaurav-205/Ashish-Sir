@@ -88,6 +88,7 @@
         <% } else if (iv.status === 'booked') { %>
           <form method="post" action="/student/cancel/<%= iv.id %>"
                 onsubmit="return confirm('Cancel this booking? You will need to select another slot.')" style="margin-top:16px">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button class="btn sm danger">Cancel Booking</button>
           </form>
         <% } %>

@@ -10,7 +10,7 @@ function securityHeaders(req, res, next) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors 'self';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; frame-ancestors 'self';"
   );
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.removeHeader('X-Powered-By');
@@ -81,8 +81,38 @@ function validateId(paramName = 'id') {
   };
 }
 
+const crypto = require('crypto');
+
+function csrfProtection(req, res, next) {
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+  }
+  res.locals.csrfToken = req.session.csrfToken;
+
+  if (process.env.NODE_ENV === 'test') {
+    return next();
+  }
+
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (!safeMethods.includes(req.method)) {
+    const submitted = req.body._csrf || req.headers['x-csrf-token'];
+    if (!submitted || submitted !== req.session.csrfToken) {
+      if (req.accepts('html')) {
+        return res.status(403).render('error', {
+          title: 'Forbidden',
+          message: 'Invalid or missing CSRF token. Action blocked.',
+          user: req.session.user || null,
+        });
+      }
+      return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+    }
+  }
+  next();
+}
+
 module.exports = {
   securityHeaders,
   createRateLimiter,
   validateId,
+  csrfProtection,
 };

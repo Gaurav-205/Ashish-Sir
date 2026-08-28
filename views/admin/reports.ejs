@@ -22,7 +22,7 @@
   <div class="stat"><div class="n"><%= avg == null ? '—' : avg.toFixed(1) %></div><div class="l">Cohort Average /<%= GRAND_TOTAL %></div></div>
   <div class="stat"><div class="n"><%= avgTech == null ? '—' : avgTech.toFixed(1) %></div><div class="l">Avg Technical /<%= RUBRIC.technical.total %></div></div>
   <div class="stat"><div class="n"><%= avgHr == null ? '—' : avgHr.toFixed(1) %></div><div class="l">Avg HR /<%= RUBRIC.hr.total %></div></div>
-  <div class="stat"><div class="n"><%= stats.attended || stats.completed %></div><div class="l">Sessions Attended</div></div>
+  <div class="stat"><div class="n"><%= stats.attended %></div><div class="l">Sessions Attended</div></div>
 </div>
 
 <div class="card">

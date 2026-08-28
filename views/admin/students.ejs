@@ -13,10 +13,11 @@
   <div class="card-head"><h2>Register a candidate</h2></div>
   <div class="card-body">
     <form method="post" action="/admin/students">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Aisha Sharma" required></div>
         <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="aisha@college.edu" required></div>
-        <div class="field"><label>Initial Password *</label><input name="password" required minlength="6" value="pass123"></div>
+        <div class="field"><label>Initial Password *</label><input type="password" name="password" placeholder="At least 6 characters" required minlength="6"></div>
         <div class="field"><label>Roll Number</label><input name="roll_no" placeholder="KON2025001"></div>
         <div class="field"><label>Branch / Major</label><input name="branch" placeholder="CSE, IT, ECE"></div>
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>

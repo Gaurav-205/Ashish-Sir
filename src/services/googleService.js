@@ -2,9 +2,9 @@
 const db = require('../db');
 const h = require('../helpers');
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';
+const getClientId = () => (process.env.GOOGLE_CLIENT_ID || '').trim();
+const getClientSecret = () => (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+const getRedirectUri = () => (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/callback/google').trim();
 
 const SCOPES = [
   'openid',
@@ -14,13 +14,13 @@ const SCOPES = [
 ];
 
 function isConfigured() {
-  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+  return !!(getClientId() && getClientSecret());
 }
 
 function getAuthUrl(state = '') {
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: GOOGLE_REDIRECT_URI,
+    client_id: getClientId(),
+    redirect_uri: getRedirectUri(),
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
@@ -32,20 +32,43 @@ function getAuthUrl(state = '') {
 }
 
 async function exchangeCode(code) {
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+  const clientId = getClientId();
+  const clientSecret = getClientSecret();
+  const redirectUri = getRedirectUri();
+
+  let tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: GOOGLE_REDIRECT_URI,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }).toString(),
   });
 
-  const tokenData = await tokenRes.json();
+  let tokenData = await tokenRes.json();
+
+  if (!tokenRes.ok && tokenData.error === 'invalid_client') {
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${basic}`,
+      },
+      body: new URLSearchParams({
+        code,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    tokenData = await tokenRes.json();
+  }
+
   if (!tokenRes.ok || tokenData.error) {
+    console.error('Google token exchange error details:', tokenData);
     throw new Error(tokenData.error_description || tokenData.error || 'Failed to exchange Google OAuth code.');
   }
 
@@ -74,7 +97,7 @@ async function exchangeCode(code) {
 }
 
 async function getValidAccessToken(userId) {
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  const user = db.prepare('SELECT google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(userId);
   if (!user || !user.google_access_token) return null;
 
   // Check if token is still valid (buffer of 60 seconds)
@@ -92,8 +115,8 @@ async function getValidAccessToken(userId) {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
+        client_id: getClientId(),
+        client_secret: getClientSecret(),
         refresh_token: user.google_refresh_token,
         grant_type: 'refresh_token',
       }).toString(),

@@ -7,6 +7,7 @@
   <div class="card-head"><h2>Create slots</h2><span class="faint">Generate several back-to-back slots at once</span></div>
   <div class="card-body">
     <form method="post" action="/admin/slots">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Interview type *</label>
           <select name="type" id="typeSel" required>
@@ -25,10 +26,11 @@
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
-        <div class="field"><label>Link / room *</label><input name="location" placeholder="https://meet… or Room 204" required></div>
+        <div class="field"><label>Link / room</label><input name="location" placeholder="Auto-generated secure meeting link if empty"></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Create slots</button>
+        <button type="button" class="btn sm" onclick="autoGenLink()">⚡ Auto-Gen Video Link</button>
         <span class="faint" style="font-size:12px">Quick presets:</span>
         <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00 - 12:00, 4 slots)</button>
         <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00 - 17:00, 6 slots)</button>
@@ -79,6 +81,7 @@
               <div class="panel" style="text-align:left;min-width:280px">
                 <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
                 <form method="post" action="/admin/slots/<%= s.id %>/reschedule">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <div class="row">
                     <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" required></div>
                     <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" required></div>
@@ -101,13 +104,13 @@
                 <% } %>
                 <div class="btn-row" style="margin-top:10px">
                   <% if (s.status === 'booked' && s.interview_status !== 'completed') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/release"><button class="btn sm">Release booking</button></form>
+                    <form method="post" action="/admin/slots/<%= s.id %>/release"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm">Release booking</button></form>
                   <% } %>
                   <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/cancel"><button class="btn sm danger">Cancel slot</button></form>
+                    <form method="post" action="/admin/slots/<%= s.id %>/cancel"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm danger">Cancel slot</button></form>
                   <% } %>
                   <% if (s.status === 'cancelled') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/reopen"><button class="btn sm">Reopen</button></form>
+                    <form method="post" action="/admin/slots/<%= s.id %>/reopen"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm">Reopen</button></form>
                   <% } %>
                 </div>
               </div>
@@ -120,28 +123,5 @@
     </table></div>
   </div>
 </div>
-<script>
-(function(){
-  var t = document.getElementById('typeSel'), m = document.getElementById('mentorSel');
-  if(!t||!m) return;
-  function sync(){
-    var v = t.value, first = null;
-    Array.prototype.forEach.call(m.options, function(o){
-      var match = o.dataset.type === v;
-      o.hidden = !match; o.disabled = !match;
-      if (match && !first) first = o;
-    });
-    if (first && (m.selectedOptions[0] || {}).hidden !== false) m.value = first.value;
-  }
-  t.addEventListener('change', sync); sync();
-  window.applyPreset = function(start, duration, count) {
-    var s = document.querySelector('input[name="start_time"]');
-    var d = document.querySelector('input[name="duration"]');
-    var c = document.querySelector('input[name="count"]');
-    if (s) s.value = start;
-    if (d) d.value = duration;
-    if (c) c.value = count;
-  };
-})();
-</script>
+<script src="/js/admin-slots.js"></script>
 <%- include('../partials/foot') %>

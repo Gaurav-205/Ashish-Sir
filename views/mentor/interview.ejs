@@ -37,6 +37,7 @@
       <% if (!iv.eval_id) { %>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="attendance" value="attended">
             <button class="btn sm <%= iv.attendance === 'attended' ? 'primary' : '' %>" style="display:inline-flex;align-items:center;gap:6px">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -46,6 +47,7 @@
             </button>
           </form>
           <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="attendance" value="absent">
             <button class="btn sm danger" onclick="return confirm('Mark candidate as absent / no-show?')" style="display:inline-flex;align-items:center;gap:6px">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -92,6 +94,7 @@
 
       <% } else { %>
         <form method="post" action="/mentor/interview/<%= iv.id %>/evaluate" id="evalForm">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <div class="row">
             <% RUBRIC[iv.type].criteria.forEach(function(c){ %>
               <div class="field">
@@ -106,14 +109,7 @@
           <p><strong>Total: <span id="tot">0</span> / <%= RUBRIC[iv.type].total %></strong></p>
           <button class="btn primary" onclick="return confirm('Submit this evaluation? It cannot be edited afterwards.')">Submit evaluation</button>
         </form>
-        <script>
-        (function(){
-          var f = document.getElementById('evalForm'); if(!f) return;
-          var ins = f.querySelectorAll('.mark'), out = document.getElementById('tot');
-          function calc(){ var t=0; ins.forEach(function(i){ var v=parseInt(i.value,10); if(!isNaN(v)) t+=v; }); out.textContent=t; }
-          ins.forEach(function(i){ i.addEventListener('input', calc); }); calc();
-        })();
-        </script>
+        <script src="/js/eval-calc.js"></script>
       <% } %>
     </div>
   </div>

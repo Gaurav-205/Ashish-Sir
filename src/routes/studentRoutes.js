@@ -7,6 +7,8 @@ const { requireRole } = require('../auth');
 
 const router = express.Router();
 const google = require('../services/googleService');
+const { validateId } = require('../middleware/security');
+const { logAudit } = require('../middleware/auditLog');
 router.use(requireRole('student'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
@@ -106,10 +108,18 @@ router.get('/api/slots/available', (req, res) => {
      ORDER BY s.slot_date, s.start_time`).all(...args);
 
   const formattedSlots = slots.map(sl => ({
-    ...sl,
+    id: sl.id,
+    type: sl.type,
+    slot_date: sl.slot_date,
+    start_time: sl.start_time,
+    end_time: sl.end_time,
+    mode: sl.mode,
+    location: sl.location,
+    mentor_name: sl.mentor_name,
     dateFormatted: h.fmtDate(sl.slot_date),
     timeFormatted: `${h.fmtTime(sl.start_time)} – ${h.fmtTime(sl.end_time)}`,
     slotFormatted: h.fmtSlot(sl),
+    locationFormatted: h.linkify(sl.location),
   }));
 
   const byDate = [];
@@ -161,9 +171,11 @@ router.post('/book', async (req, res) => {
     db.exec('COMMIT');
 
     // Asynchronously sync to Google Calendar if enabled
-    const student = db.prepare('SELECT * FROM users WHERE id=?').get(studentId);
-    const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(slot.mentor_id);
+    const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(studentId);
+    const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
     google.syncCalendarEvent({ student, mentor, slot, interviewId: insert.lastInsertRowid }).catch(() => {});
+
+    logAudit(req, 'STUDENT_BOOK_SLOT', { slot_id: slot.id, type: slot.type });
 
     flash(req, 'ok', `${h.titleCase(slot.type)} interview booked for ${h.fmtSlot(slot)}.`);
     return res.redirect('/student');
@@ -174,7 +186,7 @@ router.post('/book', async (req, res) => {
   }
 });
 
-router.post('/cancel/:id', async (req, res) => {
+router.post('/cancel/:id', validateId('id'), async (req, res) => {
   const iv = db.prepare(`SELECT * FROM interviews WHERE id=? AND student_id=?`)
     .get(Number(req.params.id), req.session.user.id);
   if (!iv) {
@@ -194,10 +206,12 @@ router.post('/cancel/:id', async (req, res) => {
 
         // Remove Google Calendar event if synced
         if (iv.google_event_id) {
-          const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
-          const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(iv.mentor_id);
+          const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
+          const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
           google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
         }
+
+        logAudit(req, 'STUDENT_CANCEL_SLOT', { interview_id: iv.id, slot_id: iv.slot_id });
 
         flash(req, 'ok', 'Booking cancelled. You can book another slot.');
       } catch (e) {

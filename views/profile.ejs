@@ -5,6 +5,7 @@
     <div class="card-head"><h2>My details</h2></div>
     <div class="card-body">
       <form method="post" action="/profile/update">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="field">
           <label>Full name</label>
           <input name="name" value="<%= me.name %>" required>
@@ -48,10 +49,11 @@
     <% if (error) { %><div class="flash err"><%= error %></div><% } %>
     <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>
     <form method="post" action="/profile/password">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="field"><label>Current password</label><input type="password" name="current" required></div>
       <div class="field"><label>New password</label><input type="password" name="next1" required minlength="6"></div>
       <div class="field"><label>Confirm new password</label><input type="password" name="next2" required minlength="6"></div>
-      <button class="btn primary">Update password</button>
+      <button class="btn primary sm">Update password</button>
     </form>
   </div></div>
 </div>
@@ -72,11 +74,13 @@
     <% if (me.google_id) { %>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <form method="post" action="/profile/google/toggle-calendar">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <button class="btn sm <%= me.google_calendar_enabled ? 'primary' : '' %>">
             <%= me.google_calendar_enabled ? '✓ Google Calendar sync active' : 'Enable Calendar sync' %>
           </button>
         </form>
         <form method="post" action="/profile/google/disconnect" onsubmit="return confirm('Disconnect Google account and calendar sync?')">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <button class="btn sm danger">Disconnect Google Account</button>
         </form>
       </div>

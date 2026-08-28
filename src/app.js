@@ -1,4 +1,7 @@
 'use strict';
+if (typeof process.loadEnvFile === 'function') {
+  try { process.loadEnvFile(); } catch (_) {}
+}
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
@@ -6,11 +9,12 @@ const SQLiteStore = require('connect-sqlite3')(session);
 
 const helpers = require('./helpers');
 const { RUBRIC, GRAND_TOTAL, grade } = require('./rubric');
-const { securityHeaders } = require('./middleware/security');
+const { securityHeaders, csrfProtection } = require('./middleware/security');
 
 const app = express();
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(securityHeaders);
 
 app.set('view engine', 'ejs');
@@ -19,9 +23,15 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1d' }));
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret && process.env.NODE_ENV === 'production') {
+  console.error('FATAL: SESSION_SECRET environment variable must be set in production.');
+  process.exit(1);
+}
+
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, '..', 'data') }),
-  secret: process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret',
+  secret: sessionSecret || 'konfident-interview-2025-dev-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -31,6 +41,8 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production',
   },
 }));
+
+app.use(csrfProtection);
 
 // flash messages
 app.use((req, res, next) => {
@@ -46,8 +58,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint for uptime and orchestrator probes
+// Safe health check endpoint for uptime and orchestrator probes
 app.get('/health', (req, res) => {
+  res.json({ status: 'healthy' });
+});
+
+// Detailed health diagnostics for administrators
+app.get('/health/details', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   res.json({
     status: 'healthy',
     uptime: Math.floor(process.uptime()),

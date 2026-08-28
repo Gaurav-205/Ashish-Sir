@@ -13,10 +13,11 @@
   <div class="card-head"><h2>Register a new mentor</h2></div>
   <div class="card-body">
     <form method="post" action="/admin/mentors">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Arjun Mehta" required></div>
         <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="arjun.mentor@konfident.in" required></div>
-        <div class="field"><label>Initial Password *</label><input name="password" required minlength="6" value="pass123"></div>
+        <div class="field"><label>Initial Password *</label><input type="password" name="password" placeholder="At least 6 characters" required minlength="6"></div>
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
       </div>
       <div style="display:flex;gap:18px;margin:12px 0 16px;flex-wrap:wrap">
@@ -49,6 +50,7 @@
             <details class="inline"><summary>Edit profile</summary>
               <div class="panel">
                 <form method="post" action="/admin/mentors/<%= m.id %>/update">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <div class="row">
                     <div class="field"><label>Name</label><input name="name" value="<%= m.name %>" required></div>
                     <div class="field"><label>Phone</label><input name="phone" value="<%= m.phone || '' %>"></div>
@@ -61,7 +63,9 @@
                   <button class="btn primary sm">Save changes</button>
                 </form>
                 <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
-                  <input name="password" placeholder="New password" minlength="6" required style="max-width:180px">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <input name="admin_password" type="password" placeholder="Your admin password" required style="max-width:160px">
+                  <input name="password" placeholder="New password" minlength="6" required style="max-width:160px">
                   <button class="btn sm">Reset password</button>
                 </form>
               </div>

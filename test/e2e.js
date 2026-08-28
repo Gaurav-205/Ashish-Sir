@@ -11,6 +11,7 @@ const { execFileSync } = require('child_process');
 const TMP = path.join(__dirname, '..', 'data', 'test.db');
 for (const f of [TMP, TMP + '-wal', TMP + '-shm']) if (fs.existsSync(f)) fs.unlinkSync(f);
 process.env.DB_PATH = TMP;
+process.env.NODE_ENV = 'test';
 
 execFileSync(process.execPath, [path.join(__dirname, '..', 'src', 'seed.js')],
   { env: { ...process.env, DB_PATH: TMP }, stdio: 'ignore' });
@@ -57,6 +58,12 @@ const login = async (who, email) => {
   ok(homeResp.headers.get('x-frame-options') === 'SAMEORIGIN', 'X-Frame-Options is SAMEORIGIN');
   ok(homeResp.headers.get('content-security-policy') != null, 'Content-Security-Policy is set');
 
+  // Verify CSRF Protection is active outside 'test' environment
+  process.env.NODE_ENV = 'development';
+  const csrfBlockResp = await post('csrf_victim', '/login', { email: 'student@konfident.in', password: 'password' });
+  ok(csrfBlockResp.status === 403, 'POST request without CSRF token is blocked with 403');
+  process.env.NODE_ENV = 'test';
+
   section('Authentication & access control');
   ok((await post('x', '/login', { email: 'admin@konfident.in', password: 'wrong' })).status === 401,
      'wrong password is rejected');
@@ -76,6 +83,13 @@ const login = async (who, email) => {
   ok((await get('student', '/mentor')).status === 403, 'student cannot open the mentor module');
   ok((await get('mentor', '/admin/reports')).status === 403, 'mentor cannot open admin reports');
   ok((await get('admin', '/student')).status === 403, 'admin cannot open the student module');
+
+  const auditCount = db.prepare('SELECT COUNT(*) c FROM audit_logs').get().c;
+  ok(auditCount > 0, 'security events are recorded in audit_logs table');
+  const failedAudit = db.prepare("SELECT * FROM audit_logs WHERE action='AUTH_LOGIN_FAILED'").get();
+  ok(!!failedAudit, 'failed login is recorded in audit_logs');
+  const loginAudit = db.prepare("SELECT * FROM audit_logs WHERE action='AUTH_LOGIN_SUCCESS'").all();
+  ok(loginAudit.length >= 4, 'successful logins are recorded in audit_logs with user metadata');
 
   section('Admin — creating mentors, students and slots');
   await post('admin', '/admin/mentors', {
@@ -340,6 +354,14 @@ const login = async (who, email) => {
   const prof = await get('newstudent', '/profile');
   ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
      'profile page renders Google Account & Calendar Integration card');
+
+  // Test Dev Mock Google Sign-In & Student Creation
+  const devMockRes = await get('gmock', '/auth/google/dev-mock');
+  ok(devMockRes.status === 302 && devMockRes.location === '/student',
+     'Google OAuth dev bypass signs in and redirects to student dashboard');
+  const gmockStudentPage = await get('gmock', '/student');
+  ok(gmockStudentPage.status === 200 && gmockStudentPage.body.includes('Hello,'),
+     'Google OAuth registered student can access dashboard');
 
   // Test profile details update
   await post('newstudent', '/profile/update', {

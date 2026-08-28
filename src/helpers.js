@@ -36,27 +36,51 @@ function titleCase(s) {
   if (!s) return '';
   return s.toLowerCase() === 'hr' ? 'HR' : s.charAt(0).toUpperCase() + s.slice(1);
 }
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function isPast(slot) {
   if (!slot || !slot.slot_date) return false;
   const now = new Date();
-  const timeStr = slot.end_time || slot.start_time || '23:59';
-  const end = new Date(`${slot.slot_date}T${timeStr}:00`);
-  return !isNaN(end.getTime()) && end < now;
+  const timeStr = slot.start_time || '00:00';
+  const start = new Date(`${slot.slot_date}T${timeStr}:00`);
+  return !isNaN(start.getTime()) && start <= now;
 }
+
+function generateMeetingLink(type = 'interview') {
+  const cleanType = String(type).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const id = Math.random().toString(36).substring(2, 8);
+  const time = Date.now().toString(36);
+  return `https://meet.jit.si/konfident-${cleanType || 'mock'}-${time}-${id}`;
+}
+
 function linkify(str) {
   if (!str) return '';
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  if (!urlRegex.test(str)) return str;
-  return str.replace(urlRegex, (url) => {
-    let label = `${url} ↗`;
-    if (url.includes('calendar.google.com') || url.includes('appointments/schedules')) {
-      label = 'Google Calendar Appointment ↗';
-    } else if (url.includes('meet.google.com') || url.includes('meet.konfident')) {
-      label = 'Google Meet ↗';
-    } else if (url.includes('zoom.us')) {
-      label = 'Zoom Meeting ↗';
+  const parts = str.split(urlRegex);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      const url = escapeHtml(part);
+      let label = `${url} ↗`;
+      if (url.includes('calendar.google.com') || url.includes('appointments/schedules')) {
+        label = 'Google Calendar Appointment ↗';
+      } else if (url.includes('meet.google.com')) {
+        label = 'Google Meet ↗';
+      } else if (url.includes('meet.jit.si') || url.includes('meet.konfident')) {
+        label = 'Join Video Meeting ↗';
+      } else if (url.includes('zoom.us')) {
+        label = 'Zoom Meeting ↗';
+      }
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
+    } else {
+      return escapeHtml(part);
     }
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
-  });
+  }).join('');
 }
-module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify };
+module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify, escapeHtml, generateMeetingLink };
