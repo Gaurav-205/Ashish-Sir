@@ -29,8 +29,15 @@
 </div>
 
 <% if (pending.length) { %>
-  <div class="note">
-    ⚡ Action needed: You have <strong><%= pending.length %></strong> completed interview(s) awaiting score submission.
+  <div class="note" style="display:flex;align-items:center;gap:10px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--warn)">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="8" x2="12" y2="12"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+    <div>
+      Action needed: You have <strong><%= pending.length %></strong> completed interview(s) awaiting score submission.
+    </div>
   </div>
 <% } %>
 

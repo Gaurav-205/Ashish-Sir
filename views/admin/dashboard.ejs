@@ -49,7 +49,7 @@
       <h2>Completed sessions awaiting scores</h2>
     </div>
     <div class="card-body tight">
-      <% if (!pendingEval.length) { %><div class="empty">Every completed interview has been evaluated. 🎉</div><% } else { %>
+      <% if (!pendingEval.length) { %><div class="empty">Every completed interview has been evaluated.</div><% } else { %>
       <div class="table-scroll"><table>
         <thead><tr><th>Student</th><th>Type</th><th>Mentor</th><th>Date</th></tr></thead>
         <tbody><% pendingEval.forEach(function(i){ %>
@@ -72,7 +72,7 @@
   </div>
   <div class="card-body tight">
     <% if (!notBooked.length) { %>
-      <div class="empty">Every student has booked both interviews. 🎉</div>
+      <div class="empty">Every student has booked both interviews.</div>
     <% } else { %>
     <div class="table-scroll"><table>
       <thead><tr><th>Roll No</th><th>Student Name</th><th>Booking Status</th><th class="num">Action</th></tr></thead>

@@ -38,14 +38,21 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
             <input type="hidden" name="attendance" value="attended">
-            <button class="btn sm <%= iv.attendance === 'attended' ? 'primary' : '' %>">
-              ✓ <%= iv.attendance === 'attended' ? 'Marked Attended' : 'Mark Attended (Present)' %>
+            <button class="btn sm <%= iv.attendance === 'attended' ? 'primary' : '' %>" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <%= iv.attendance === 'attended' ? 'Marked Attended' : 'Mark Attended (Present)' %>
             </button>
           </form>
           <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
             <input type="hidden" name="attendance" value="absent">
-            <button class="btn sm danger" onclick="return confirm('Mark candidate as absent / no-show?')">
-              ✗ <%= iv.attendance === 'absent' ? 'Marked Absent' : 'Mark Absent / No-Show' %>
+            <button class="btn sm danger" onclick="return confirm('Mark candidate as absent / no-show?')" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <%= iv.attendance === 'absent' ? 'Marked Absent' : 'Mark Absent / No-Show' %>
             </button>
           </form>
         </div>

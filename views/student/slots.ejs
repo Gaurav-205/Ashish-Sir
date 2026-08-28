@@ -14,12 +14,19 @@
 </div>
 
 <% if (already && already.status !== 'cancelled') { %>
-  <div class="note">
-    ℹ️ You have already booked your <%= h.titleCase(type) %> interview —
-    <strong><%= h.fmtSlot(already) %></strong> with <strong><%= already.mentor_name %></strong>.
-    <% if (already.status === 'booked') { %>
-      To select a different time, cancel your current booking from your <a href="/student">dashboard</a>.
-    <% } %>
+  <div class="note" style="display:flex;align-items:center;gap:10px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--action-blue)">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="16" x2="12" y2="12"></line>
+      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+    <div>
+      You have already booked your <%= h.titleCase(type) %> interview —
+      <strong><%= h.fmtSlot(already) %></strong> with <strong><%= already.mentor_name %></strong>.
+      <% if (already.status === 'booked') { %>
+        To select a different time, cancel your current booking from your <a href="/student">dashboard</a>.
+      <% } %>
+    </div>
   </div>
 <% } %>
 
@@ -27,8 +34,11 @@
 <div id="smart-auto-banner" class="card" style="margin-bottom:20px;display:none;background:var(--pale-green);border-color:#bbf7d0">
   <div class="card-body" style="padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
     <div>
-      <div class="mono" style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--deep-green);text-transform:uppercase;margin-bottom:2px">
-        ⚡ Smart Match · Earliest Available Slot Found
+      <div class="mono" style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--deep-green);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        Smart Match · Earliest Available Slot Found
       </div>
       <div id="smart-auto-text" style="font-size:14px;color:var(--deep-green)">
         Finding earliest slot…
@@ -63,8 +73,13 @@
           <option value="<%= m.id %>" <%= selectedMentor === m.id ? 'selected' : '' %>><%= m.name %></option>
         <% }); %>
       </select>
-      <button type="button" class="btn sm" onclick="fetchLatestSlots()" title="Refresh available slots">
-        🔄 Refresh
+      <button type="button" class="btn sm" onclick="fetchLatestSlots()" title="Refresh available slots" style="display:inline-flex;align-items:center;gap:6px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Refresh
       </button>
     </form>
   </div>

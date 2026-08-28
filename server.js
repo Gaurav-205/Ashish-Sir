@@ -4,8 +4,8 @@ const db = require('./src/db');
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
-  console.log(`\n  🎯 Konfident Interview 2025 running at http://localhost:${PORT}`);
-  console.log(`  ⚡ Environment: ${process.env.NODE_ENV || 'development'} | PID: ${process.pid}\n`);
+  console.log(`\n  [Konfident Interview 2025] running at http://localhost:${PORT}`);
+  console.log(`  Environment: ${process.env.NODE_ENV || 'development'} | PID: ${process.pid}\n`);
 });
 
 // Graceful shutdown handling for container and process orchestrators
