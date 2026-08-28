@@ -1,10 +1,32 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireLogin } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
+const { logAudit } = require('../middleware/auditLog');
+const fs = require('fs');
+const path = require('path');
+const { DatabaseSync } = require('node:sqlite');
+
+function invalidateOtherSessions(userId, currentSessionId) {
+  setTimeout(() => {
+    try {
+      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
+      if (fs.existsSync(sessionsDbPath)) {
+        const sdb = new DatabaseSync(sessionsDbPath);
+        sdb.exec('PRAGMA busy_timeout = 5000');
+        sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ? AND sid <> ?")
+           .run(Number(userId), String(currentSessionId));
+        sdb.close();
+      }
+    } catch (err) {
+      console.error('Failed to invalidate other sessions:', err);
+    }
+  }, 100);
+}
 
 const router = express.Router();
 const authLimiter = createRateLimiter({
@@ -36,6 +58,7 @@ router.post('/login', authLimiter, (req, res) => {
   const row = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
 
   if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+    logAudit(req, 'AUTH_LOGIN_FAILED', { email });
     return res.status(401).render('login', {
       title: 'Sign in',
       error: 'Invalid email or password.',
@@ -44,6 +67,7 @@ router.post('/login', authLimiter, (req, res) => {
     });
   }
   if (!row.active) {
+    logAudit(req, 'AUTH_LOGIN_DEACTIVATED', { email });
     return res.status(403).render('login', {
       title: 'Sign in',
       error: 'This account has been deactivated. Contact the admin.',
@@ -60,9 +84,22 @@ router.post('/login', authLimiter, (req, res) => {
   }
 
   // Session fixation protection
-  req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role };
+  const userData = { id: row.id, name: row.name, email: row.email, role: row.role };
+  const redirectTo = to || HOME[row.role];
   delete req.session.redirectTo;
-  res.redirect(to || HOME[row.role]);
+
+  req.session.regenerate((err) => {
+    if (err) {
+      console.error('Session regeneration error:', err);
+      return res.status(500).render('error', {
+        title: 'Login error',
+        message: 'Could not complete login. Please try again.',
+      });
+    }
+    req.session.user = userData;
+    logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row.id);
+    res.redirect(redirectTo);
+  });
 });
 
 /* ------------------------------ Google OAuth ----------------------------- */
@@ -75,11 +112,17 @@ router.get('/auth/google', (req, res) => {
       googleConfigured: false,
     });
   }
-  const state = req.query.link === '1' && req.session.user ? `link:${req.session.user.id}` : 'auth';
-  res.redirect(google.getAuthUrl(state));
+  const stateToken = crypto.randomBytes(32).toString('hex');
+  const action = req.query.link === '1' && req.session.user ? 'link' : 'auth';
+  const userId = req.session.user ? req.session.user.id : null;
+  req.session.oauthState = { token: stateToken, action, userId };
+  req.session.save((err) => {
+    if (err) console.error('OAuth state session save error:', err);
+    res.redirect(google.getAuthUrl(stateToken));
+  });
 });
 
-router.get('/auth/google/callback', async (req, res) => {
+router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/callback'], async (req, res) => {
   const { code, state, error } = req.query;
   if (error || !code) {
     return res.render('login', {
@@ -90,12 +133,24 @@ router.get('/auth/google/callback', async (req, res) => {
     });
   }
 
+  // Verify OAuth state token
+  if (!req.session.oauthState || req.session.oauthState.token !== state) {
+    return res.status(403).render('login', {
+      title: 'Sign in',
+      error: 'Invalid OAuth state. Please try signing in again.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
+  }
+  const { action, userId } = req.session.oauthState;
+  delete req.session.oauthState;
+
   try {
     const { tokens, profile } = await google.exchangeCode(code);
     const email = profile.email.toLowerCase();
 
     // Check if this was a profile link request
-    if (state && state.startsWith('link:') && req.session.user) {
+    if (action === 'link' && req.session.user && req.session.user.id === userId) {
       db.prepare(`UPDATE users SET google_id=?, google_access_token=?, google_refresh_token=COALESCE(?, google_refresh_token),
                   google_token_expiry=?, google_calendar_enabled=1 WHERE id=?`)
         .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, req.session.user.id);
@@ -104,9 +159,9 @@ router.get('/auth/google/callback', async (req, res) => {
     }
 
     // Find existing user by google_id or email
-    let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id);
+    let user = db.prepare('SELECT id, name, email, role, active FROM users WHERE google_id = ?').get(profile.id);
     if (!user) {
-      user = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
+      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE lower(email) = ?').get(email);
     }
 
     if (user) {
@@ -126,17 +181,16 @@ router.get('/auth/google/callback', async (req, res) => {
         .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, user.id);
     } else {
       // Auto-register new user as Student
-      const randomPasswordHash = bcrypt.hashSync(Math.random().toString(36), 10);
+      const randomPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
       const insert = db.prepare(`
         INSERT INTO users (name, email, password_hash, role, google_id, google_access_token,
                            google_refresh_token, google_token_expiry, google_calendar_enabled)
         VALUES (?, ?, ?, 'student', ?, ?, ?, ?, 1)
       `).run(profile.name || email.split('@')[0], email, randomPasswordHash, profile.id,
              tokens.access_token, tokens.refresh_token, tokens.expiry_date);
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(insert.lastInsertRowid);
+      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE id = ?').get(insert.lastInsertRowid);
     }
 
-    req.session.user = { id: user.id, name: user.name, email: user.email, role: user.role };
     let to = req.session.redirectTo;
     delete req.session.redirectTo;
     if (to) {
@@ -144,24 +198,51 @@ router.get('/auth/google/callback', async (req, res) => {
       else if (to.startsWith('/student') && user.role !== 'student') to = null;
       else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
     }
-    res.redirect(to || HOME[user.role]);
+    const userData = { id: user.id, name: user.name, email: user.email, role: user.role };
+    const redirectTo = to || HOME[user.role];
+
+    req.session.regenerate((err) => {
+      if (err) return res.redirect('/login');
+      req.session.user = userData;
+      logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
+      res.redirect(redirectTo);
+    });
   } catch (err) {
     console.error('Google OAuth callback error:', err);
     res.render('login', {
       title: 'Sign in',
-      error: `Google login failed: ${err.message}`,
+      error: `Google login failed: ${err.message}. Please click "Sign in with Google" again to start a fresh authorization request.`,
       email: '',
       googleConfigured: google.isConfigured(),
     });
   }
 });
 
+router.get('/auth/google/dev-mock', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).send('Dev mock is disabled in production.');
+  }
+  let student = db.prepare(`SELECT id, name, email, role FROM users WHERE role='student' LIMIT 1`).get();
+  if (!student) {
+    const ins = db.prepare(`INSERT INTO users (name, email, password_hash, role, can_technical, can_hr)
+                            VALUES ('Google Demo Student', 'student.demo@gmail.com', 'dummy', 'student', 0, 0)`).run();
+    student = db.prepare('SELECT id, name, email, role FROM users WHERE id=?').get(ins.lastInsertRowid);
+  }
+  req.session.regenerate((err) => {
+    if (err) return res.redirect('/login');
+    req.session.user = { id: student.id, name: student.name, email: student.email, role: student.role };
+    logAudit(req, 'AUTH_DEV_GOOGLE_LOGIN', { email: student.email }, student.id);
+    res.redirect('/student');
+  });
+});
+
 router.post('/logout', (req, res) => {
+  logAudit(req, 'AUTH_LOGOUT');
   req.session.destroy(() => res.redirect('/login'));
 });
 
 router.get('/profile', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profile', {
     title: 'My profile',
     me,
@@ -172,7 +253,7 @@ router.get('/profile', requireLogin, (req, res) => {
 });
 
 router.post('/profile/update', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active FROM users WHERE id = ?').get(req.session.user.id);
   const name = String(req.body.name || '').trim();
   if (!name) {
     return res.status(400).render('profile', {
@@ -203,7 +284,7 @@ router.post('/profile/google/disconnect', requireLogin, (req, res) => {
 });
 
 router.post('/profile/google/toggle-calendar', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   const enabled = me.google_calendar_enabled ? 0 : 1;
   db.prepare('UPDATE users SET google_calendar_enabled = ? WHERE id = ?').run(enabled, me.id);
   req.session.flash = {
@@ -214,17 +295,20 @@ router.post('/profile/google/toggle-calendar', requireLogin, (req, res) => {
 });
 
 router.post('/profile/password', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const user = db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(req.session.user.id);
   const { current, next1, next2 } = req.body;
   let error = null, ok = null;
-  if (!bcrypt.compareSync(String(current || ''), me.password_hash)) error = 'Current password is incorrect.';
+  if (!bcrypt.compareSync(String(current || ''), user.password_hash)) error = 'Current password is incorrect.';
   else if (String(next1 || '').length < 6) error = 'New password must be at least 6 characters.';
   else if (next1 !== next2) error = 'The two new passwords do not match.';
   else {
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-      .run(bcrypt.hashSync(String(next1), 10), me.id);
+      .run(bcrypt.hashSync(String(next1), 10), user.id);
+    invalidateOtherSessions(user.id, req.sessionID);
+    logAudit(req, 'AUTH_PASSWORD_CHANGE', null, user.id);
     ok = 'Password updated.';
   }
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profile', {
     title: 'My profile',
     me,

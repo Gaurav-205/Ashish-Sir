@@ -39,9 +39,12 @@ function allInterviews(filters = {}) {
                      ORDER BY s.slot_date DESC, s.start_time`).all(...args);
 }
 
+const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, resume_url,
+                        can_technical, can_hr, active, google_id, google_calendar_enabled, created_at`;
+
 /** Per-student roll-up used by student dashboard, admin reports and exports. */
 function studentSummary(studentId) {
-  const student = db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'student'`).get(studentId);
+  const student = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ? AND role = 'student'`).get(studentId);
   if (!student) return null;
   const list = interviewsForStudent(studentId);
   const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
@@ -73,8 +76,70 @@ function studentSummary(studentId) {
 }
 
 function allStudentSummaries() {
-  return db.prepare(`SELECT id FROM users WHERE role = 'student' ORDER BY name`)
-    .all().map((r) => studentSummary(r.id));
+  const students = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE role = 'student' ORDER BY name`).all();
+  
+  const allIvs = db.prepare(`
+    SELECT i.*, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
+           m.name AS mentor_name, m.email AS mentor_email,
+           st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.resume_url,
+           e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
+           e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at
+      FROM interviews i
+      JOIN slots s ON s.id = i.slot_id
+      JOIN users m ON m.id = i.mentor_id
+      JOIN users st ON st.id = i.student_id
+      LEFT JOIN evaluations e ON e.interview_id = i.id
+     WHERE i.status <> 'cancelled'
+  `).all();
+
+  const ivsByStudent = {};
+  for (const iv of allIvs) {
+    if (!ivsByStudent[iv.student_id]) {
+      ivsByStudent[iv.student_id] = [];
+    }
+    ivsByStudent[iv.student_id].push(iv);
+  }
+
+  return students.map((student) => {
+    const list = ivsByStudent[student.id] || [];
+    const sortedList = [...list].sort((a, b) => {
+      const da = a.slot_date + ' ' + a.start_time;
+      const dbStr = b.slot_date + ' ' + b.start_time;
+      return da.localeCompare(dbStr);
+    });
+    const history = [...list].sort((a, b) => {
+      const da = a.slot_date + ' ' + a.start_time;
+      const dbStr = b.slot_date + ' ' + b.start_time;
+      return dbStr.localeCompare(da);
+    });
+
+    const byType = { technical: null, hr: null };
+    for (const iv of sortedList) {
+      byType[iv.type] = iv;
+    }
+
+    const scored = (iv) => (iv && iv.status === 'completed' && iv.eval_id != null);
+    const techScore = scored(byType.technical) ? byType.technical.score : null;
+    const hrScore   = scored(byType.hr)        ? byType.hr.score        : null;
+    const done = techScore != null && hrScore != null;
+    const total = done ? techScore + hrScore : null;
+
+    return {
+      student,
+      technical: byType.technical,
+      hr: byType.hr,
+      history,
+      techScore, hrScore, total,
+      percent: done ? Math.round((total / GRAND_TOTAL) * 1000) / 10 : null,
+      bookedCount: sortedList.length,
+      completedCount: sortedList.filter((i) => i.status === 'completed').length,
+      attendedCount: sortedList.filter((i) => i.attendance === 'attended').length,
+      absentCount: sortedList.filter((i) => i.attendance === 'absent').length,
+      evaluatedCount: sortedList.filter((i) => i.eval_id != null).length,
+      allBooked: !!(byType.technical && byType.hr),
+      allEvaluated: done,
+    };
+  });
 }
 
 function adminStats() {
@@ -98,12 +163,12 @@ function adminStats() {
 function mentorsList(type) {
   const col = type === 'hr' ? 'can_hr' : 'can_technical';
   const extra = type ? ` AND ${col} = 1` : '';
-  return db.prepare(`SELECT * FROM users WHERE role='mentor' AND active=1${extra} ORDER BY name`).all();
+  return db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE role='mentor' AND active=1${extra} ORDER BY name`).all();
 }
 
 function mentorsWithOpenSlots() {
   return db.prepare(`
-    SELECT m.*,
+    SELECT m.id, m.name, m.email, m.phone, m.can_technical, m.can_hr, m.active,
       (SELECT COUNT(*) FROM slots s
         WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'technical'
           AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS tech_open_slots,

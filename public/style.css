@@ -554,19 +554,19 @@ td.empty, div.empty {
   background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
-  padding: 40px;
+  padding: 36px 40px;
   width: 100%;
-  max-width: 440px;
+  max-width: 480px;
   box-shadow: var(--shadow-pop);
 }
 .login-card h1 { font-size: 22px; margin-bottom: 6px; }
-.login-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.login-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 
 .auth-divider {
   display: flex;
   align-items: center;
   text-align: center;
-  margin: 20px 0;
+  margin: 18px 0;
   color: var(--faint);
   font-size: 11px;
   text-transform: uppercase;
@@ -578,6 +578,82 @@ td.empty, div.empty {
   border-bottom: 1px solid var(--line);
 }
 .auth-divider span { padding: 0 10px; }
+
+/* ---- Fast Demo Role Credentials ----------------------------------------- */
+.demo-section {
+  margin: 16px 0 20px;
+}
+.demo-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--slate);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.demo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+button.demo-role-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 12px !important;
+  background: var(--surface-alt) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  transition: all 0.15s ease !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+  outline: none !important;
+}
+button.demo-role-btn:hover {
+  border-color: var(--primary) !important;
+  background: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+button.demo-role-btn.active {
+  border-color: var(--action-blue) !important;
+  background: var(--pale-blue) !important;
+}
+.demo-role-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.demo-role-meta {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.demo-role-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.demo-role-email {
+  font-size: 10.5px;
+  color: var(--slate);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
 
 .demo-creds {
   margin-top: 24px;

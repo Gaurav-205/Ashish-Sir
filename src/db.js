@@ -95,17 +95,29 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER,
+  action     TEXT NOT NULL,
+  details    TEXT,
+  ip         TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- High-concurrency composite indexes
 CREATE INDEX IF NOT EXISTS idx_slots_type_date ON slots (type, status, slot_date, start_time);
 CREATE INDEX IF NOT EXISTS idx_slots_mentor ON slots (mentor_id, status);
 CREATE INDEX IF NOT EXISTS idx_interviews_student ON interviews (student_id, status);
 CREATE INDEX IF NOT EXISTS idx_interviews_mentor ON interviews (mentor_id, status);
 CREATE INDEX IF NOT EXISTS idx_evaluations_interview ON evaluations (interview_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs (action);
 `);
 
 // Safe migrations for existing databases
 const migrations = [
-  'ALTER TABLE users ADD COLUMN google_id TEXT UNIQUE',
+  'ALTER TABLE users ADD COLUMN google_id TEXT',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users (google_id)',
   'ALTER TABLE users ADD COLUMN google_access_token TEXT',
   'ALTER TABLE users ADD COLUMN google_refresh_token TEXT',
   'ALTER TABLE users ADD COLUMN google_token_expiry INTEGER',

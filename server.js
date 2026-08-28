@@ -1,4 +1,7 @@
 'use strict';
+if (typeof process.loadEnvFile === 'function') {
+  try { process.loadEnvFile(); } catch (_) {}
+}
 const app = require('./src/app');
 const db = require('./src/db');
 const PORT = process.env.PORT || 3000;

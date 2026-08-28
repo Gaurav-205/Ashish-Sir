@@ -48,6 +48,7 @@
   </div>
   <div class="card-body">
     <form method="post" action="/mentor/slots">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Interview domain *</label>
           <select name="type" required>
@@ -61,8 +62,8 @@
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
-        <div class="field"><label>Meeting link / room / calendar schedule *</label>
-          <input name="location" placeholder="https://meet.google.com/… or Google Calendar link" required></div>
+        <div class="field"><label>Meeting link / room / calendar</label>
+          <input name="location" placeholder="Auto-generated secure meeting link if empty"></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Publish slots →</button>

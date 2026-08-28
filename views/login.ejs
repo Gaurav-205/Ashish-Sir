@@ -16,14 +16,64 @@
 
     <% if (error) { %><div class="flash err"><%= error %></div><% } %>
 
+    <div class="demo-section">
+      <div class="demo-section-title">
+        Fast Demo Role Credentials
+      </div>
+      <div class="demo-grid">
+        <button type="button" class="demo-role-btn" data-email="admin@konfident.in" data-password="pass123">
+          <div class="demo-role-icon" style="background:#0f172a;color:#ffffff">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="demo-role-meta">
+            <div class="demo-role-name">Admin</div>
+            <div class="demo-role-email">admin@konfident.in</div>
+          </div>
+        </button>
+
+        <button type="button" class="demo-role-btn" data-email="tech.mentor@konfident.in" data-password="pass123">
+          <div class="demo-role-icon" style="background:#1863dc;color:#ffffff">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <div class="demo-role-meta">
+            <div class="demo-role-name">Tech Mentor</div>
+            <div class="demo-role-email">tech.mentor@konfident.in</div>
+          </div>
+        </button>
+
+        <button type="button" class="demo-role-btn" data-email="hr.mentor@konfident.in" data-password="pass123">
+          <div class="demo-role-icon" style="background:#6366f1;color:#ffffff">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="demo-role-meta">
+            <div class="demo-role-name">HR Mentor</div>
+            <div class="demo-role-email">hr.mentor@konfident.in</div>
+          </div>
+        </button>
+
+        <button type="button" class="demo-role-btn" data-email="student@konfident.in" data-password="pass123">
+          <div class="demo-role-icon" style="background:#059669;color:#ffffff">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          </div>
+          <div class="demo-role-meta">
+            <div class="demo-role-name">Student</div>
+            <div class="demo-role-email">student@konfident.in</div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <div class="auth-divider"><span>or email login</span></div>
+
     <form method="post" action="/login">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="field">
         <label for="email">Work / Academic Email</label>
-        <input id="email" name="email" type="email" value="<%= email %>" placeholder="name@college.edu or mentor@konfident.in" required autofocus>
+        <input id="email" name="email" type="email" value="<%= email %>" autocomplete="username email" placeholder="name@college.edu or mentor@konfident.in" required autofocus>
       </div>
       <div class="field">
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" placeholder="••••••••" required>
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
       </div>
       <button class="btn primary" style="width:100%;justify-content:center;margin-top:6px;padding:12px 24px">
         Sign in with Password →
@@ -41,6 +91,9 @@
       </svg>
       Sign in with Google
     </a>
+    <div style="text-align:center;margin-top:6px">
+      <a href="/auth/google/dev-mock" class="faint" style="font-size:11px;text-decoration:underline">⚡ Quick Dev Bypass (Test Google Student Flow)</a>
+    </div>
     <% if (!googleConfigured) { %>
       <div class="hint" style="text-align:center;margin-top:8px;font-size:11px;display:flex;align-items:center;justify-content:center;gap:6px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -58,4 +111,5 @@
     </div>
   </div>
 </div>
+<script src="/js/login-demo.js"></script>
 </body></html>

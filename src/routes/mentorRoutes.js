@@ -5,6 +5,7 @@ const q = require('../queries');
 const h = require('../helpers');
 const { requireRole } = require('../auth');
 const { RUBRIC } = require('../rubric');
+const { validateId } = require('../middleware/security');
 
 const router = express.Router();
 router.use(requireRole('mentor'));
@@ -13,7 +14,7 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 router.get('/', (req, res) => {
   const id = req.session.user.id;
-  const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  const mentor = db.prepare('SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=?').get(id);
   const all = q.interviewsForMentor(id);
   const upcoming = all.filter((i) => i.status === 'booked');
   const completed = all.filter((i) => i.status === 'completed');
@@ -36,20 +37,25 @@ router.post('/slots', (req, res) => {
   const mentorId = req.session.user.id;
   const { type, slot_date, start_time, duration, count, mode, location } = req.body;
   try {
-    const mentor = db.prepare(`SELECT * FROM users WHERE id=? AND role='mentor'`).get(mentorId);
+    const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=? AND role='mentor'`).get(mentorId);
     if (!mentor) throw new Error('Mentor account not found.');
     if (type === 'technical' && !mentor.can_technical) throw new Error('Your profile is not enabled for Technical interviews.');
     if (type === 'hr' && !mentor.can_hr) throw new Error('Your profile is not enabled for HR interviews.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
     if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
 
+    if (duration !== undefined && duration !== null && String(duration).trim() !== '') {
+      const minsVal = Number(duration);
+      if (isNaN(minsVal) || minsVal <= 0) throw new Error('Duration must be a positive number.');
+    }
     const mins = Number(duration) || 30;
     const n = Math.min(Math.max(Number(count) || 1, 1), 20);
     const [sh, sm] = start_time.split(':').map(Number);
     let made = 0, skipped = 0;
     const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                             VALUES (?,?,?,?,?,?,?)`);
-    const loc = (location && location.trim()) ? location.trim() : 'https://meet.konfident.in/room';
+    const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
+    if (/<[^>]+>/.test(loc)) throw new Error('Location cannot contain HTML tags.');
 
     for (let k = 0; k < n; k++) {
       const startMin = sh * 60 + sm + k * mins;
@@ -85,7 +91,7 @@ router.post('/slots', (req, res) => {
   res.redirect('/mentor');
 });
 
-router.get('/interview/:id', (req, res) => {
+router.get('/interview/:id', validateId('id'), (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', {
@@ -96,7 +102,7 @@ router.get('/interview/:id', (req, res) => {
   res.render('mentor/interview', { title: `${h.titleCase(iv.type)} — ${iv.student_name}`, iv, error: null, form: {} });
 });
 
-router.post('/interview/:id/attendance', (req, res) => {
+router.post('/interview/:id/attendance', validateId('id'), (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
@@ -109,14 +115,15 @@ router.post('/interview/:id/attendance', (req, res) => {
                 attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
     flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
   } else {
-    db.prepare(`UPDATE interviews SET attendance='absent',
+    db.prepare(`UPDATE interviews SET attendance='absent', status='completed',
+                completed_at=COALESCE(completed_at, datetime('now')),
                 attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
     flash(req, 'err', 'Candidate marked as Absent / No-Show.');
   }
   res.redirect('/mentor/interview/' + iv.id);
 });
 
-router.post('/interview/:id/complete', (req, res) => {
+router.post('/interview/:id/complete', validateId('id'), (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
@@ -130,7 +137,7 @@ router.post('/interview/:id/complete', (req, res) => {
   res.redirect('/mentor/interview/' + iv.id);
 });
 
-router.post('/interview/:id/evaluate', (req, res) => {
+router.post('/interview/:id/evaluate', validateId('id'), (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });

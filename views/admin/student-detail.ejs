@@ -78,6 +78,7 @@
     <div class="card-head"><h2>Edit Candidate Details</h2></div>
     <div class="card-body">
       <form method="post" action="/admin/students/<%= s.student.id %>/update">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="row">
           <div class="field"><label>Full Name</label><input name="name" value="<%= s.student.name %>" required></div>
           <div class="field"><label>Roll Number</label><input name="roll_no" value="<%= s.student.roll_no || '' %>"></div>
@@ -90,7 +91,9 @@
       </form>
       <hr style="border:none;border-top:1px solid var(--line-soft);margin:20px 0">
       <form method="post" action="/admin/students/<%= s.student.id %>/reset-password" class="btn-row">
-        <input name="password" placeholder="New password" minlength="6" required style="max-width:220px">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input name="admin_password" type="password" placeholder="Your admin password" required style="max-width:200px">
+        <input name="password" placeholder="New password for student" minlength="6" required style="max-width:200px">
         <button class="btn">Reset password</button>
       </form>
     </div>

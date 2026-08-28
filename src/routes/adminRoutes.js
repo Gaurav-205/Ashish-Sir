@@ -7,11 +7,32 @@ const h = require('../helpers');
 const { requireRole } = require('../auth');
 const { RUBRIC, GRAND_TOTAL } = require('../rubric');
 const google = require('../services/googleService');
+const { validateId } = require('../middleware/security');
+const { logAudit } = require('../middleware/auditLog');
+const fs = require('fs');
+const path = require('path');
+const { DatabaseSync } = require('node:sqlite');
 
 const router = express.Router();
 router.use(requireRole('admin'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
+
+function invalidateUserSessions(userId) {
+  setTimeout(() => {
+    try {
+      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
+      if (fs.existsSync(sessionsDbPath)) {
+        const sdb = new DatabaseSync(sessionsDbPath);
+        sdb.exec('PRAGMA busy_timeout = 5000');
+        sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ?").run(Number(userId));
+        sdb.close();
+      }
+    } catch (err) {
+      console.error('Failed to invalidate sessions:', err);
+    }
+  }, 100);
+}
 
 /* ------------------------------ dashboard ------------------------------ */
 router.get('/', (req, res) => {
@@ -53,7 +74,7 @@ router.get('/students', (req, res) => {
 router.post('/students', (req, res) => {
   const { name, email, password, roll_no, branch, phone, resume_url } = req.body;
   try {
-    if (!name || !email || !password) throw new Error('Name, email and password are required.');
+    if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
     db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,phone,resume_url)
                 VALUES (?,?,?,'student',?,?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10),
@@ -65,7 +86,7 @@ router.post('/students', (req, res) => {
   res.redirect('/admin/students');
 });
 
-router.post('/students/:id/update', (req, res) => {
+router.post('/students/:id/update', validateId('id'), (req, res) => {
   const { name, roll_no, branch, phone, resume_url, active } = req.body;
   if (!name || !name.trim()) {
     flash(req, 'err', 'Name is required.');
@@ -79,18 +100,26 @@ router.post('/students/:id/update', (req, res) => {
   res.redirect('/admin/students/' + req.params.id);
 });
 
-router.post('/students/:id/reset-password', (req, res) => {
+router.post('/students/:id/reset-password', validateId('id'), (req, res) => {
+  const admin = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.session.user.id);
+  const adminPw = String(req.body.admin_password || '');
+  if (!bcrypt.compareSync(adminPw, admin.password_hash)) {
+    flash(req, 'err', 'Enter your admin password to confirm the reset.');
+    return res.redirect('/admin/students/' + req.params.id);
+  }
   const pw = String(req.body.password || '');
   if (pw.length < 6) flash(req, 'err', 'Password must be at least 6 characters.');
   else {
     db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND role='student'`)
       .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
+    invalidateUserSessions(req.params.id);
+    logAudit(req, 'ADMIN_RESET_STUDENT_PASSWORD', { target_user_id: req.params.id });
     flash(req, 'ok', 'Password reset.');
   }
   res.redirect('/admin/students/' + req.params.id);
 });
 
-router.get('/students/:id', (req, res) => {
+router.get('/students/:id', validateId('id'), (req, res) => {
   const summary = q.studentSummary(Number(req.params.id));
   if (!summary) return res.status(404).render('error', { title: 'Not found', message: 'No such student.' });
   res.render('admin/student-detail', { title: summary.student.name, s: summary });
@@ -99,7 +128,7 @@ router.get('/students/:id', (req, res) => {
 /* -------------------------------- mentors ------------------------------ */
 router.get('/mentors', (req, res) => {
   const mentors = db.prepare(`
-    SELECT u.*,
+    SELECT u.id, u.name, u.email, u.phone, u.can_technical, u.can_hr, u.active,
       (SELECT COUNT(*) FROM slots s WHERE s.mentor_id=u.id AND s.status<>'cancelled') AS slot_count,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='booked') AS upcoming,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='completed') AS done
@@ -110,7 +139,7 @@ router.get('/mentors', (req, res) => {
 router.post('/mentors', (req, res) => {
   const { name, email, password, phone } = req.body;
   try {
-    if (!name || !email || !password) throw new Error('Name, email and password are required.');
+    if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
     db.prepare(`INSERT INTO users (name,email,password_hash,role,phone,can_technical,can_hr)
                 VALUES (?,?,?,'mentor',?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10), phone || null,
@@ -122,22 +151,35 @@ router.post('/mentors', (req, res) => {
   res.redirect('/admin/mentors');
 });
 
-router.post('/mentors/:id/update', (req, res) => {
+router.post('/mentors/:id/update', validateId('id'), (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) {
+    flash(req, 'err', 'Name is required.');
+    return res.redirect('/admin/mentors');
+  }
   db.prepare(`UPDATE users SET name=?, phone=?, can_technical=?, can_hr=?, active=?
               WHERE id=? AND role='mentor'`)
-    .run(req.body.name, req.body.phone || null,
+    .run(name, req.body.phone || null,
          req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0,
          req.body.active ? 1 : 0, Number(req.params.id));
   flash(req, 'ok', 'Mentor updated.');
   res.redirect('/admin/mentors');
 });
 
-router.post('/mentors/:id/reset-password', (req, res) => {
+router.post('/mentors/:id/reset-password', validateId('id'), (req, res) => {
+  const admin = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.session.user.id);
+  const adminPw = String(req.body.admin_password || '');
+  if (!bcrypt.compareSync(adminPw, admin.password_hash)) {
+    flash(req, 'err', 'Enter your admin password to confirm the reset.');
+    return res.redirect('/admin/mentors');
+  }
   const pw = String(req.body.password || '');
   if (pw.length < 6) flash(req, 'err', 'Password must be at least 6 characters.');
   else {
     db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND role='mentor'`)
       .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
+    invalidateUserSessions(req.params.id);
+    logAudit(req, 'ADMIN_RESET_MENTOR_PASSWORD', { target_user_id: req.params.id });
     flash(req, 'ok', 'Password reset.');
   }
   res.redirect('/admin/mentors');
@@ -177,19 +219,26 @@ router.get('/slots', (req, res) => {
 router.post('/slots', (req, res) => {
   const { type, mentor_id, slot_date, start_time, duration, count, mode, location } = req.body;
   try {
-    const mentor = db.prepare(`SELECT * FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
+    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     if (type === 'technical' && !mentor.can_technical) throw new Error(`${mentor.name} is not enabled for Technical interviews.`);
     if (type === 'hr' && !mentor.can_hr) throw new Error(`${mentor.name} is not enabled for HR interviews.`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
     if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
 
+    if (duration !== undefined && duration !== null && String(duration).trim() !== '') {
+      const minsVal = Number(duration);
+      if (isNaN(minsVal) || minsVal <= 0) throw new Error('Duration must be a positive number.');
+    }
     const mins = Number(duration) || 30;
     const n = Math.min(Math.max(Number(count) || 1, 1), 20);
     const [sh, sm] = start_time.split(':').map(Number);
     let made = 0, skipped = 0;
     const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                             VALUES (?,?,?,?,?,?,?)`);
+    const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
+    if (/<[^>]+>/.test(loc)) throw new Error('Location cannot contain HTML tags.');
+
     for (let k = 0; k < n; k++) {
       const startMin = sh * 60 + sm + k * mins;
       const endMin = startMin + mins;
@@ -210,7 +259,7 @@ router.post('/slots', (req, res) => {
       }
 
       try {
-        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', (location && location.trim()) ? location.trim() : 'https://meet.konfident.in/room');
+        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', loc);
         made++;
       } catch (e) {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
@@ -224,7 +273,7 @@ router.post('/slots', (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/reschedule', (req, res) => {
+router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
   const id = Number(req.params.id);
   const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(id);
   if (!slot) { flash(req, 'err', 'Slot not found.'); return res.redirect('/admin/slots'); }
@@ -235,7 +284,13 @@ router.post('/slots/:id/reschedule', (req, res) => {
     }
 
     const { slot_date, start_time, end_time, mentor_id, mode, location } = req.body;
-    const mentor = db.prepare(`SELECT * FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
+    if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
+    if (!/^\d{2}:\d{2}$/.test(end_time)) throw new Error('Pick a valid end time.');
+    if (start_time >= end_time) throw new Error('Start time must be before end time.');
+    if (location && /<[^>]+>/.test(location)) throw new Error('Location cannot contain HTML tags.');
+
+    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     const col = slot.type === 'hr' ? 'can_hr' : 'can_technical';
     if (!mentor[col]) throw new Error(`${mentor.name} is not enabled for ${h.titleCase(slot.type)} interviews.`);
@@ -263,7 +318,7 @@ router.post('/slots/:id/reschedule', (req, res) => {
 
     // Sync Google Calendar event update if present
     if (iv && iv.google_event_id) {
-      const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
+      const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
       google.updateCalendarEvent({
         eventId: iv.google_event_id,
         student,
@@ -272,6 +327,7 @@ router.post('/slots/:id/reschedule', (req, res) => {
       }).catch(() => {});
     }
 
+    logAudit(req, 'ADMIN_RESCHEDULE_SLOT', { slot_id: id, slot_date, start_time, end_time, mentor_id });
     flash(req, 'ok', 'Slot updated. The student and mentor now see the new schedule.');
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That mentor already has a slot at that time.' : e.message);
@@ -279,7 +335,7 @@ router.post('/slots/:id/reschedule', (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/cancel', (req, res) => {
+router.post('/slots/:id/cancel', validateId('id'), (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
   if (iv && iv.status === 'completed') {
@@ -292,13 +348,13 @@ router.post('/slots/:id/cancel', (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/reopen', (req, res) => {
+router.post('/slots/:id/reopen', validateId('id'), (req, res) => {
   db.prepare(`UPDATE slots SET status='open' WHERE id=? AND status='cancelled'`).run(Number(req.params.id));
   flash(req, 'ok', 'Slot reopened for booking.');
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/release', async (req, res) => {
+router.post('/slots/:id/release', validateId('id'), async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
   if (!iv) { flash(req, 'err', 'That slot is not booked.'); return res.redirect('/admin/slots'); }
@@ -310,10 +366,12 @@ router.post('/slots/:id/release', async (req, res) => {
     db.exec('COMMIT');
 
     if (iv.google_event_id) {
-      const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
-      const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(iv.mentor_id);
+      const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
+      const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
       google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
     }
+
+    logAudit(req, 'ADMIN_RELEASE_SLOT', { slot_id: id, interview_id: iv.id });
 
     flash(req, 'ok', 'Booking released — the slot is open again.');
   } catch (e) {

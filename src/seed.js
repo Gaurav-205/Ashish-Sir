@@ -16,14 +16,26 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const h = require('./helpers');
 
+const mode = process.env.SEED_MODE || (process.env.DB_PATH && process.env.DB_PATH.includes('test.db') ? 'test' : 'dev');
+const crypto = require('crypto');
+
 const adminEmail = process.env.ADMIN_EMAIL || 'admin@konfident.in';
-const adminPassword = process.env.ADMIN_PASSWORD || 'pass123';
+let adminPassword = process.env.ADMIN_PASSWORD;
+let isGenerated = false;
+if (!adminPassword) {
+  if (mode === 'test') {
+    adminPassword = 'pass123';
+  } else {
+    adminPassword = crypto.randomBytes(12).toString('base64url');
+    isGenerated = true;
+  }
+}
 const adminName = process.env.ADMIN_NAME || 'Platform Administrator';
 const PW = bcrypt.hashSync(adminPassword, 10);
 
 // Clear existing tables
-db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users;
-         DELETE FROM sqlite_sequence WHERE name IN ('users','slots','interviews','evaluations');`);
+db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users; DELETE FROM audit_logs;
+         DELETE FROM sqlite_sequence WHERE name IN ('users','slots','interviews','evaluations','audit_logs');`);
 
 const addUser = db.prepare(`INSERT INTO users
   (name,email,password_hash,role,phone,roll_no,branch,resume_url,can_technical,can_hr)
@@ -31,8 +43,6 @@ const addUser = db.prepare(`INSERT INTO users
 
 // 1. Root Admin Account
 addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, 0, 0);
-
-const mode = process.env.SEED_MODE || (process.env.DB_PATH && process.env.DB_PATH.includes('test.db') ? 'test' : 'dev');
 
 if (mode === 'test') {
   // Test suite fixture
@@ -189,11 +199,15 @@ if (mode === 'test') {
 
 const c = (s) => db.prepare(s).get().c;
 if (mode === 'dev') {
+  let pwString = `Password for all accounts: ${adminPassword}`;
+  if (isGenerated) {
+    pwString = `⚠️  Auto-generated password for all accounts: ${adminPassword}\n  ⚠️  Save this now — it will not be shown again.\n  💡 Set ADMIN_PASSWORD env var to use your own password.`;
+  }
   console.log(`
   =============================================================
   [Development Dataset Initialized — 1 Account of Each Role]
   =============================================================
-  Password for all accounts: ${adminPassword}
+  ${pwString}
 
   1. Admin Account:
      Email:    admin@konfident.in
