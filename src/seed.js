@@ -1,16 +1,25 @@
 'use strict';
 /**
- * Seeds the database. By default, it sets up a clean database (no mock data, admin only).
- * If run during tests (detected via DB_PATH containing 'test.db') or with SEED_MOCK=true,
- * it seeds the full demo dataset.
- * Usage: npm run seed
+ * Konfident Interview 2025 — Database Initializer
+ * 
+ * Default (Production Clean):
+ *   npm run init
+ *   -> Initializes clean database schema with only the Root Administrator. Zero mock records.
+ * 
+ * Demo / Testing Mode:
+ *   npm run seed:demo
+ *   -> Seeds demo dataset for local testing.
  */
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const h = require('./helpers');
 
-const PW = bcrypt.hashSync('pass123', 10);
+const adminEmail = process.env.ADMIN_EMAIL || 'admin@konfident.in';
+const adminPassword = process.env.ADMIN_PASSWORD || 'pass123';
+const adminName = process.env.ADMIN_NAME || 'Platform Administrator';
+const PW = bcrypt.hashSync(adminPassword, 10);
 
+// Clear existing tables
 db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users;
          DELETE FROM sqlite_sequence WHERE name IN ('users','slots','interviews','evaluations');`);
 
@@ -18,11 +27,11 @@ const addUser = db.prepare(`INSERT INTO users
   (name,email,password_hash,role,phone,roll_no,branch,resume_url,can_technical,can_hr)
   VALUES (?,?,?,?,?,?,?,?,?,?)`);
 
-// Default admin
-addUser.run('Konfident Admin', 'admin@konfident.in', PW, 'admin', '9800000000', null, null, null, 0, 0);
+// Create Root Administrator
+addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', null, null, null, null, 0, 0);
 
 const isTest = process.env.DB_PATH && process.env.DB_PATH.includes('test.db');
-const seedMock = isTest || process.env.SEED_MOCK !== 'false';
+const seedMock = isTest || process.env.SEED_MOCK === 'true';
 
 if (seedMock) {
   const mentors = [
@@ -56,10 +65,9 @@ if (seedMock) {
     return db.prepare('SELECT * FROM users WHERE email=?').get(email);
   });
 
-  /* ------------------------------- slots -------------------------------- */
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                               VALUES (?,?,?,?,?,?,?)`);
-  const start = h.addDays(h.today(), -2);           // two days of past slots, five ahead
+  const start = h.addDays(h.today(), -2);
   const times = ['10:00', '10:30', '11:00', '11:30', '14:00', '14:30'];
   const fmt = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
@@ -73,7 +81,6 @@ if (seedMock) {
           try { addSlot.run(m.id, 'technical', date, t, fmt(s + 30), 'Online', 'https://meet.konfident.in/tech-' + m.id); } catch (_) {}
         }
         if (m.can_hr) {
-          // stagger HR slots by 15 min so a dual-skill mentor has no clash
           const s2 = s + 15;
           try { addSlot.run(m.id, 'hr', date, fmt(s2), fmt(s2 + 30), 'Online', 'https://meet.konfident.in/hr-' + m.id); } catch (_) {}
         }
@@ -81,7 +88,6 @@ if (seedMock) {
     }
   }
 
-  /* ------------------------------ bookings ------------------------------ */
   const addInterview = db.prepare(`INSERT INTO interviews (student_id,mentor_id,slot_id,type,status,attendance,completed_at,attendance_marked_at)
                                    VALUES (?,?,?,?,?,?,?,?)`);
   const addEval = db.prepare(`INSERT INTO evaluations
@@ -115,11 +121,10 @@ if (seedMock) {
     'Polite and composed throughout. Add concrete examples of teamwork.',
   ];
   const pick = (arr, i) => arr[i % arr.length];
-  const rnd = (min, max, i) => min + ((i * 7 + 3) % (max - min + 1)); // deterministic spread
+  const rnd = (min, max, i) => min + ((i * 7 + 3) % (max - min + 1));
 
   students.forEach((st, i) => {
     if (i < 6) {
-      // fully done: both interviews completed & evaluated
       const t = book(st, 'technical', true);
       const hr = book(st, 'hr', true);
       if (t) {
@@ -131,7 +136,6 @@ if (seedMock) {
         addEval.run(hr.id, hr.mentor_id, null, null, null, a, b, a + b, pick(hrFeedback, i));
       }
     } else if (i < 8) {
-      // technical done & scored, HR upcoming
       const t = book(st, 'technical', true);
       if (t) {
         const a = rnd(5, 10, i), b = rnd(5, 10, i + 2), c = rnd(3, 10, i + 4);
@@ -139,15 +143,11 @@ if (seedMock) {
       }
       book(st, 'hr', false);
     } else if (i < 9) {
-      // completed but mentor has not scored yet
       book(st, 'technical', true);
       book(st, 'hr', false);
     } else if (i < 11) {
-      // both booked, upcoming
       book(st, 'technical', false);
       book(st, 'hr', false);
-    } else {
-      // nothing booked yet
     }
   });
 }
@@ -155,26 +155,35 @@ if (seedMock) {
 const c = (s) => db.prepare(s).get().c;
 if (seedMock) {
   console.log(`
-  Seed complete (with mock data).
+  [Demo Seed Complete]
     users:      ${c('SELECT COUNT(*) c FROM users')}
     slots:      ${c('SELECT COUNT(*) c FROM slots')} (${c("SELECT COUNT(*) c FROM slots WHERE status='open'")} open)
     interviews: ${c('SELECT COUNT(*) c FROM interviews')}
     evaluations:${c('SELECT COUNT(*) c FROM evaluations')}
 
-  Sign in with password: pass123
+  Demo Credentials:
     Admin:    admin@konfident.in
     Mentor:   arjun.mentor@konfident.in
     Student:  aisha@student.in
+    Password: pass123
   `);
 } else {
   console.log(`
-  Clean database setup complete (no mock data).
-    users:      ${c('SELECT COUNT(*) c FROM users')} (Admin only)
-    slots:      ${c('SELECT COUNT(*) c FROM slots')}
-    interviews: ${c('SELECT COUNT(*) c FROM interviews')}
-    evaluations:${c('SELECT COUNT(*) c FROM evaluations')}
+  =============================================================
+  [Clean Production Database Initialized]
+  =============================================================
+  The mock database has been completely removed.
+  
+  Users:       1 (Root Admin)
+  Students:    0
+  Mentors:     0
+  Slots:       0
+  Interviews:  0
+  Evaluations: 0
 
-  Sign in with password: pass123
-    Admin: admin@konfident.in
+  Root Administrator Login:
+    Email:    ${adminEmail}
+    Password: ${adminPassword}
+  =============================================================
   `);
 }

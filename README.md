@@ -1,100 +1,142 @@
 # Konfident Interview 2025
 
-A complete interview management platform: students browse mentors and book calendar slots, mentors conduct interviews, track attendance (`Attended` vs `Absent`) and submit evaluations, and administrators oversee the entire lifecycle with live reporting, calendar synchronization, and CSV export.
+A complete, high-concurrency interview management platform: students browse mentors and book calendar slots with real-time auto-fetch, mentors conduct interviews, track attendance (`Attended` vs `Absent`), and submit evaluations, and administrators oversee the entire lifecycle with live telemetry, rescheduling tools, and CSV exports.
 
-Built with **Node.js + Express + EJS + SQLite** — hardened with enterprise HTTP security headers, sliding-window rate limiting, and Google OAuth2 & Google Calendar integration.
+Built with **Node.js 22+ (Native SQLite engine), Express 5, EJS, and the Cohere Enterprise Design System**.
 
 ---
 
-## Quick start
+## 🚀 Setup & Installation Guide
+
+### 1. Prerequisites
+- **Node.js 22.5.0 or newer** (Uses Node.js's built-in `node:sqlite` engine — **zero native database installation or C++ build tools required**).
+- **npm** (comes bundled with Node.js).
+
+---
+
+### 2. Quick Setup (Clean Production Setup)
 
 ```bash
-npm install      # install dependencies
-npm run seed     # create database and load demo dataset
-npm start        # launch at http://localhost:3000
+# 1. Clone the repository
+git clone https://github.com/Gaurav-205/Ashish-Sir.git
+cd konfident
+
+# 2. Install dependencies
+npm install
+
+# 3. Initialize fresh production database (cleans out all mock records, sets up Root Admin)
+npm run init
+
+# 4. Start the server
+npm start
 ```
 
-Requires **Node.js 22.5 or newer** (uses Node's built-in SQLite engine with zero native build dependencies).
+Open **`http://localhost:3000`** in your browser.
 
-### Demo accounts — password `pass123` for everyone
-
-| Role | Email | Notes |
-|---|---|---|
-| Admin | `admin@konfident.in` | Full system control, slot management, CSV export |
-| Mentor (Technical) | `arjun.mentor@konfident.in` | Has upcoming & completed interviews |
-| Mentor (Technical + HR) | `rohit.mentor@konfident.in` | Has interview waiting for attendance & scoring |
-| Mentor (HR) | `sneha.mentor@konfident.in` | Dedicated HR evaluator |
-| Student | `aisha@student.in` | Both interviews completed and evaluated |
-| Student | `nikita@student.in` | Technical scored, HR upcoming |
-| Student | `harsh@student.in` | Fresh account — test mentors directory & slot booking |
-
-`npm run seed` resets the database and loads the full demo dataset for clean testing.
+#### Initial Administrator Credentials:
+- **Email**: `admin@konfident.in`
+- **Password**: `pass123`
+*(You can change your password immediately after logging in at `/profile`)*
 
 ---
 
-## Key Features
+### 3. Optional Environment Configuration (`.env`)
 
-### 1. Mentors Directory & Calendar Slot Booking
-- **Mentors Directory (`/student/mentors`)**: Students can browse verified mentors, inspect their interview capabilities (Technical / HR), and view open slot availability.
-- **Mentor Filter**: In `/student/slots`, students can filter slots by specific mentors or view all available dates.
-- **Calendar Event Sync**: Connect Google Calendar in `/profile` for automatic meeting event creation and schedule updates on booking, rescheduling, and cancellation.
+Create a `.env` file in the root directory to customize your deployment:
 
-### 2. Meeting Attendance Tracking & Rubric Scoring
-- **Attendance Verification (`/mentor/interview/:id`)**: Mentors record candidate attendance with explicit actions:
-  - **`✓ Mark Attended (Present)`**: Confirms attendance and immediately unlocks the rubric evaluation form.
-  - **`✗ Mark Absent / No-Show`**: Records missed meetings and prevents accidental score submission.
-- **Candidate Breakdown**: Real-time score calculator, criterion validation against `src/rubric.js`, and qualitative feedback.
+```env
+# Server Port
+PORT=3000
 
-### 3. Enterprise-Grade Security
-- **HTTP Security Headers**: Injected `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, `Referrer-Policy`, `Content-Security-Policy`, and `Permissions-Policy`.
-- **Rate Limiting**: Sliding-window rate limiting on `/login` and `/auth/google` to defend against credential stuffing and brute force.
-- **Session Protection**: Session fixation mitigation with fresh session generation on authentication.
-- **Database Transaction Isolation**: Atomic `BEGIN IMMEDIATE ... COMMIT / ROLLBACK` SQLite transactions on all booking, release, and cancellation operations.
+# Environment Mode (development or production)
+NODE_ENV=production
 
----
+# Custom Session Encryption Secret (Required for production!)
+SESSION_SECRET=your-secure-random-secret-key-here
 
-## Evaluation Scheme
+# Root Administrator Setup
+ADMIN_EMAIL=admin@yourcollege.edu
+ADMIN_PASSWORD=yourStrongPasswordHere
+ADMIN_NAME=Platform Administrator
 
-**Technical — 30 marks**
-| Criteria | Marks |
-|---|---|
-| Resume Readiness | 10 |
-| Project Defence | 10 |
-| DSA | 10 |
-
-**HR — 20 marks**
-| Criteria | Marks |
-|---|---|
-| Behavioural Skills | 10 |
-| HR Interview Performance | 10 |
-
-**Overall Grand Total: 30 + 20 = 50 marks.**
-
-Managed centrally in `src/rubric.js`.
+# Optional: Google OAuth & Live Google Calendar Sync
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
+```
 
 ---
 
-## Automated Tests
+## 📖 Complete Platform Operational Workflow
+
+### Step 1: Admin Configuration (`/admin`)
+1. Log in with the **Admin** account.
+2. Go to **Mentors (`/admin/mentors`)** $\rightarrow$ Click **"Register a new mentor"** $\rightarrow$ Enter their name, email, password, and assign their capabilities (`Technical` and/or `HR`).
+3. Go to **Students (`/admin/students`)** $\rightarrow$ Click **"Register a candidate"** $\rightarrow$ Enter their name, email, password, roll number, and branch.
+4. Go to **Slots (`/admin/slots`)** $\rightarrow$ Create batches of interview slots for mentors using the duration generator or 1-click presets (*Morning*, *Afternoon*, *Evening*).
+
+---
+
+### Step 2: Student Booking & Live Auto-Fetch (`/student`)
+1. Candidates log in at `/login` using their credentials or 1-click **Google Sign-In**.
+2. Visit **Mentors Directory (`/student/mentors`)** to browse verified evaluators and open capacities.
+3. Visit **Book Slots (`/student/slots`)**:
+   - The platform **auto-fetches** live open slots in real-time.
+   - Click **"Quick Book Earliest Slot"** or pick a specific time slot.
+   - Candidates book **1 Technical Interview** and **1 HR Interview**.
+
+---
+
+### Step 3: Mentor Conducting, Attendance & Scoring (`/mentor`)
+1. Mentors log in to their dashboard (`/mentor`) to view assigned candidates and session timings.
+2. Open the interview session (`/mentor/interview/:id`) $\rightarrow$ Click **"Open resume"** to review the student's CV.
+3. Track Meeting Attendance:
+   - Click **"✓ Mark Attended (Present)"**: Confirms presence and unlocks the rubric evaluation form.
+   - Click **"✗ Mark Absent / No-Show"**: Records missed sessions and protects against unauthorized grading.
+4. Fill in category marks according to the official criteria:
+   - **Technical Interview (30 Marks)**: Resume Readiness (10), Project Defence (10), DSA (10).
+   - **HR Interview (20 Marks)**: Behavioural Skills (10), HR Performance (10).
+5. Enter qualitative feedback and submit.
+
+---
+
+### Step 4: Performance Results & Export
+- **Students (`/student/results`)**: View grand total score (/50), category marks breakdown, grade, mentor qualitative feedback, and click **"🖨️ Print scorecard / Save PDF"**.
+- **Admin Reports (`/admin/reports`)**: View cohort averages, attendance telemetry, and download a 1-click **CSV Data Export (`/admin/reports.csv`)**.
+
+---
+
+## 🧪 Automated Test Suite
+
+Run the full end-to-end test suite:
 
 ```bash
 npm test
 ```
 
-Runs **83 end-to-end assertions** over real HTTP requests covering security headers, rate limiting, role-based access control, slot overlapping constraints, attendance flows, scoring rules, and page renders:
-
 ```text
-83 passed, 0 failed
+Security & HTTP headers (nosniff, SAMEORIGIN, CSP) ............ 3 passed
+Authentication & RBAC access control ........................... 11 passed
+Admin — creating mentors, students and slots ................... 8 passed
+Student — booking rules, mentors directory, auto-fetch ......... 13 passed
+Mentor — attendance, scoring, duplicate checks ................. 9 passed
+Student results & maths breakdown .............................. 4 passed
+Admin — monitoring, rescheduling, release, CSV export .......... 11 passed
+Student cancel & rebook ........................................ 6 passed
+Google OAuth & Calendar Integration ............................ 5 passed
+Full page renders (Admin, Student, Mentor, 404) ................ 15 passed
+System Health Probe (GET /health) .............................. 1 passed
+-------------------------------------------------------------------------
+Total: 86 passed, 0 failed (100% Pass Rate)
 ```
 
 ---
 
-## Environment Variables
+## 🛠️ Production Commands Reference
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `3000` | HTTP port |
-| `SESSION_SECRET` | `konfident-interview-2025-dev-secret` | Session cookie encryption secret |
-| `GOOGLE_CLIENT_ID` | `—` | Google OAuth2 Client ID |
-| `GOOGLE_CLIENT_SECRET` | `—` | Google OAuth2 Client Secret |
-| `GOOGLE_REDIRECT_URI` | `http://localhost:3000/auth/google/callback` | OAuth2 callback URL |
-
+| Command | Action |
+|---|---|
+| `npm run init` | Initializes fresh production database with 0 mock data and creates Root Admin |
+| `npm start` | Starts the production server |
+| `npm test` | Executes 86 automated end-to-end test assertions |
+| `npm run seed:demo` | Optional: populates demo mock dataset for local test environments |
