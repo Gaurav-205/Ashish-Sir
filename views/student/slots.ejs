@@ -1,26 +1,34 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Available <%= h.titleCase(type) %> slots</h1>
-    <p class="sub">Pick any open slot. Each slot can be taken by one student only.</p></div>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Calendar Scheduling · One Student Per Slot
+    </div>
+    <h1>Available <%= h.titleCase(type) %> slots</h1>
+    <p class="sub">Select any available slot to confirm your <%= h.titleCase(type) %> interview with a verified mentor.</p>
+  </div>
   <div class="btn-row">
-    <a class="btn <%= type==='technical'?'primary':'' %>" href="/student/slots?type=technical">Technical</a>
-    <a class="btn <%= type==='hr'?'primary':'' %>" href="/student/slots?type=hr">HR</a>
+    <a class="btn <%= type==='technical'?'primary':'' %>" href="/student/slots?type=technical">Technical slots</a>
+    <a class="btn <%= type==='hr'?'primary':'' %>" href="/student/slots?type=hr">HR slots</a>
   </div>
 </div>
 
 <% if (already) { %>
-  <div class="note">You have already booked your <%= h.titleCase(type) %> interview —
-    <strong><%= h.fmtSlot(already) %></strong> with <%= already.mentor_name %>.
-    <% if (already.status === 'booked') { %> Cancel it from your <a href="/student">dashboard</a> if you need a different time.<% } %>
+  <div class="note">
+    ℹ️ You have already booked your <%= h.titleCase(type) %> interview —
+    <strong><%= h.fmtSlot(already) %></strong> with <strong><%= already.mentor_name %></strong>.
+    <% if (already.status === 'booked') { %>
+      To select a different time, cancel your current booking from your <a href="/student">dashboard</a>.
+    <% } %>
   </div>
 <% } %>
 
 <div class="card">
   <div class="card-head">
-    <h2>Open slots</h2>
+    <h2>Available <%= h.titleCase(type) %> Calendar Slots</h2>
     <form method="get" class="btn-row" style="margin:0">
       <input type="hidden" name="type" value="<%= type %>">
-      <select name="mentor" onchange="this.form.submit()" style="font-size:13px;padding:6px 10px">
+      <select name="mentor" onchange="this.form.submit()" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-pill);max-width:200px">
         <option value="">All mentors</option>
         <% (mentors || []).forEach(function(m){ %>
           <option value="<%= m.id %>" <%= selectedMentor === m.id ? 'selected' : '' %>><%= m.name %></option>
@@ -31,7 +39,7 @@
   </div>
   <div class="card-body tight">
     <% if (!byDate.length) { %>
-      <div class="empty">No open <%= h.titleCase(type) %> slots right now. Please check back — the admin adds slots regularly.</div>
+      <div class="empty">No open <%= h.titleCase(type) %> slots available currently. The admin updates and publishes new slots regularly.</div>
     <% } %>
     <% byDate.forEach(function(g){ %>
       <div class="slot-day">
@@ -40,12 +48,12 @@
           <% g.slots.forEach(function(sl){ %>
             <div class="slot">
               <div class="t"><%= h.fmtTime(sl.start_time) %> – <%= h.fmtTime(sl.end_time) %></div>
-              <div class="m"><%= sl.mentor_name %> · <%= sl.mode %></div>
-              <form method="post" action="/student/book">
+              <div class="m">Mentor: <strong><%= sl.mentor_name %></strong><br><%= sl.mode %><%= sl.location ? ' · ' + sl.location : '' %></div>
+              <form method="post" action="/student/book" style="margin:0">
                 <input type="hidden" name="slot_id" value="<%= sl.id %>">
                 <input type="hidden" name="type" value="<%= type %>">
-                <button class="btn primary sm" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
-                  <%= already ? 'Already booked' : 'Book this slot' %>
+                <button class="btn primary sm" style="width:100%" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
+                  <%= already ? 'Already booked' : 'Book this slot →' %>
                 </button>
               </form>
             </div>

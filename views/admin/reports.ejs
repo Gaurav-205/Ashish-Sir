@@ -1,45 +1,64 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Reports</h1><p class="sub">Overall evaluation is out of <%= GRAND_TOTAL %> — Technical <%= RUBRIC.technical.total %> + HR <%= RUBRIC.hr.total %>.</p></div>
-  <a class="btn primary" href="/admin/reports.csv">Download CSV</a>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Performance Analytics · Cohort Score Sheet
+    </div>
+    <h1>Cohort evaluations &amp; reports</h1>
+    <p class="sub">Aggregate marks scored across Technical (30 marks) and HR (20 marks) — Total <%= GRAND_TOTAL %> marks.</p>
+  </div>
+  <a class="btn primary" href="/admin/reports.csv" style="display:inline-flex;align-items:center;gap:6px">
+    📥 Export Data to CSV
+  </a>
 </div>
+
 <div class="stats">
-  <div class="stat"><div class="n"><%= doneCount %><small class="faint">/<%= summaries.length %></small></div><div class="l">Fully evaluated</div></div>
-  <div class="stat"><div class="n"><%= avg == null ? '—' : avg.toFixed(1) %></div><div class="l">Avg total /<%= GRAND_TOTAL %></div></div>
-  <div class="stat"><div class="n"><%= avgTech == null ? '—' : avgTech.toFixed(1) %></div><div class="l">Avg technical /<%= RUBRIC.technical.total %></div></div>
+  <div class="stat"><div class="n"><%= doneCount %><small class="faint"> / <%= summaries.length %></small></div><div class="l">Fully Evaluated</div></div>
+  <div class="stat"><div class="n"><%= avg == null ? '—' : avg.toFixed(1) %></div><div class="l">Cohort Average /<%= GRAND_TOTAL %></div></div>
+  <div class="stat"><div class="n"><%= avgTech == null ? '—' : avgTech.toFixed(1) %></div><div class="l">Avg Technical /<%= RUBRIC.technical.total %></div></div>
   <div class="stat"><div class="n"><%= avgHr == null ? '—' : avgHr.toFixed(1) %></div><div class="l">Avg HR /<%= RUBRIC.hr.total %></div></div>
-  <div class="stat"><div class="n"><%= stats.completed %></div><div class="l">Interviews done</div></div>
+  <div class="stat"><div class="n"><%= stats.attended || stats.completed %></div><div class="l">Sessions Attended</div></div>
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>Score sheet</h2></div>
+  <div class="card-head">
+    <h2>Comprehensive Cohort Score Sheet</h2>
+    <span class="faint"><%= summaries.length %> candidate records</span>
+  </div>
   <div class="card-body tight">
     <div class="table-scroll"><table class="report">
       <thead><tr>
-        <th>Roll no</th><th>Student</th>
+        <th>Roll No</th>
+        <th>Student</th>
         <% RUBRIC.technical.criteria.forEach(function(c){ %><th class="num"><%= c.label %></th><% }); %>
         <th class="num">Tech /<%= RUBRIC.technical.total %></th>
         <% RUBRIC.hr.criteria.forEach(function(c){ %><th class="num"><%= c.label %></th><% }); %>
         <th class="num">HR /<%= RUBRIC.hr.total %></th>
-        <th class="num">Total /<%= GRAND_TOTAL %></th><th>Result</th>
+        <th class="num">Total /<%= GRAND_TOTAL %></th>
+        <th>Grade &amp; Status</th>
       </tr></thead>
       <tbody>
       <% summaries.forEach(function(s){ %>
         <tr>
-          <td class="mono"><%= s.student.roll_no || '—' %></td>
-          <td><a href="/admin/students/<%= s.student.id %>"><%= s.student.name %></a></td>
+          <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
+          <td><a href="/admin/students/<%= s.student.id %>"><strong><%= s.student.name %></strong></a><br><span class="faint"><%= s.student.email %></span></td>
           <% RUBRIC.technical.criteria.forEach(function(c){ %>
             <td class="num"><%= s.technical && s.technical.eval_id ? s.technical[c.key] : '—' %></td><% }); %>
-          <td class="num"><strong><%= s.techScore == null ? '—' : s.techScore %></strong></td>
+          <td class="num"><strong style="font-family:var(--font-display)"><%= s.techScore == null ? '—' : s.techScore %></strong></td>
           <% RUBRIC.hr.criteria.forEach(function(c){ %>
             <td class="num"><%= s.hr && s.hr.eval_id ? s.hr[c.key] : '—' %></td><% }); %>
-          <td class="num"><strong><%= s.hrScore == null ? '—' : s.hrScore %></strong></td>
-          <td class="num"><strong><%= s.total == null ? '—' : s.total %></strong></td>
-          <td><% if (s.allEvaluated) { %><span class="pill <%= grade(s.percent).cls %>"><%= grade(s.percent).label %> · <%= s.percent %>%</span>
-              <% } else { %><span class="pill p-cancelled">in progress</span><% } %></td>
+          <td class="num"><strong style="font-family:var(--font-display)"><%= s.hrScore == null ? '—' : s.hrScore %></strong></td>
+          <td class="num"><strong style="font-family:var(--font-display);font-size:15px"><%= s.total == null ? '—' : s.total %></strong></td>
+          <td>
+            <% if (s.allEvaluated) { %>
+              <span class="pill <%= grade(s.percent).cls %>"><%= grade(s.percent).label %> · <%= s.percent %>%</span>
+            <% } else { %>
+              <span class="pill p-booked">In progress</span>
+            <% } %>
+          </td>
         </tr>
       <% }); %>
-      <% if (!summaries.length) { %><tr><td colspan="11" class="empty">No students yet.</td></tr><% } %>
+      <% if (!summaries.length) { %><tr><td colspan="11" class="empty">No student records found.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>

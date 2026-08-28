@@ -1,54 +1,99 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>My interviews</h1><p class="sub">Interviews the admin assigned to you. You can score only these.</p></div>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Mentor Workspace · Assigned Cohorts
+    </div>
+    <h1>Evaluator dashboard</h1>
+    <p class="sub">Conduct your assigned candidate interviews, track meeting attendance, and submit rubric evaluations.</p>
+  </div>
 </div>
+
 <div class="stats">
-  <div class="stat"><div class="n"><%= upcoming.length %></div><div class="l">Upcoming</div></div>
-  <div class="stat"><div class="n"><%= completed.length %></div><div class="l">Completed</div></div>
-  <div class="stat"><div class="n"><%= pending.length %></div><div class="l">Pending evaluation</div></div>
-  <div class="stat"><div class="n"><%= slots.length %></div><div class="l">Open slots of mine</div></div>
+  <div class="stat">
+    <div class="n"><%= upcoming.length %></div>
+    <div class="l">Upcoming Sessions</div>
+  </div>
+  <div class="stat">
+    <div class="n"><%= completed.length %></div>
+    <div class="l">Completed</div>
+  </div>
+  <div class="stat">
+    <div class="n"><%= pending.length %></div>
+    <div class="l">Awaiting Score</div>
+  </div>
+  <div class="stat">
+    <div class="n"><%= slots.length %></div>
+    <div class="l">Open Slots of Mine</div>
+  </div>
 </div>
 
 <% if (pending.length) { %>
-  <div class="note">You have <strong><%= pending.length %></strong> completed interview(s) awaiting scores.</div>
+  <div class="note">
+    ⚡ Action needed: You have <strong><%= pending.length %></strong> completed interview(s) awaiting score submission.
+  </div>
 <% } %>
 
-<div class="card">
-  <div class="card-head"><h2>Upcoming</h2></div>
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head">
+    <h2>Upcoming Interview Sessions (<%= upcoming.length %>)</h2>
+  </div>
   <div class="card-body tight">
-    <% if (!upcoming.length) { %><div class="empty">No upcoming interviews.</div><% } else { %>
+    <% if (!upcoming.length) { %>
+      <div class="empty">No upcoming interview sessions scheduled currently.</div>
+    <% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mode</th><th></th></tr></thead>
+      <thead><tr><th>Date &amp; Time</th><th>Domain</th><th>Candidate</th><th>Mode &amp; Link</th><th class="num">Action</th></tr></thead>
       <tbody><% upcoming.forEach(function(i){ %>
         <tr>
           <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td><strong><%= i.student_name %></strong><br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span></td>
           <td class="faint"><%= i.mode %><%= i.location ? ' · ' + i.location : '' %></td>
-          <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open</a></td>
+          <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a></td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-head"><h2>Completed</h2></div>
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head">
+    <h2>Completed Sessions &amp; Evaluation Status</h2>
+  </div>
   <div class="card-body tight">
-    <% if (!completed.length) { %><div class="empty">Nothing completed yet.</div><% } else { %>
+    <% if (!completed.length) { %>
+      <div class="empty">No completed interviews yet.</div>
+    <% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Evaluation</th><th class="num">Score</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Domain</th><th>Candidate</th><th>Attendance</th><th>Evaluation</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
       <tbody><% completed.forEach(function(i){ %>
         <tr>
           <td><%= h.fmtDate(i.slot_date) %></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-          <td><%= i.student_name %></td>
-          <td><% if (i.eval_id) { %><span class="pill p-completed">submitted</span>
-              <% } else { %><span class="pill p-booked">pending</span><% } %></td>
-          <td class="num"><% if (i.eval_id) { %><strong><%= i.score %></strong><span class="faint">/<%= RUBRIC[i.type].total %></span>
-            <% } else { %><span class="faint">—</span><% } %></td>
-          <td class="num"><a class="btn sm <%= i.eval_id ? '' : 'primary' %>" href="/mentor/interview/<%= i.id %>">
-            <%= i.eval_id ? 'View' : 'Score now' %></a></td>
+          <td><strong><%= i.student_name %></strong></td>
+          <td>
+            <% if (i.attendance === 'attended') { %>
+              <span class="pill p-completed">Attended</span>
+            <% } else if (i.attendance === 'absent') { %>
+              <span class="pill p-cancelled">Absent</span>
+            <% } else { %>
+              <span class="pill p-booked">Pending</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (i.eval_id) { %><span class="pill p-completed">Submitted</span>
+            <% } else { %><span class="pill p-booked">Pending</span><% } %>
+          </td>
+          <td class="num">
+            <% if (i.eval_id) { %><strong><%= i.score %></strong><span class="faint">/<%= RUBRIC[i.type].total %></span>
+            <% } else { %><span class="faint">—</span><% } %>
+          </td>
+          <td class="num">
+            <a class="btn sm <%= i.eval_id ? '' : 'primary' %>" href="/mentor/interview/<%= i.id %>">
+              <%= i.eval_id ? 'View' : 'Score now →' %>
+            </a>
+          </td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>
@@ -56,16 +101,23 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>My open slots</h2><span class="faint">Created by the admin — students may still book these</span></div>
+  <div class="card-head">
+    <h2>My Open Published Slots (<%= slots.length %>)</h2>
+    <span class="faint">Students can book into any of these slots</span>
+  </div>
   <div class="card-body tight">
-    <% if (!slots.length) { %><div class="empty">No open slots.</div><% } else { %>
+    <% if (!slots.length) { %>
+      <div class="empty">No open slots currently published by admin for your profile.</div>
+    <% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Mode</th></tr></thead>
+      <thead><tr><th>Date</th><th>Timing</th><th>Domain</th><th>Meeting Mode</th></tr></thead>
       <tbody><% slots.forEach(function(s){ %>
-        <tr><td><%= h.fmtDate(s.slot_date) %></td>
+        <tr>
+          <td><%= h.fmtDate(s.slot_date) %></td>
           <td><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></td></tr>
+          <td class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></td>
+        </tr>
       <% }); %></tbody>
     </table></div><% } %>
   </div>
