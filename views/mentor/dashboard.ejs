@@ -56,7 +56,7 @@
           <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td><strong><%= i.student_name %></strong><br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span></td>
-          <td class="faint"><%= i.mode %><%= i.location ? ' · ' + i.location : '' %></td>
+          <td class="faint"><%= i.mode %><% if (i.location) { %> · <%- h.linkify ? h.linkify(i.location) : i.location %><% } %></td>
           <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a></td>
         </tr>
       <% }); %></tbody>
@@ -73,10 +73,10 @@
       <div class="empty">No completed interviews yet.</div>
     <% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Domain</th><th>Candidate</th><th>Attendance</th><th>Evaluation</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
+      <thead><tr><th>Date &amp; Time</th><th>Domain</th><th>Candidate</th><th>Attendance</th><th>Evaluation</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
       <tbody><% completed.forEach(function(i){ %>
         <tr>
-          <td><%= h.fmtDate(i.slot_date) %></td>
+          <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td><strong><%= i.student_name %></strong></td>
           <td>
@@ -123,7 +123,7 @@
           <td><%= h.fmtDate(s.slot_date) %></td>
           <td><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td class="faint"><%= s.mode %><%= s.location ? ' · ' + s.location : '' %></td>
+          <td class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify ? h.linkify(s.location) : s.location %><% } %></td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>

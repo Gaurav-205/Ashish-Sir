@@ -17,7 +17,7 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 router.get('/', (req, res) => {
   const stats = q.adminStats();
   const upcoming = db.prepare(`
-    SELECT i.id, i.type, i.status, s.slot_date, s.start_time, s.end_time,
+    SELECT i.id, i.type, i.status, s.slot_date, s.start_time, s.end_time, s.location,
            st.name AS student_name, m.name AS mentor_name
       FROM interviews i
       JOIN slots s ON s.id = i.slot_id
@@ -26,7 +26,7 @@ router.get('/', (req, res) => {
      WHERE i.status = 'booked'
      ORDER BY s.slot_date, s.start_time LIMIT 8`).all();
   const pendingEval = db.prepare(`
-    SELECT i.id, i.type, s.slot_date, st.name AS student_name, m.name AS mentor_name
+    SELECT i.id, i.type, s.slot_date, s.location, st.name AS student_name, m.name AS mentor_name
       FROM interviews i
       JOIN slots s ON s.id = i.slot_id
       JOIN users st ON st.id = i.student_id
@@ -40,7 +40,8 @@ router.get('/', (req, res) => {
         (SELECT COUNT(*) FROM interviews i WHERE i.student_id=u.id AND i.status<>'cancelled') AS booked
         FROM users u WHERE u.role='student'
     ) WHERE booked < 2 ORDER BY booked, name LIMIT 10`).all();
-  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked });
+  const studentSummaries = q.allStudentSummaries();
+  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked, studentSummaries, GRAND_TOTAL });
 });
 
 /* ------------------------------- students ------------------------------ */
@@ -209,7 +210,7 @@ router.post('/slots', (req, res) => {
       }
 
       try {
-        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', location || null);
+        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', (location && location.trim()) ? location.trim() : 'https://meet.konfident.in/room');
         made++;
       } catch (e) {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;

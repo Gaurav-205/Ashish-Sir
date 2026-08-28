@@ -43,4 +43,12 @@ function isPast(slot) {
   const end = new Date(`${slot.slot_date}T${timeStr}:00`);
   return !isNaN(end.getTime()) && end < now;
 }
-module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast };
+function linkify(str) {
+  if (!str) return '';
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  if (!urlRegex.test(str)) return str;
+  return str.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${url} ↗</a>`;
+  });
+}
+module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify };

@@ -63,7 +63,7 @@
             Assigned Mentor: <strong><%= iv.mentor_name %></strong> (<%= iv.mentor_email %>)
           </p>
           <p class="muted" style="margin-bottom:0;font-size:13px">
-            Mode: <%= iv.mode %><%= iv.location ? ' · ' + iv.location : '' %>
+            Mode: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
           </p>
         </div>
 

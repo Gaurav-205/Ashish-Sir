@@ -97,6 +97,23 @@ a:hover {
   text-decoration: underline;
 }
 
+a.meet-link {
+  color: var(--action-blue, var(--tech, #1863dc));
+  font-weight: 600;
+  text-decoration: underline;
+  word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+a.meet-link:hover {
+  color: var(--cohere-black, var(--brand-dark, #000));
+  background: var(--tech-soft, #f1f5ff);
+  border-radius: 4px;
+  padding: 0 4px;
+  text-decoration: none;
+}
+
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 600;
