@@ -1,8 +1,25 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1><%= s.student.name %></h1>
-    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · ' + s.student.roll_no : '' %><%= s.student.branch ? ' · ' + s.student.branch : '' %></p></div>
-  <a class="btn" href="/admin/students">← All students</a>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Candidate Record · Profile &amp; Interview History
+    </div>
+    <h1><%= s.student.name %></h1>
+    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · Roll No: ' + s.student.roll_no : '' %><%= s.student.branch ? ' · Branch: ' + s.student.branch : '' %></p>
+  </div>
+  <div class="btn-row">
+    <% if (s.student.resume_url) { %>
+      <a class="btn sm" href="<%= s.student.resume_url %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        View Resume Link
+      </a>
+    <% } %>
+    <a class="btn sm" href="/admin/students">← All students</a>
+  </div>
 </div>
 
 <div class="grid two">
@@ -90,5 +107,25 @@
       <button class="btn">Reset password</button>
     </form>
   </div></div>
+    <div class="card-body">
+      <form method="post" action="/admin/students/<%= s.student.id %>/update">
+        <div class="row">
+          <div class="field"><label>Full Name</label><input name="name" value="<%= s.student.name %>" required></div>
+          <div class="field"><label>Roll Number</label><input name="roll_no" value="<%= s.student.roll_no || '' %>"></div>
+          <div class="field"><label>Branch / Major</label><input name="branch" value="<%= s.student.branch || '' %>"></div>
+          <div class="field"><label>Phone Number</label><input name="phone" value="<%= s.student.phone || '' %>"></div>
+        </div>
+        <div class="field"><label>Resume Link (Google Drive / Portfolio)</label><input type="url" name="resume_url" value="<%= s.student.resume_url || '' %>"></div>
+        <label class="check" style="margin-bottom:16px"><input type="checkbox" name="active" value="1" <%= s.student.active ? 'checked' : '' %>> Candidate account active</label>
+        <button class="btn primary">Save Changes</button>
+      </form>
+      <hr style="border:none;border-top:1px solid var(--line-soft);margin:20px 0">
+      <form method="post" action="/admin/students/<%= s.student.id %>/reset-password" class="btn-row">
+        <input name="password" placeholder="New password" minlength="6" required style="max-width:220px">
+        <button class="btn">Reset password</button>
+      </form>
+    </div>
+  </div>
+>>>>>>> origin/main
 </div>
 <%- include('../partials/foot') %>

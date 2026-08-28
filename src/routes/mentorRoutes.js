@@ -34,15 +34,36 @@ router.get('/interview/:id', (req, res) => {
   res.render('mentor/interview', { title: `${h.titleCase(iv.type)} — ${iv.student_name}`, iv, error: null, form: {} });
 });
 
+router.post('/interview/:id/attendance', (req, res) => {
+  const iv = q.interviewById(Number(req.params.id));
+  if (!iv || iv.mentor_id !== req.session.user.id) {
+    return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
+  }
+  const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
+
+  if (attendance === 'attended') {
+    db.prepare(`UPDATE interviews SET attendance='attended', status='completed',
+                completed_at=COALESCE(completed_at, datetime('now')),
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
+  } else {
+    db.prepare(`UPDATE interviews SET attendance='absent',
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'err', 'Candidate marked as Absent / No-Show.');
+  }
+  res.redirect('/mentor/interview/' + iv.id);
+});
+
 router.post('/interview/:id/complete', (req, res) => {
   const iv = q.interviewById(Number(req.params.id));
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
-  if (iv.status !== 'booked') flash(req, 'err', 'This interview is not in a bookable state.');
+  if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
   else {
-    db.prepare(`UPDATE interviews SET status='completed', completed_at=datetime('now') WHERE id=?`).run(iv.id);
-    flash(req, 'ok', 'Marked as completed. You can now submit the evaluation.');
+    db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=datetime('now'),
+                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    flash(req, 'ok', 'Marked as completed and attended. You can now submit the evaluation.');
   }
   res.redirect('/mentor/interview/' + iv.id);
 });
@@ -56,7 +77,8 @@ router.post('/interview/:id/evaluate', (req, res) => {
     title: 'Evaluate', iv, error, form: req.body,
   });
 
-  if (iv.status !== 'completed') return rerender('Mark the interview as completed before submitting scores.');
+  if (iv.attendance === 'absent') return rerender('Cannot submit scores for an absent candidate. Mark attendance as attended first.');
+  if (iv.status !== 'completed') return rerender('Mark candidate as attended and completed before submitting scores.');
   if (iv.eval_id) return rerender('An evaluation has already been submitted for this interview.');
 
   let total;
@@ -65,12 +87,19 @@ router.post('/interview/:id/evaluate', (req, res) => {
 
   const keys = RUBRIC[iv.type].criteria.map((c) => c.key);
   const val = (k) => (keys.includes(k) ? Number(req.body[k]) : null);
-  db.prepare(`INSERT INTO evaluations
-      (interview_id, mentor_id, resume_marks, project_marks, dsa_marks,
-       behaviour_marks, hr_perf_marks, total, feedback)
-      VALUES (?,?,?,?,?,?,?,?,?)`)
-    .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
-         val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
+  try {
+    db.prepare(`INSERT INTO evaluations
+        (interview_id, mentor_id, resume_marks, project_marks, dsa_marks,
+         behaviour_marks, hr_perf_marks, total, feedback)
+        VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
+           val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) {
+      return rerender('An evaluation has already been submitted for this interview.');
+    }
+    return rerender('Could not save evaluation: ' + e.message);
+  }
 
   flash(req, 'ok', `Evaluation submitted — ${total}/${RUBRIC[iv.type].total}. The student can now see the result.`);
   res.redirect('/mentor');

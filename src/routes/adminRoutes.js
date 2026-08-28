@@ -6,6 +6,7 @@ const q = require('../queries');
 const h = require('../helpers');
 const { requireRole } = require('../auth');
 const { RUBRIC, GRAND_TOTAL } = require('../rubric');
+const google = require('../services/googleService');
 
 const router = express.Router();
 router.use(requireRole('admin'));
@@ -66,12 +67,16 @@ router.post('/students', (req, res) => {
 
 router.post('/students/:id/update', (req, res) => {
   const { name, roll_no, branch, phone, resume_url, active } = req.body;
+  if (!name || !name.trim()) {
+    flash(req, 'err', 'Name is required.');
+    return res.redirect('/admin/students/' + req.params.id);
+  }
   db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
-    .run(name, roll_no || null, branch || null, phone || null, resume_url || null,
+    .run(name.trim(), roll_no || null, branch || null, phone || null, resume_url || null,
          active ? 1 : 0, Number(req.params.id));
   flash(req, 'ok', 'Student updated.');
-  res.redirect('/admin/students');
+  res.redirect('/admin/students/' + req.params.id);
 });
 
 router.post('/students/:id/reset-password', (req, res) => {
@@ -82,7 +87,7 @@ router.post('/students/:id/reset-password', (req, res) => {
       .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
     flash(req, 'ok', 'Password reset.');
   }
-  res.redirect('/admin/students');
+  res.redirect('/admin/students/' + req.params.id);
 });
 
 router.get('/students/:id', (req, res) => {
@@ -225,6 +230,11 @@ router.post('/slots/:id/reschedule', (req, res) => {
   const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(id);
   if (!slot) { flash(req, 'err', 'Slot not found.'); return res.redirect('/admin/slots'); }
   try {
+    const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
+    if (iv && iv.status === 'completed') {
+      throw new Error('Completed interviews cannot be rescheduled.');
+    }
+
     const { slot_date, start_time, end_time, mentor_id, mode, location } = req.body;
     const mentor = db.prepare(`SELECT * FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
@@ -238,10 +248,31 @@ router.post('/slots/:id/reschedule', (req, res) => {
     `).get(mentor.id, slot_date, id, end_time, start_time);
     if (clash) throw new Error('That mentor already has an overlapping slot at that time.');
 
+    if (iv) {
+      const studentClash = db.prepare(`
+        SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
+         WHERE i.student_id = ? AND i.status <> 'cancelled' AND i.id <> ?
+           AND s2.slot_date = ? AND s2.start_time < ? AND s2.end_time > ?
+      `).get(iv.student_id, iv.id, slot_date, end_time, start_time);
+      if (studentClash) throw new Error('The booked student already has another interview at that time.');
+    }
+
     db.prepare(`UPDATE slots SET slot_date=?, start_time=?, end_time=?, mentor_id=?, mode=?, location=? WHERE id=?`)
       .run(slot_date, start_time, end_time, mentor.id, mode || 'Online', location || null, id);
     // keep the linked interview's mentor in sync
     db.prepare(`UPDATE interviews SET mentor_id=? WHERE slot_id=? AND status<>'cancelled'`).run(mentor.id, id);
+
+    // Sync Google Calendar event update if present
+    if (iv && iv.google_event_id) {
+      const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
+      google.updateCalendarEvent({
+        eventId: iv.google_event_id,
+        student,
+        mentor,
+        slot: { slot_date, start_time, end_time, mode: mode || 'Online', location, type: slot.type }
+      }).catch(() => {});
+    }
+
     flash(req, 'ok', 'Slot updated. The student and mentor now see the new schedule.');
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That mentor already has a slot at that time.' : e.message);
@@ -268,20 +299,39 @@ router.post('/slots/:id/reopen', (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/release', (req, res) => {
+router.post('/slots/:id/release', async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
   if (!iv) { flash(req, 'err', 'That slot is not booked.'); return res.redirect('/admin/slots'); }
   if (iv.status === 'completed') { flash(req, 'err', 'Completed interviews cannot be released.'); return res.redirect('/admin/slots'); }
-  db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
-  db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(id);
-  flash(req, 'ok', 'Booking released — the slot is open again.');
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
+    db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(id);
+    db.exec('COMMIT');
+
+    if (iv.google_event_id) {
+      const student = db.prepare('SELECT * FROM users WHERE id=?').get(iv.student_id);
+      const mentor = db.prepare('SELECT * FROM users WHERE id=?').get(iv.mentor_id);
+      google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
+    }
+
+    flash(req, 'ok', 'Booking released — the slot is open again.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not release slot: ' + e.message);
+  }
   res.redirect('/admin/slots');
 });
 
 /* ------------------------------ interviews ----------------------------- */
 router.get('/interviews', (req, res) => {
-  const filters = { type: req.query.type || '', status: req.query.status || '', mentor: req.query.mentor || '' };
+  const filters = {
+    type: req.query.type || '',
+    status: req.query.status || '',
+    attendance: req.query.attendance || '',
+    mentor: req.query.mentor || '',
+  };
   const list = q.allInterviews(filters);
   res.render('admin/interviews', {
     title: 'Interviews', list, filters,
@@ -307,16 +357,20 @@ router.get('/reports.csv', (req, res) => {
   const head = ['Roll No', 'Student', 'Email', 'Branch',
     ...RUBRIC.technical.criteria.map((c) => c.label), 'Technical Total',
     ...RUBRIC.hr.criteria.map((c) => c.label), 'HR Total',
-    `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'HR Status'];
+    `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'Technical Attendance', 'HR Status', 'HR Attendance'];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [head.map(esc).join(',')];
   for (const s of rows) {
     const t = s.technical, hr = s.hr;
+    const techMarks = RUBRIC.technical.criteria.map((c) => (t && t.eval_id ? t[c.key] : ''));
+    const hrMarks = RUBRIC.hr.criteria.map((c) => (hr && hr.eval_id ? hr[c.key] : ''));
     lines.push([
       s.student.roll_no, s.student.name, s.student.email, s.student.branch,
-      t?.resume_marks, t?.project_marks, t?.dsa_marks, s.techScore,
-      hr?.behaviour_marks, hr?.hr_perf_marks, s.hrScore,
-      s.total, s.percent, t ? t.status : 'not booked', hr ? hr.status : 'not booked',
+      ...techMarks, s.techScore,
+      ...hrMarks, s.hrScore,
+      s.total, s.percent,
+      t ? t.status : 'not booked', t ? t.attendance : '—',
+      hr ? hr.status : 'not booked', hr ? hr.attendance : '—',
     ].map(esc).join(','));
   }
   res.setHeader('Content-Type', 'text/csv');

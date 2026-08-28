@@ -27,7 +27,13 @@
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
         <div class="field"><label>Meeting link / room *</label><input name="location" placeholder="https://meet.google.com/xyz or Room 204" required></div>
       </div>
-      <button class="btn primary">Create slots</button>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <button class="btn primary">Create slots</button>
+        <span class="faint" style="font-size:12px">Quick presets:</span>
+        <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00 - 12:00, 4 slots)</button>
+        <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00 - 17:00, 6 slots)</button>
+        <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00 - 20:00, 4 slots)</button>
+      </div>
     </form>
   </div>
 </div>
@@ -128,6 +134,14 @@
     if (first && (m.selectedOptions[0] || {}).hidden !== false) m.value = first.value;
   }
   t.addEventListener('change', sync); sync();
+  window.applyPreset = function(start, duration, count) {
+    var s = document.querySelector('input[name="start_time"]');
+    var d = document.querySelector('input[name="duration"]');
+    var c = document.querySelector('input[name="count"]');
+    if (s) s.value = start;
+    if (d) d.value = duration;
+    if (c) c.value = count;
+  };
 })();
 </script>
 <%- include('../partials/foot') %>

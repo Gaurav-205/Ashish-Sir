@@ -1,39 +1,106 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Available <%= h.titleCase(type) %> slots</h1>
-    <p class="sub">Pick any open slot. Each slot can be taken by one student only.</p></div>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Calendar Scheduling · Real-Time Auto-Fetch
+    </div>
+    <h1>Available <%= h.titleCase(type) %> slots</h1>
+    <p class="sub">The platform automatically discovers and synchronizes all open slots across verified mentors.</p>
+  </div>
   <div class="btn-row">
-    <a class="btn <%= type==='technical'?'primary':'' %>" href="/student/slots?type=technical">Technical</a>
-    <a class="btn <%= type==='hr'?'primary':'' %>" href="/student/slots?type=hr">HR</a>
+    <a class="btn <%= type==='technical'?'primary':'' %>" href="/student/slots?type=technical">Technical slots</a>
+    <a class="btn <%= type==='hr'?'primary':'' %>" href="/student/slots?type=hr">HR slots</a>
   </div>
 </div>
 
-<% if (already) { %>
-  <div class="note">You have already booked your <%= h.titleCase(type) %> interview —
-    <strong><%= h.fmtSlot(already) %></strong> with <%= already.mentor_name %>.
-    <% if (already.status === 'booked') { %> Cancel it from your <a href="/student">dashboard</a> if you need a different time.<% } %>
+<% if (already && already.status !== 'cancelled') { %>
+  <div class="note" style="display:flex;align-items:center;gap:10px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--action-blue)">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="16" x2="12" y2="12"></line>
+      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+    <div>
+      You have already booked your <%= h.titleCase(type) %> interview —
+      <strong><%= h.fmtSlot(already) %></strong> with <strong><%= already.mentor_name %></strong>.
+      <% if (already.status === 'booked') { %>
+        To select a different time, cancel your current booking from your <a href="/student">dashboard</a>.
+      <% } %>
+    </div>
   </div>
 <% } %>
 
+<!-- Smart Auto-Select Earliest Slot Banner -->
+<div id="smart-auto-banner" class="card" style="margin-bottom:20px;display:none;background:var(--pale-green);border-color:#bbf7d0">
+  <div class="card-body" style="padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <div class="mono" style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--deep-green);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        Smart Match · Earliest Available Slot Found
+      </div>
+      <div id="smart-auto-text" style="font-size:14px;color:var(--deep-green)">
+        Finding earliest slot…
+      </div>
+    </div>
+    <form id="smart-auto-form" method="post" action="/student/book" style="margin:0">
+      <input type="hidden" name="slot_id" id="smart-auto-slot-id" value="">
+      <input type="hidden" name="type" value="<%= type %>">
+      <button class="btn primary sm" id="smart-auto-btn" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
+        Quick Book Earliest Slot →
+      </button>
+    </form>
+  </div>
+</div>
+
 <div class="card">
-  <div class="card-head"><h2>Open slots</h2><span class="faint">Times shown are interview start times</span></div>
-  <div class="card-body tight">
+  <div class="card-head">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Available <%= h.titleCase(type) %> Slots</h2>
+      <span id="auto-fetch-badge" class="pill p-completed" style="font-size:11px;display:inline-flex;align-items:center;gap:6px">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#003c33;animation:pulse 2s infinite"></span>
+        Auto-fetch active
+      </span>
+      <span id="last-updated-text" class="faint" style="font-size:11px">Synced just now</span>
+    </div>
+
+    <form method="get" id="filter-form" class="btn-row" style="margin:0">
+      <input type="hidden" name="type" id="current-type" value="<%= type %>">
+      <select name="mentor" id="mentor-select" onchange="fetchLatestSlots()" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-pill);max-width:200px">
+        <option value="">All mentors</option>
+        <% (mentors || []).forEach(function(m){ %>
+          <option value="<%= m.id %>" <%= selectedMentor === m.id ? 'selected' : '' %>><%= m.name %></option>
+        <% }); %>
+      </select>
+      <button type="button" class="btn sm" onclick="fetchLatestSlots()" title="Refresh available slots" style="display:inline-flex;align-items:center;gap:6px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Refresh
+      </button>
+    </form>
+  </div>
+
+  <div class="card-body tight" id="slots-container">
     <% if (!byDate.length) { %>
-      <div class="empty">No open <%= h.titleCase(type) %> slots right now. Please check back — the admin adds slots regularly.</div>
+      <div class="empty" id="empty-state">No open <%= h.titleCase(type) %> slots available currently. The system will auto-detect when new slots are published.</div>
     <% } %>
     <% byDate.forEach(function(g){ %>
-      <div class="slot-day">
+      <div class="slot-day" data-date="<%= g.date %>">
         <h3><%= h.fmtDate(g.date) %></h3>
         <div class="slot-list">
           <% g.slots.forEach(function(sl){ %>
-            <div class="slot">
+            <div class="slot" id="slot-card-<%= sl.id %>">
               <div class="t"><%= h.fmtTime(sl.start_time) %> – <%= h.fmtTime(sl.end_time) %></div>
-              <div class="m"><%= sl.mentor_name %> · <%= sl.mode %><% if (sl.location) { %> · <%- h.linkify ? h.linkify(sl.location) : sl.location %><% } %></div>
-              <form method="post" action="/student/book">
+              <div class="m">Mentor: <strong><%= sl.mentor_name %></strong><br><%= sl.mode %><% if (sl.location) { %> · <%- h.linkify ? h.linkify(sl.location) : sl.location %><% } %></div>
+              <form method="post" action="/student/book" style="margin:0">
                 <input type="hidden" name="slot_id" value="<%= sl.id %>">
                 <input type="hidden" name="type" value="<%= type %>">
-                <button class="btn primary sm" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
-                  <%= already ? 'Already booked' : 'Book this slot' %>
+                <button class="btn primary sm" style="width:100%" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
+                  <%= already && already.status !== 'cancelled' ? 'Already booked' : 'Book this slot →' %>
                 </button>
               </form>
             </div>
@@ -43,4 +110,86 @@
     <% }); %>
   </div>
 </div>
+
+<style>
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+</style>
+
+<script>
+const currentType = "<%= type %>";
+const isAlreadyBooked = <%= (already && already.status !== 'cancelled') ? 'true' : 'false' %>;
+
+async function fetchLatestSlots() {
+  const mentorId = document.getElementById('mentor-select').value;
+  const badge = document.getElementById('auto-fetch-badge');
+  const lastUpdated = document.getElementById('last-updated-text');
+  const container = document.getElementById('slots-container');
+  const banner = document.getElementById('smart-auto-banner');
+  const autoText = document.getElementById('smart-auto-text');
+  const autoSlotId = document.getElementById('smart-auto-slot-id');
+
+  try {
+    const url = `/student/api/slots/available?type=${encodeURIComponent(currentType)}${mentorId ? '&mentor=' + encodeURIComponent(mentorId) : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const now = new Date();
+    lastUpdated.textContent = 'Synced ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Handle Smart Match Banner
+    if (data.earliest && !isAlreadyBooked) {
+      autoText.innerHTML = `<strong>${data.earliest.slotFormatted}</strong> with <strong>${data.earliest.mentor_name}</strong> (${data.earliest.mode})`;
+      autoSlotId.value = data.earliest.id;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+
+    // Render Slots
+    if (!data.byDate || data.byDate.length === 0) {
+      container.innerHTML = `<div class="empty">No open ${currentType.toUpperCase()} slots available currently. The system will auto-detect when new slots are published.</div>`;
+      return;
+    }
+
+    let html = '';
+    for (const g of data.byDate) {
+      html += `
+        <div class="slot-day" data-date="${g.date}">
+          <h3>${g.dateFormatted || g.date}</h3>
+          <div class="slot-list">`;
+      for (const sl of g.slots) {
+        html += `
+          <div class="slot" id="slot-card-${sl.id}">
+            <div class="t">${sl.timeFormatted}</div>
+            <div class="m">Mentor: <strong>${sl.mentor_name}</strong><br>${sl.mode}${sl.location ? ' · ' + sl.location : ''}</div>
+            <form method="post" action="/student/book" style="margin:0">
+              <input type="hidden" name="slot_id" value="${sl.id}">
+              <input type="hidden" name="type" value="${currentType}">
+              <button class="btn primary sm" style="width:100%" ${isAlreadyBooked ? 'disabled' : ''}>
+                ${isAlreadyBooked ? 'Already booked' : 'Book this slot →'}
+              </button>
+            </form>
+          </div>`;
+      }
+      html += `
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+  } catch (err) {
+    console.warn('Auto-fetch error:', err);
+  }
+}
+
+// Initial smart match run
+fetchLatestSlots();
+
+// Auto-fetch in background every 10 seconds
+setInterval(fetchLatestSlots, 10000);
+</script>
 <%- include('../partials/foot') %>

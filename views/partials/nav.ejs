@@ -3,22 +3,37 @@ const links = {
   admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
           ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
   mentor: [['/mentor','My interviews']],
-  student: [['/student','Dashboard'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
-}[user.role] || [];
-const initials = user.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  student: [['/student','Dashboard'],['/student/mentors','Mentors'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
+}[user ? user.role : ''] || [];
+const userName = (user && user.name) ? String(user.name).trim() : '';
+const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?';
 %>
+<div class="announcement-bar">
+  <span>✦ Konfident 2026 Enterprise Interview System · Placement Cohort 2025–26</span>
+</div>
 <header class="topbar">
   <div class="topbar-in">
-    <div class="brand">Konfident <span>Interview 2025</span></div>
+    <a href="/" class="brand" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#17171c"/>
+        <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Konfident</span>
+      <span class="faint" style="font-size:12px;letter-spacing:0.04em">SYSTEM</span>
+    </a>
     <nav class="nav">
       <% links.forEach(function(l){ %>
         <a href="<%= l[0] %>" class="<%= path === l[0].split('?')[0] ? 'on' : '' %>"><%= l[1] %></a>
       <% }); %>
     </nav>
     <div class="who">
-      <a href="/profile" title="My profile"><span class="avatar"><%= initials %></span></a>
-      <span class="name"><%= user.name %> · <%= user.role %></span>
-      <form method="post" action="/logout"><button class="btn sm">Sign out</button></form>
+      <a href="/profile" title="My profile" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+        <span class="avatar"><%= initials %></span>
+        <span class="name"><strong><%= user.name %></strong> <span class="faint">(<%= user.role %>)</span></span>
+      </a>
+      <form method="post" action="/logout" style="margin:0">
+        <button class="btn sm" style="padding:4px 12px;font-size:12px">Sign out</button>
+      </form>
     </div>
   </div>
 </header>

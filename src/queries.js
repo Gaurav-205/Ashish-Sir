@@ -31,9 +31,10 @@ function interviewById(id) {
 function allInterviews(filters = {}) {
   const where = ["i.status <> 'cancelled'"];
   const args = [];
-  if (filters.type)   { where.push('i.type = ?');   args.push(filters.type); }
-  if (filters.status) { where.push('i.status = ?'); args.push(filters.status); }
-  if (filters.mentor) { where.push('i.mentor_id = ?'); args.push(Number(filters.mentor)); }
+  if (filters.type)       { where.push('i.type = ?');       args.push(filters.type); }
+  if (filters.status)     { where.push('i.status = ?');     args.push(filters.status); }
+  if (filters.attendance) { where.push('i.attendance = ?'); args.push(filters.attendance); }
+  if (filters.mentor)     { where.push('i.mentor_id = ?');  args.push(Number(filters.mentor)); }
   return db.prepare(`${INTERVIEW_SELECT} WHERE ${where.join(' AND ')}
                      ORDER BY s.slot_date DESC, s.start_time`).all(...args);
 }
@@ -60,6 +61,8 @@ function studentSummary(studentId) {
     percent: done ? Math.round((total / GRAND_TOTAL) * 1000) / 10 : null,
     bookedCount: list.length,
     completedCount: list.filter((i) => i.status === 'completed').length,
+    attendedCount: list.filter((i) => i.attendance === 'attended').length,
+    absentCount: list.filter((i) => i.attendance === 'absent').length,
     evaluatedCount: list.filter((i) => i.eval_id != null).length,
     allBooked: !!(byType.technical && byType.hr),
     allEvaluated: done,
@@ -80,6 +83,8 @@ function adminStats() {
     openSlots: one(`SELECT COUNT(*) c FROM slots WHERE status='open'`),
     booked:   one(`SELECT COUNT(*) c FROM interviews WHERE status='booked'`),
     completed: one(`SELECT COUNT(*) c FROM interviews WHERE status='completed'`),
+    attended:  one(`SELECT COUNT(*) c FROM interviews WHERE attendance='attended'`),
+    absent:    one(`SELECT COUNT(*) c FROM interviews WHERE attendance='absent'`),
     evaluated: one(`SELECT COUNT(*) c FROM evaluations`),
     fullyBooked: one(`SELECT COUNT(*) c FROM (
         SELECT student_id FROM interviews WHERE status<>'cancelled'
@@ -91,6 +96,24 @@ function mentorsList(type) {
   const col = type === 'hr' ? 'can_hr' : 'can_technical';
   const extra = type ? ` AND ${col} = 1` : '';
   return db.prepare(`SELECT * FROM users WHERE role='mentor' AND active=1${extra} ORDER BY name`).all();
+}
+
+function mentorsWithOpenSlots() {
+  return db.prepare(`
+    SELECT m.*,
+      (SELECT COUNT(*) FROM slots s
+        WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'technical'
+          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS tech_open_slots,
+      (SELECT COUNT(*) FROM slots s
+        WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'hr'
+          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS hr_open_slots,
+      (SELECT COUNT(*) FROM slots s
+        WHERE s.mentor_id = m.id AND s.status = 'open'
+          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS total_open_slots
+     FROM users m
+    WHERE m.role = 'mentor' AND m.active = 1
+    ORDER BY m.name
+  `).all();
 }
 
 function computeTotal(type, body) {
@@ -107,5 +130,5 @@ function computeTotal(type, body) {
 
 module.exports = {
   interviewsForStudent, interviewsForMentor, interviewById, allInterviews,
-  studentSummary, allStudentSummaries, adminStats, mentorsList, computeTotal,
+  studentSummary, allStudentSummaries, adminStats, mentorsList, mentorsWithOpenSlots, computeTotal,
 };

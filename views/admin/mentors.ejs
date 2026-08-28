@@ -1,31 +1,39 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Mentors</h1><p class="sub">Mentors are assigned by you — students can never change their mentor.</p></div>
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Evaluator Pool · Mentor Management
+    </div>
+    <h1>Mentors &amp; evaluators</h1>
+    <p class="sub">Manage verified mentors, configure Technical/HR permissions, and inspect slot capacities.</p>
+  </div>
 </div>
 
-<div class="card">
-  <div class="card-head"><h2>Add a mentor</h2></div>
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head"><h2>Register a new mentor</h2></div>
   <div class="card-body">
     <form method="post" action="/admin/mentors">
       <div class="row">
-        <div class="field"><label>Full name *</label><input name="name" required></div>
-        <div class="field"><label>Email *</label><input type="email" name="email" required></div>
-        <div class="field"><label>Password *</label><input name="password" required minlength="6" value="pass123"></div>
-        <div class="field"><label>Phone</label><input name="phone"></div>
+        <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Arjun Mehta" required></div>
+        <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="arjun.mentor@konfident.in" required></div>
+        <div class="field"><label>Initial Password *</label><input name="password" required minlength="6" value="pass123"></div>
+        <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
       </div>
-      <label class="check"><input type="checkbox" name="can_technical" value="1" checked> Can take Technical interviews</label>
-      <label class="check"><input type="checkbox" name="can_hr" value="1"> Can take HR interviews</label>
-      <button class="btn primary" style="margin-top:8px">Add mentor</button>
+      <div style="display:flex;gap:18px;margin:12px 0 16px;flex-wrap:wrap">
+        <label class="check"><input type="checkbox" name="can_technical" value="1" checked> Can conduct Technical interviews</label>
+        <label class="check"><input type="checkbox" name="can_hr" value="1"> Can conduct HR interviews</label>
+      </div>
+      <button class="btn primary">Register Mentor →</button>
     </form>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>All mentors</h2></div>
+  <div class="card-head"><h2>Verified Evaluators (<%= mentors.length %>)</h2></div>
   <div class="card-body tight">
     <div class="table-scroll"><table>
-      <thead><tr><th>Mentor</th><th>Conducts</th><th class="num">Slots</th><th class="num">Upcoming</th>
-        <th class="num">Completed</th><th></th></tr></thead>
+      <thead><tr><th>Mentor</th><th>Domains</th><th class="num">Published Slots</th><th class="num">Upcoming</th>
+        <th class="num">Completed</th><th class="num">Action</th></tr></thead>
       <tbody>
       <% mentors.forEach(function(m){ %>
         <tr>
@@ -34,23 +42,25 @@
           <td><% if (m.can_technical) { %><span class="pill p-technical">Technical</span> <% } %>
               <% if (m.can_hr) { %><span class="pill p-hr">HR</span><% } %>
               <% if (!m.can_technical && !m.can_hr) { %><span class="faint">—</span><% } %></td>
-          <td class="num"><%= m.slot_count %></td>
-          <td class="num"><%= m.upcoming %></td>
-          <td class="num"><%= m.done %></td>
-          <td>
-            <details class="inline"><summary>Edit</summary>
+          <td class="num font-mono"><strong><%= m.slot_count %></strong></td>
+          <td class="num font-mono"><%= m.upcoming %></td>
+          <td class="num font-mono"><%= m.done %></td>
+          <td class="num">
+            <details class="inline"><summary>Edit profile</summary>
               <div class="panel">
                 <form method="post" action="/admin/mentors/<%= m.id %>/update">
                   <div class="row">
                     <div class="field"><label>Name</label><input name="name" value="<%= m.name %>" required></div>
                     <div class="field"><label>Phone</label><input name="phone" value="<%= m.phone || '' %>"></div>
                   </div>
-                  <label class="check"><input type="checkbox" name="can_technical" value="1" <%= m.can_technical ? 'checked' : '' %>> Technical</label>
-                  <label class="check"><input type="checkbox" name="can_hr" value="1" <%= m.can_hr ? 'checked' : '' %>> HR</label>
-                  <label class="check"><input type="checkbox" name="active" value="1" <%= m.active ? 'checked' : '' %>> Active</label>
-                  <button class="btn primary sm">Save</button>
+                  <div style="display:flex;gap:12px;margin:8px 0;flex-wrap:wrap">
+                    <label class="check"><input type="checkbox" name="can_technical" value="1" <%= m.can_technical ? 'checked' : '' %>> Technical</label>
+                    <label class="check"><input type="checkbox" name="can_hr" value="1" <%= m.can_hr ? 'checked' : '' %>> HR</label>
+                    <label class="check"><input type="checkbox" name="active" value="1" <%= m.active ? 'checked' : '' %>> Active</label>
+                  </div>
+                  <button class="btn primary sm">Save changes</button>
                 </form>
-                <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:10px">
+                <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
                   <input name="password" placeholder="New password" minlength="6" required style="max-width:180px">
                   <button class="btn sm">Reset password</button>
                 </form>
@@ -59,7 +69,7 @@
           </td>
         </tr>
       <% }); %>
-      <% if (!mentors.length) { %><tr><td colspan="6" class="empty">No mentors yet.</td></tr><% } %>
+      <% if (!mentors.length) { %><tr><td colspan="6" class="empty">No mentors registered yet.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>

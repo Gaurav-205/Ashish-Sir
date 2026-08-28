@@ -37,7 +37,7 @@ async function req(who, method, url, form) {
   const set = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
   if (set.length) jars[who] = set.map((c) => c.split(';')[0]).join('; ');
   const body = await res.text();
-  return { status: res.status, location: res.headers.get('location'), body };
+  return { status: res.status, location: res.headers.get('location'), headers: res.headers, body };
 }
 const get = (w, u) => req(w, 'GET', u);
 const post = (w, u, f) => req(w, 'POST', u, f);
@@ -51,10 +51,21 @@ const login = async (who, email) => {
   await new Promise((r) => server.once('listening', r));
   base = 'http://127.0.0.1:' + server.address().port;
 
+  section('Security & HTTP headers');
+  const homeResp = await get('anon', '/login');
+  ok(homeResp.headers.get('x-content-type-options') === 'nosniff', 'X-Content-Type-Options is nosniff');
+  ok(homeResp.headers.get('x-frame-options') === 'SAMEORIGIN', 'X-Frame-Options is SAMEORIGIN');
+  ok(homeResp.headers.get('content-security-policy') != null, 'Content-Security-Policy is set');
+
   section('Authentication & access control');
   ok((await post('x', '/login', { email: 'admin@konfident.in', password: 'wrong' })).status === 401,
      'wrong password is rejected');
   ok((await get('anon', '/admin')).location === '/login', 'anonymous user is redirected to login');
+
+  // test role-aware redirect when a student logs in after an admin page was requested
+  await get('anon_admin_attempt', '/admin/reports');
+  const studentLoginAttempt = await post('anon_admin_attempt', '/login', { email: 'harsh@student.in', password: 'pass123' });
+  ok(studentLoginAttempt.location === '/student', 'student logging in after accessing admin URL is redirected to student dashboard');
 
   ok((await login('admin', 'admin@konfident.in')).location === '/admin', 'admin signs in');
   ok((await login('mentor', 'arjun.mentor@konfident.in')).location === '/mentor', 'mentor signs in');
@@ -143,6 +154,19 @@ const login = async (who, email) => {
   ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND status<>'cancelled'`).get(ts.id).c === 2,
      'student books the HR interview too (1 technical + 1 HR)');
 
+  // Mentors directory and mentor-filtered slot booking
+  const mentorsDir = await get('newstudent', '/student/mentors');
+  ok(mentorsDir.status === 200 && mentorsDir.body.includes('Test Mentor'), 'student can view the mentors directory');
+  const filteredSlots = await get('newstudent', `/student/slots?type=technical&mentor=${tm.id}`);
+  ok(filteredSlots.status === 200, 'student can filter slots by specific mentor');
+
+  // Auto-fetch slots JSON API
+  const apiSlots = await get('newstudent', `/student/api/slots/available?type=technical`);
+  ok(apiSlots.status === 200, 'platform auto-fetches available slots via API');
+  const apiData = JSON.parse(apiSlots.body);
+  ok(apiData.ok === true && Array.isArray(apiData.slots) && apiData.already !== undefined,
+     'auto-fetch API returns structured available slots payload');
+
   const dash = await get('newstudent', '/student');
   ok(dash.body.includes('Test Mentor'), 'student dashboard shows the assigned mentor');
   ok(dash.body.includes('2 of 2 booked'), 'student dashboard shows booking progress');
@@ -158,14 +182,20 @@ const login = async (who, email) => {
       { resume_marks: '9', project_marks: '9', dsa_marks: '9' })).status === 403,
      'a mentor cannot score an interview assigned to someone else');
 
-  const early = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
-    { resume_marks: '8', project_marks: '8', dsa_marks: '8' });
-  ok(early.status === 400 && !db.prepare('SELECT * FROM evaluations WHERE interview_id=?').get(techIv.id),
-     'scores are refused before the interview is marked completed');
+  // Attendance tracking: test marking absent then attended
+  await post('testmentor', '/mentor/interview/' + techIv.id + '/attendance', { attendance: 'absent' });
+  ok(db.prepare('SELECT attendance FROM interviews WHERE id=?').get(techIv.id).attendance === 'absent',
+     'mentor marks candidate absent');
 
-  await post('testmentor', '/mentor/interview/' + techIv.id + '/complete');
-  ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(techIv.id).status === 'completed',
-     'mentor marks the interview completed');
+  const absentScoreAttempt = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
+    { resume_marks: '8', project_marks: '8', dsa_marks: '8' });
+  ok(absentScoreAttempt.status === 400, 'scoring is refused when candidate is marked absent');
+
+  // Mark candidate attended (present)
+  await post('testmentor', '/mentor/interview/' + techIv.id + '/attendance', { attendance: 'attended' });
+  ok(db.prepare('SELECT attendance, status FROM interviews WHERE id=?').get(techIv.id).attendance === 'attended'
+     && db.prepare('SELECT status FROM interviews WHERE id=?').get(techIv.id).status === 'completed',
+     'mentor marks candidate attended and interview completes');
 
   const bad = await post('testmentor', '/mentor/interview/' + techIv.id + '/evaluate',
     { resume_marks: '12', project_marks: '5', dsa_marks: '5' });
@@ -210,6 +240,12 @@ const login = async (who, email) => {
   ok((await get('admin', '/admin/interviews?type=hr')).body.includes('HR'), 'admin can filter interviews by type');
   ok((await get('admin', '/admin/students/' + ts.id)).body.includes('Test Student'), 'admin can open a student record');
 
+  // admin updates student details
+  const updateRes = await post('admin', '/admin/students/' + ts.id + '/update', {
+    name: 'Test Student Updated', roll_no: 'KON2025099', branch: 'CSE', active: '1'
+  });
+  ok(updateRes.location === '/admin/students/' + ts.id, 'admin updating student details redirects back to student detail view');
+
   // reschedule an upcoming booking
   await login('student3', 'nikita@student.in');
   const nik = db.prepare(`SELECT * FROM users WHERE email='nikita@student.in'`).get();
@@ -234,12 +270,20 @@ const login = async (who, email) => {
      && db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(rel.id).c === 0,
      'admin releases a booking and the slot reopens');
 
-  // completed interviews are protected
+  // completed interviews are protected against cancel and reschedule
   const doneSlot = db.prepare(`SELECT s.id FROM slots s JOIN interviews i ON i.slot_id=s.id
                                WHERE i.status='completed' LIMIT 1`).get();
   await post('admin', '/admin/slots/' + doneSlot.id + '/cancel');
   ok(db.prepare('SELECT status FROM slots WHERE id=?').get(doneSlot.id).status !== 'cancelled',
      'a completed interview cannot be cancelled');
+
+  const beforeResched = db.prepare('SELECT * FROM slots WHERE id=?').get(doneSlot.id);
+  await post('admin', '/admin/slots/' + doneSlot.id + '/reschedule', {
+    slot_date: h.addDays(beforeResched.slot_date, 2), start_time: '10:00', end_time: '10:30',
+    mentor_id: String(beforeResched.mentor_id)
+  });
+  const afterResched = db.prepare('SELECT * FROM slots WHERE id=?').get(doneSlot.id);
+  ok(afterResched.slot_date === beforeResched.slot_date, 'a completed interview cannot be rescheduled');
 
   section('Student cancel & rebook');
   const cIv = db.prepare(`SELECT i.*, u.email FROM interviews i
@@ -285,12 +329,37 @@ const login = async (who, email) => {
   ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(pIv.id).status === 'booked',
      'student cannot cancel a past booking');
 
+  section('Google OAuth & Calendar Integration');
+  const google = require('../src/services/googleService');
+  ok(typeof google.isConfigured === 'function', 'googleService exports isConfigured check');
+  ok(typeof google.syncCalendarEvent === 'function', 'googleService exports syncCalendarEvent');
+
+  const gLogin = await get('anon', '/auth/google');
+  ok(gLogin.status === 200 || gLogin.status === 302, 'GET /auth/google handles request cleanly');
+
+  const prof = await get('newstudent', '/profile');
+  ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
+     'profile page renders Google Account & Calendar Integration card');
+
+  // Test profile details update
+  await post('newstudent', '/profile/update', {
+    name: 'New Student Updated',
+    phone: '+91 99999 88888',
+    branch: 'CSE AI/ML',
+    resume_url: 'https://example.com/resume.pdf',
+  });
+  const updatedStudent = db.prepare('SELECT * FROM users WHERE id=?').get(ts.id);
+  ok(updatedStudent.name === 'New Student Updated' && updatedStudent.branch === 'CSE AI/ML'
+     && updatedStudent.resume_url === 'https://example.com/resume.pdf',
+     'student can update profile details (name, phone, branch, resume link)');
+
   section('Every page renders');
   const pages = [
     ['admin', '/admin'], ['admin', '/admin/students'], ['admin', '/admin/mentors'],
     ['admin', '/admin/slots'], ['admin', '/admin/interviews'], ['admin', '/admin/reports'],
     ['admin', '/profile'],
-    ['newstudent', '/student'], ['newstudent', '/student/slots?type=technical'],
+    ['newstudent', '/student'], ['newstudent', '/student/mentors'],
+    ['newstudent', '/student/slots?type=technical'],
     ['newstudent', '/student/slots?type=hr'], ['newstudent', '/student/results'],
     ['testmentor', '/mentor'], ['testmentor', '/mentor/interview/' + techIv.id],
   ];
@@ -298,6 +367,8 @@ const login = async (who, email) => {
     const r = await get(who, url);
     ok(r.status === 200 && !/Something went wrong/.test(r.body), `GET ${url} → 200`);
   }
+  const healthRes = await get('anon', '/health');
+  ok(healthRes.status === 200 && JSON.parse(healthRes.body).status === 'healthy', 'GET /health returns healthy status');
   ok((await get('admin', '/no-such-page')).status === 404, 'unknown URL returns 404');
 
   server.close();

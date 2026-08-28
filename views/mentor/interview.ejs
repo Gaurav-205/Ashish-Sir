@@ -8,7 +8,18 @@
 
 <div class="grid two">
   <div class="card">
-    <div class="card-head"><h2>Candidate</h2><span class="pill p-<%= iv.status %>"><%= iv.status %></span></div>
+    <div class="card-head">
+      <h2>Candidate</h2>
+      <div style="display:flex;gap:6px;align-items:center">
+        <% if (iv.attendance === 'attended') { %>
+          <span class="pill p-completed">Attended</span>
+        <% } else if (iv.attendance === 'absent') { %>
+          <span class="pill p-cancelled">Absent / No-Show</span>
+        <% } else { %>
+          <span class="pill p-booked">Attendance Pending</span>
+        <% } %>
+      </div>
+    </div>
     <div class="card-body">
       <p><strong><%= iv.student_name %></strong><br>
         <span class="muted"><%= iv.student_email %></span><br>
@@ -16,12 +27,39 @@
       <% if (iv.resume_url) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener">Open resume ↗</a></p>
       <% } else { %><p class="faint">No resume link on file.</p><% } %>
 
-      <% if (iv.status === 'booked') { %>
-        <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
-        <p class="muted">Mark the interview as completed once you have conducted it — then you can submit scores.</p>
-        <form method="post" action="/mentor/interview/<%= iv.id %>/complete">
-          <button class="btn primary">Mark interview as completed</button>
-        </form>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+      
+      <h3>Meeting Attendance</h3>
+      <p class="muted" style="font-size:13px">
+        Track whether the candidate attended the meet session. Scoring is enabled once candidate attendance is confirmed.
+      </p>
+
+      <% if (!iv.eval_id) { %>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+            <input type="hidden" name="attendance" value="attended">
+            <button class="btn sm <%= iv.attendance === 'attended' ? 'primary' : '' %>" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <%= iv.attendance === 'attended' ? 'Marked Attended' : 'Mark Attended (Present)' %>
+            </button>
+          </form>
+          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+            <input type="hidden" name="attendance" value="absent">
+            <button class="btn sm danger" onclick="return confirm('Mark candidate as absent / no-show?')" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <%= iv.attendance === 'absent' ? 'Marked Absent' : 'Mark Absent / No-Show' %>
+            </button>
+          </form>
+        </div>
+      <% } else { %>
+        <p class="faint" style="font-size:13px">
+          Candidate attended and completed evaluation on <%= iv.submitted_at %>.
+        </p>
       <% } %>
     </div>
   </div>
@@ -44,8 +82,13 @@
         <% if (iv.feedback) { %><div style="margin-top:14px"><div class="l faint">Feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div><% } %>
         <p class="faint" style="margin-top:12px">Submitted <%= iv.submitted_at %>. Evaluations are final — contact the admin for corrections.</p>
 
-      <% } else if (iv.status !== 'completed') { %>
-        <p class="muted">Scores can be entered only after the interview is marked completed.</p>
+      <% } else if (iv.attendance === 'absent') { %>
+        <div class="note" style="margin:0">
+          Candidate was marked as <strong>Absent / No-Show</strong>. Scores cannot be submitted for missed sessions. If the candidate joins later, mark them as Attended.
+        </div>
+
+      <% } else if (iv.attendance !== 'attended' && iv.status !== 'completed') { %>
+        <p class="muted">Confirm candidate attendance by clicking <strong>Mark Attended (Present)</strong> to start scoring the interview.</p>
 
       <% } else { %>
         <form method="post" action="/mentor/interview/<%= iv.id %>/evaluate" id="evalForm">
