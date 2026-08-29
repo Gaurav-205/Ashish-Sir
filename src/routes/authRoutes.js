@@ -118,7 +118,14 @@ router.get('/auth/google', (req, res) => {
   const stateToken = crypto.randomBytes(32).toString('hex');
   const action = req.query.link === '1' && req.session.user ? 'link' : 'auth';
   const userId = req.session.user ? req.session.user.id : null;
-  req.session.oauthState = { token: stateToken, action, userId };
+  const oauthData = { token: stateToken, action, userId };
+  req.session.oauthState = oauthData;
+
+  // Set stateless backup cookie for serverless (Vercel Lambda) instances
+  const cookieVal = encodeURIComponent(JSON.stringify(oauthData));
+  const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  res.setHeader('Set-Cookie', `oauth_state=${cookieVal}; Path=/; HttpOnly; Max-Age=600; SameSite=Lax${isSecure ? '; Secure' : ''}`);
+
   req.session.save((err) => {
     if (err) console.error('OAuth state session save error:', err);
     res.redirect(google.getAuthUrl(stateToken));
@@ -136,8 +143,31 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Verify OAuth state token
-  if (!req.session.oauthState || req.session.oauthState.token !== state) {
+  // Retrieve OAuth state from session or fallback cookie
+  let sessionStateToken = req.session.oauthState ? req.session.oauthState.token : null;
+  let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
+  let userId = req.session.oauthState ? req.session.oauthState.userId : null;
+
+  if (!sessionStateToken && req.headers.cookie) {
+    try {
+      const cookies = {};
+      req.headers.cookie.split(';').forEach(c => {
+        const [k, ...v] = c.split('=');
+        if (k) cookies[k.trim()] = decodeURIComponent(v.join('='));
+      });
+      if (cookies.oauth_state) {
+        const parsed = JSON.parse(cookies.oauth_state);
+        sessionStateToken = parsed.token;
+        action = parsed.action || 'auth';
+        userId = parsed.userId || null;
+      }
+    } catch (_) {}
+  }
+
+  // Clear state cookie
+  res.setHeader('Set-Cookie', 'oauth_state=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
+
+  if (!sessionStateToken || sessionStateToken !== state) {
     return res.status(403).render('login', {
       title: 'Sign in',
       error: 'Invalid OAuth state. Please try signing in again.',
@@ -145,7 +175,6 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
       googleConfigured: google.isConfigured(),
     });
   }
-  const { action, userId } = req.session.oauthState;
   delete req.session.oauthState;
 
   try {
