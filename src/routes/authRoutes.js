@@ -203,13 +203,13 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     } else {
       // Auto-register new user as Student
       const randomPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
-      const insert = db.prepare(`
+      db.prepare(`
         INSERT INTO users (name, email, password_hash, role, google_id, google_access_token,
                            google_refresh_token, google_token_expiry, google_calendar_enabled)
         VALUES (?, ?, ?, 'student', ?, ?, ?, ?, 1)
       `).run(profile.name || email.split('@')[0], email, randomPasswordHash, profile.id,
              tokens.access_token, tokens.refresh_token, tokens.expiry_date);
-      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE id = ?').get(insert.lastInsertRowid);
+      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE lower(email) = ?').get(email);
     }
 
     let to = req.session.redirectTo;
@@ -222,9 +222,8 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     const userData = { id: user.id, name: user.name, email: user.email, role: user.role };
     const redirectTo = to || HOME[user.role];
 
-    req.session.regenerate((err) => {
-      if (err) return res.redirect('/login');
-      req.session.user = userData;
+    req.session.user = userData;
+    req.session.save(() => {
       logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
       res.redirect(redirectTo);
     });

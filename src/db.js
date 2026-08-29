@@ -16,6 +16,9 @@ function convertSql(sql) {
   converted = converted.replace(/datetime\('now','localtime'\)/gi, 'CURRENT_TIMESTAMP::text');
   converted = converted.replace(/datetime\(([^)]+)\)/gi, '($1)::timestamp');
   converted = converted.replace(/AUTOINCREMENT/gi, '');
+  if (/^\s*INSERT\s+INTO/i.test(converted) && !/RETURNING/i.test(converted)) {
+    converted += ' RETURNING *';
+  }
   return converted;
 }
 
