@@ -6,7 +6,6 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 
 const helpers = require('./helpers');
 const { RUBRIC, GRAND_TOTAL, grade } = require('./rubric');
@@ -31,14 +30,18 @@ if (!sessionSecret && process.env.NODE_ENV === 'production') {
 }
 
 const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const sessionDir = isVercel ? '/tmp/data' : path.join(__dirname, '..', 'data');
-if (!fs.existsSync(sessionDir)) {
-  try { fs.mkdirSync(sessionDir, { recursive: true }); } catch (_) {}
-}
 
-const sessionStore = isVercel
-  ? new session.MemoryStore()
-  : new SQLiteStore({ db: 'sessions.db', dir: sessionDir });
+let sessionStore;
+if (isVercel) {
+  sessionStore = new session.MemoryStore();
+} else {
+  try {
+    const SQLiteStore = require('connect-sqlite3')(session);
+    sessionStore = new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, '..', 'data') });
+  } catch (_) {
+    sessionStore = new session.MemoryStore();
+  }
+}
 
 app.use(session({
   store: sessionStore,

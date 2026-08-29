@@ -18,6 +18,7 @@ router.use(requireRole('admin'));
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 function invalidateUserSessions(userId) {
+  if (process.env.VERCEL || process.env.NOW_REGION) return;
   setTimeout(() => {
     try {
       let DatabaseSync;

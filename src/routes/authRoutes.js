@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 function invalidateOtherSessions(userId, currentSessionId) {
+  if (process.env.VERCEL || process.env.NOW_REGION) return;
   setTimeout(() => {
     try {
       let DatabaseSync;
