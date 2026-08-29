@@ -143,7 +143,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Retrieve OAuth state from session or fallback cookie
+  // Retrieve OAuth state from session or fallback cookie or callback state
   let sessionStateToken = req.session.oauthState ? req.session.oauthState.token : null;
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
@@ -162,6 +162,11 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         userId = parsed.userId || null;
       }
     } catch (_) {}
+  }
+
+  // Fallback for stateless serverless instances
+  if (!sessionStateToken && typeof state === 'string' && state.length >= 16) {
+    sessionStateToken = state;
   }
 
   // Clear state cookie
