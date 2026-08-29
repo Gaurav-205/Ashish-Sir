@@ -241,9 +241,9 @@ router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
     flash(req, 'err', 'Interview not found.');
     return res.redirect('/student');
   }
-  if (iv.status !== 'completed' && iv.attendance !== 'attended') {
-    flash(req, 'err', 'Feedback can only be submitted for completed interviews.');
-    return res.redirect('/student');
+  if (iv.attendance === 'absent' || (iv.status !== 'completed' && iv.attendance !== 'attended')) {
+    flash(req, 'err', 'Feedback can only be submitted for attended interviews.');
+    return res.redirect(req.headers.referer || '/student');
   }
 
   const satisfaction = Number(req.body.satisfaction);

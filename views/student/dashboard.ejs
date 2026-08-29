@@ -14,24 +14,47 @@
   <% } %>
 </div>
 
-<div class="card" style="margin-bottom:24px">
-  <div class="card-body">
-    <div class="timeline">
-      <div class="step <%= s.allBooked ? 'done' : 'todo' %>">
-        <div class="k">Step 01</div>
-        <strong>Book Both Slots</strong>
-        <div class="faint"><%= s.bookedCount %> of 2 booked</div>
-      </div>
-      <div class="step <%= s.completedCount === 2 ? 'done' : 'todo' %>">
-        <div class="k">Step 02</div>
-        <strong>Attend Interviews</strong>
-        <div class="faint"><%= s.completedCount %> of 2 attended &amp; completed</div>
-      </div>
-      <div class="step <%= s.allEvaluated ? 'done' : 'todo' %>">
-        <div class="k">Step 03</div>
-        <strong>Review Results &amp; Feedback</strong>
-        <div class="faint"><%= s.evaluatedCount %> of 2 evaluations submitted</div>
-      </div>
+<% if (!s.student.resume_url) { %>
+<div class="note" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fffbeb;border-color:#fde68a">
+  <div style="display:flex;align-items:center;gap:10px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span><strong>Resume link missing:</strong> Add your Google Drive or portfolio CV link so mentors can review it before your session.</span>
+  </div>
+  <a class="btn sm" href="/profile#resume" style="white-space:nowrap;background:#ffffff">Add Resume Link →</a>
+</div>
+<% } %>
+
+<div class="milestone-grid">
+  <div class="milestone-step <%= s.student.resume_url ? 'done' : 'active' %>">
+    <div class="step-num"><%= s.student.resume_url ? '✓' : '1' %></div>
+    <div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate);font-weight:700">Milestone 01</div>
+      <strong>Profile &amp; Resume</strong>
+      <div class="faint" style="font-size:12px"><%= s.student.resume_url ? 'CV attached' : 'Action needed' %></div>
+    </div>
+  </div>
+  <div class="milestone-step <%= s.allBooked ? 'done' : (s.student.resume_url ? 'active' : '') %>">
+    <div class="step-num"><%= s.allBooked ? '✓' : '2' %></div>
+    <div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate);font-weight:700">Milestone 02</div>
+      <strong>Book Both Slots</strong>
+      <div class="faint" style="font-size:12px"><%= s.bookedCount %> of 2 booked</div>
+    </div>
+  </div>
+  <div class="milestone-step <%= s.completedCount === 2 ? 'done' : (s.allBooked ? 'active' : '') %>">
+    <div class="step-num"><%= s.completedCount === 2 ? '✓' : '3' %></div>
+    <div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate);font-weight:700">Milestone 03</div>
+      <strong>Attend Interviews</strong>
+      <div class="faint" style="font-size:12px"><%= s.completedCount %> of 2 attended</div>
+    </div>
+  </div>
+  <div class="milestone-step <%= s.allEvaluated ? 'done' : (s.completedCount > 0 ? 'active' : '') %>">
+    <div class="step-num"><%= s.allEvaluated ? '✓' : '4' %></div>
+    <div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate);font-weight:700">Milestone 04</div>
+      <strong>Scores &amp; Feedback</strong>
+      <div class="faint" style="font-size:12px"><%= s.evaluatedCount %> of 2 submitted</div>
     </div>
   </div>
 </div>
@@ -63,7 +86,7 @@
             Assigned Mentor: <strong><%= iv.mentor_name %></strong> (<%= iv.mentor_email %>)
           </p>
           <p class="muted" style="margin-bottom:0;font-size:13px">
-            Mode: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
+            Mode: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %>
           </p>
         </div>
 
@@ -85,7 +108,7 @@
             <div class="bar"><span style="width:<%= (iv.score / RUBRIC[t].total * 100).toFixed(0) %>%"></span></div>
             <p style="margin-top:12px;margin-bottom:0"><a href="/student/results">View detailed breakdown &amp; feedback →</a></p>
           </div>
-        <% } else if (iv.status === 'booked') { %>
+        <% } else if (iv.status === 'booked' && !h.isPast(iv)) { %>
           <form method="post" action="/student/cancel/<%= iv.id %>"
                 onsubmit="return confirm('Cancel this booking? You will need to select another slot.')" style="margin-top:16px">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -93,7 +116,7 @@
           </form>
         <% } %>
 
-        <% if (iv.status === 'completed' || iv.attendance === 'attended') { %>
+        <% if ((iv.status === 'completed' || iv.attendance === 'attended') && iv.attendance !== 'absent') { %>
           <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line-soft)">
             <div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
               <span>Student Feedback for Mentor (<%= iv.mentor_name %>)</span>

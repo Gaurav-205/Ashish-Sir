@@ -1,14 +1,15 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
   <div>
-    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
-      Platform Administration · Overview Telemetry
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center">
+      <span class="live-pulse"></span> Platform Administration · Live Telemetry
     </div>
     <h1>Admin dashboard</h1>
     <p class="sub">Comprehensive monitoring of interview slots, candidate bookings, mentor assignments, and evaluation progress.</p>
   </div>
   <div class="btn-row">
-    <a class="btn" href="/admin/slots">Create slots</a>
+    <a class="btn" href="/admin/slots">+ Create slots</a>
+    <a class="btn" href="/admin/students">All candidates</a>
     <a class="btn primary" href="/admin/reports">View reports &amp; CSV →</a>
   </div>
 </div>
@@ -38,7 +39,7 @@
             <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %></span></td>
             <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
             <td><strong><%= i.student_name %></strong></td>
-            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(i.location) : i.location %></span><% } %></td>
+            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify(i.location) %></span><% } %></td>
           </tr><% }); %></tbody>
       </table></div><% } %>
     </div>
@@ -56,7 +57,7 @@
           <tr>
             <td><strong><%= i.student_name %></strong></td>
             <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(i.location) : i.location %></span><% } %></td>
+            <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify(i.location) %></span><% } %></td>
             <td class="faint"><%= h.fmtDate(i.slot_date) %></td>
           </tr>
         <% }); %></tbody>
@@ -66,13 +67,18 @@
 </div>
 
 <div class="card" style="margin-bottom:24px">
-  <div class="card-head">
-    <h2>Student Interview Breakdown (Technical &amp; HR Lists)</h2>
-    <span class="faint">Separate Technical and HR interview records for every registered student</span>
+  <div class="card-head" style="flex-wrap:wrap;gap:12px">
+    <div>
+      <h2>Student Interview Breakdown (Technical &amp; HR Lists)</h2>
+      <span class="faint">Separate Technical and HR interview records for every registered student</span>
+    </div>
+    <div style="min-width:240px">
+      <input type="text" id="adminStudentFilter" placeholder="Filter by candidate, roll no..." style="padding:6px 14px;font-size:12px;border:1px solid var(--line);border-radius:var(--radius-pill);width:100%" onkeyup="filterBreakdownTable()">
+    </div>
   </div>
   <div class="card-body tight">
     <% if (typeof studentSummaries === 'undefined' || !studentSummaries || !studentSummaries.length) { %><div class="empty">No students registered yet.</div><% } else { %>
-    <div class="table-scroll"><table>
+    <div class="table-scroll"><table id="studentBreakdownTable">
       <thead>
         <tr>
           <th>Roll No</th>
@@ -99,7 +105,7 @@
               <div class="faint" style="margin-top:4px">
                 <%= h.fmtDate(s.technical.slot_date) %> · <%= h.fmtTime(s.technical.start_time) %><br>
                 Mentor: <%= s.technical.mentor_name %>
-                <% if (s.technical.location) { %><br><%- h.linkify ? h.linkify(s.technical.location) : s.technical.location %><% } %>
+                <% if (s.technical.location) { %><br><%- h.linkify(s.technical.location) %><% } %>
               </div>
             <% } %>
           </td>
@@ -111,7 +117,7 @@
               <div class="faint" style="margin-top:4px">
                 <%= h.fmtDate(s.hr.slot_date) %> · <%= h.fmtTime(s.hr.start_time) %><br>
                 Mentor: <%= s.hr.mentor_name %>
-                <% if (s.hr.location) { %><br><%- h.linkify ? h.linkify(s.hr.location) : s.hr.location %><% } %>
+                <% if (s.hr.location) { %><br><%- h.linkify(s.hr.location) %><% } %>
               </div>
             <% } %>
           </td>
@@ -154,4 +160,14 @@
     </table></div><% } %>
   </div>
 </div>
+<script>
+function filterBreakdownTable() {
+  const query = (document.getElementById('adminStudentFilter').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#studentBreakdownTable tbody tr');
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    r.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+</script>
 <%- include('../partials/foot') %>

@@ -13,12 +13,22 @@
   </div>
 </div>
 
-<div class="grid two">
+<div class="search-toolbar" style="margin-bottom:20px">
+  <div class="filter-chips">
+    <button type="button" class="filter-chip active" onclick="filterMentors('all', this)">All Mentors (<%= mentors.length %>)</button>
+    <button type="button" class="filter-chip" onclick="filterMentors('technical', this)">Technical Mentors</button>
+    <button type="button" class="filter-chip" onclick="filterMentors('hr', this)">HR Mentors</button>
+  </div>
+</div>
+
+<div class="grid two" id="mentorsGrid">
 <% mentors.forEach(function(m){ %>
-  <div class="card">
-    <div class="card-head">
+  <div class="card mentor-card" data-tech="<%= m.can_technical ? '1' : '0' %>" data-hr="<%= m.can_hr ? '1' : '0' %>">
+    <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
-        <span class="avatar" style="width:36px;height:36px;font-size:12px"><%= m.name.trim().split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() %></span>
+        <% const mName = (m && m.name) ? String(m.name).trim() : ''; %>
+        <% const mInitials = mName ? mName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?'; %>
+        <span class="avatar" style="width:40px;height:40px;font-size:13px"><%= mInitials %></span>
         <div>
           <h2 style="margin:0;font-size:16px"><%= m.name %></h2>
           <span class="faint" style="font-size:12px"><%= m.email %></span>
@@ -67,4 +77,20 @@
   <div class="card" style="grid-column: 1 / -1;"><div class="card-body empty">No verified mentors found.</div></div>
 <% } %>
 </div>
+<script>
+function filterMentors(domain, btn) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const cards = document.querySelectorAll('.mentor-card');
+  cards.forEach(c => {
+    if (domain === 'all') {
+      c.style.display = '';
+    } else if (domain === 'technical') {
+      c.style.display = c.getAttribute('data-tech') === '1' ? '' : 'none';
+    } else if (domain === 'hr') {
+      c.style.display = c.getAttribute('data-hr') === '1' ? '' : 'none';
+    }
+  });
+}
+</script>
 <%- include('../partials/foot') %>

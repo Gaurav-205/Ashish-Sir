@@ -37,8 +37,10 @@ const path = require('path');
 const adminEmail = process.env.ADMIN_EMAIL || 'utkarsha.kasar@kalvium.com';
 let adminPassword = process.env.ADMIN_PASSWORD;
 let isGenerated = false;
-if (!adminPassword) {
-  if (mode === 'test' || mode === 'dev') {
+if (mode === 'test') {
+  adminPassword = 'pass123';
+} else if (!adminPassword) {
+  if (mode === 'dev') {
     adminPassword = 'pass123';
   } else {
     adminPassword = crypto.randomBytes(12).toString('base64url');

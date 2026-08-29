@@ -1,7 +1,7 @@
 /**
  * Dynamically computes and displays the sum of rubric evaluation marks in real time.
  */
-document.addEventListener('DOMContentLoaded', function () {
+function initEvalCalc() {
   var form = document.getElementById('evalForm');
   if (!form) return;
   var inputs = form.querySelectorAll('.mark');
@@ -18,6 +18,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   inputs.forEach(function (input) {
     input.addEventListener('input', calculate);
+    input.addEventListener('change', calculate);
   });
   calculate();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initEvalCalc);
+} else {
+  initEvalCalc();
+}
+

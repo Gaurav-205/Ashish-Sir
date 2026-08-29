@@ -78,10 +78,14 @@ router.post('/students', (req, res) => {
   const { name, email, password, roll_no, branch, squad, phone, resume_url } = req.body;
   try {
     if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
+    const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
+    if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+      throw new Error('Resume link must be a valid URL starting with http:// or https://');
+    }
     db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,squad,phone,resume_url)
                 VALUES (?,?,?,'student',?,?,?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10),
-           roll_no || null, branch || null, squad || null, phone || null, resume_url || null);
+           roll_no || null, branch || null, squad || null, phone || null, cleanResume);
     flash(req, 'ok', `Student ${name} added.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
@@ -95,10 +99,15 @@ router.post('/students/:id/update', validateId('id'), (req, res) => {
     flash(req, 'err', 'Name is required.');
     return res.redirect('/admin/students/' + req.params.id);
   }
+  const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
+  if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+    flash(req, 'err', 'Resume link must be a valid URL starting with http:// or https://');
+    return res.redirect('/admin/students/' + req.params.id);
+  }
   const isActive = active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, squad=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
-    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, resume_url || null,
+    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, cleanResume,
          isActive, Number(req.params.id));
   if (!isActive) {
     invalidateUserSessions(req.params.id);

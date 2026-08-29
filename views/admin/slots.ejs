@@ -71,7 +71,7 @@
         <tr>
           <td><%= h.fmtDate(s.slot_date) %><br><span class="faint"><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></span></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td><%= s.mentor_name %><br><span class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify ? h.linkify(s.location) : s.location %><% } %></span></td>
+          <td><%= s.mentor_name %><br><span class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify(s.location) %><% } %></span></td>
           <td><span class="pill p-<%= s.status %>"><%= s.status %></span>
               <% if (s.interview_status === 'completed') { %><br><span class="pill p-completed">interview done</span><% } %></td>
           <td><% if (s.student_name) { %><%= s.student_name %><br><span class="faint"><%= s.roll_no || '' %></span>

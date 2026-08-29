@@ -46,7 +46,9 @@
             <% } else { %>
               <div class="big-score" style="color:var(--muted)">—<small>/<%= RUBRIC[t].total %></small></div>
               <div class="faint" style="margin-top:4px">
-                <% if (iv.status === 'completed') { %>
+                <% if (iv.attendance === 'absent') { %>
+                  Candidate marked absent / no-show
+                <% } else if (iv.status === 'completed') { %>
                   Evaluation in progress by mentor
                 <% } else { %>
                   Upcoming scheduled session
@@ -63,7 +65,7 @@
               Assigned Mentor: <strong><%= iv.mentor_name %></strong>
             </p>
             <p class="muted" style="margin-bottom:8px;font-size:13px">
-              Mode &amp; Location: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
+              Mode &amp; Location: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %>
             </p>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
@@ -81,27 +83,24 @@
 </div>
 
 <% if (s.allEvaluated) { %>
-  <div class="card" style="margin-bottom:24px;background:var(--surface)">
-    <div class="card-body">
-      <div class="grid three">
-        <div>
-          <div class="l">Technical Score</div>
-          <div class="big-score"><%= s.techScore %><small>/<%= RUBRIC.technical.total %></small></div>
-          <div class="bar"><span style="width:<%= (s.techScore / RUBRIC.technical.total * 100).toFixed(0) %>%"></span></div>
-        </div>
-        <div>
-          <div class="l">HR Score</div>
-          <div class="big-score"><%= s.hrScore %><small>/<%= RUBRIC.hr.total %></small></div>
-          <div class="bar"><span style="width:<%= (s.hrScore / RUBRIC.hr.total * 100).toFixed(0) %>%"></span></div>
-        </div>
-        <div>
-          <div class="l">Grand Aggregate Total</div>
-          <div class="big-score"><%= s.total %><small>/<%= GRAND_TOTAL %></small></div>
-          <div style="margin-top:8px">
-            <span class="pill <%= grade(s.percent).cls %>"><%= grade(s.percent).label %> · <%= s.percent %>%</span>
-          </div>
-          <div class="bar"><span style="width:<%= s.percent %>%"></span></div>
-        </div>
+  <div class="score-hero-box">
+    <div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#cbd5e1;margin-bottom:6px">Official Placement Evaluation</div>
+      <div class="score-hero-val"><%= s.total %><span style="font-size:26px;color:#94a3b8">/<%= GRAND_TOTAL %></span></div>
+      <div style="margin-top:8px">
+        <span class="pill" style="background:#ffffff;color:#17171c;font-weight:700;font-size:13px"><%= grade(s.percent).label %> · <%= s.percent %>% Aggregate</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Technical Mock Score</div>
+        <div style="font-size:24px;font-weight:700;font-family:var(--font-display)"><%= s.techScore %> <span style="font-size:14px;color:#94a3b8">/ <%= RUBRIC.technical.total %></span></div>
+        <div class="bar" style="background:rgba(255,255,255,0.15);width:140px;margin-top:6px"><span style="background:#38bdf8;width:<%= (s.techScore / RUBRIC.technical.total * 100).toFixed(0) %>%"></span></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">HR Mock Score</div>
+        <div style="font-size:24px;font-weight:700;font-family:var(--font-display)"><%= s.hrScore %> <span style="font-size:14px;color:#94a3b8">/ <%= RUBRIC.hr.total %></span></div>
+        <div class="bar" style="background:rgba(255,255,255,0.15);width:140px;margin-top:6px"><span style="background:#c084fc;width:<%= (s.hrScore / RUBRIC.hr.total * 100).toFixed(0) %>%"></span></div>
       </div>
     </div>
   </div>
@@ -135,7 +134,7 @@
             <td><span class="pill p-<%= iv.type %>"><%= iv.type === 'hr' ? 'HR' : 'Technical' %></span></td>
             <td>
               <strong><%= iv.mentor_name %></strong>
-              <% if (iv.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(iv.location) : iv.location %></span><% } %>
+              <% if (iv.location) { %><br><span class="faint"><%- h.linkify(iv.location) %></span><% } %>
             </td>
             <td>
               <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
@@ -153,7 +152,7 @@
               <% } %>
             </td>
           </tr>
-          <% if (iv.eval_id || iv.feedback || iv.status === 'completed' || iv.attendance === 'attended') { %>
+          <% if (iv.eval_id || iv.feedback || ((iv.status === 'completed' || iv.attendance === 'attended') && iv.attendance !== 'absent')) { %>
             <tr>
               <td colspan="5" style="background:var(--surface-hover);padding:12px 16px;border-bottom:1px solid var(--line-soft)">
                 <% if (iv.eval_id) { %>
@@ -169,7 +168,7 @@
                   </p>
                 <% } %>
 
-                <% if (iv.status === 'completed' || iv.attendance === 'attended') { %>
+                <% if ((iv.status === 'completed' || iv.attendance === 'attended') && iv.attendance !== 'absent') { %>
                   <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-soft)">
                     <div style="font-weight:600;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
                       <span>Student Feedback on Mentor (<%= iv.mentor_name %>)</span>

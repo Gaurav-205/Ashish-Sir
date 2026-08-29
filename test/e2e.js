@@ -411,11 +411,40 @@ const login = async (who, email) => {
 
   section('Google OAuth & Calendar Integration');
   const google = require('../src/services/googleService');
+  const sessionAuth = require('../src/middleware/sessionAuth');
   ok(typeof google.isConfigured === 'function', 'googleService exports isConfigured check');
   ok(typeof google.syncCalendarEvent === 'function', 'googleService exports syncCalendarEvent');
 
   const gLogin = await get('anon', '/auth/google');
   ok(gLogin.status === 200 || gLogin.status === 302, 'GET /auth/google handles request cleanly');
+
+  // Verify diagnostic endpoint for production URLs
+  const debugResp = await get('anon', '/auth/google/debug');
+  ok(debugResp.status === 200, 'GET /auth/google/debug returns 200 OK');
+  const debugJson = JSON.parse(debugResp.body);
+  ok(debugJson.status === 'ok' && !!debugJson.environment.currentOrigin && !!debugJson.googleCloudConsoleInstructions,
+     'debug endpoint provides complete Google Cloud Console setup guidance');
+
+  // Verify dynamic redirect URI resolver
+  const mockReq = {
+    headers: { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'custom.konfident.edu' },
+    protocol: 'http',
+  };
+  const dynamicUri = google.getRedirectUri(mockReq);
+  ok(dynamicUri.startsWith('https://custom.konfident.edu'), 'dynamic redirect URI derives from request host and proto');
+
+  // Verify stateless signed cookie rehydration across serverless instances
+  const testUser = db.prepare("SELECT * FROM users WHERE role='student' LIMIT 1").get();
+  const signedToken = sessionAuth.signToken({ id: testUser.id, role: testUser.role, ts: Date.now() });
+  const serverlessJar = `konfident_auth=${signedToken}`;
+  const statelessResp = await req('stateless_student', 'GET', '/student', null);
+  // Initially anon redirects to login
+  ok(statelessResp.status === 302 && statelessResp.location === '/login', 'anonymous request is redirected');
+  // With konfident_auth signed cookie, session is rehydrated automatically without in-memory store
+  jars['stateless_student'] = serverlessJar;
+  const rehydratedResp = await req('stateless_student', 'GET', '/student', null);
+  ok(rehydratedResp.status === 200 && rehydratedResp.body.includes('Hello,'),
+     'stateless backup cookie rehydrates session across serverless instances');
 
   const prof = await get('newstudent', '/profile');
   ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
@@ -594,6 +623,51 @@ const login = async (who, email) => {
   const healthRes = await get('anon', '/health');
   ok(healthRes.status === 200 && JSON.parse(healthRes.body).status === 'healthy', 'GET /health returns healthy status');
   ok((await get('admin', '/no-such-page')).status === 404, 'unknown URL returns 404');
+
+  section('Bugfix & Security Regression Tests');
+  // 1. Resume URL XSS validation
+  const xssResumeUpdate = await post('newstudent', '/profile/update', {
+    name: 'Test Student Updated', resume_url: 'javascript:alert(document.cookie)'
+  });
+  ok(xssResumeUpdate.status === 400 && xssResumeUpdate.body.includes('Resume link must be a valid URL'),
+     'javascript: protocol in resume_url is rejected');
+
+  // Admin student creation with invalid resume URL
+  await post('admin', '/admin/students', {
+    name: 'Bad Resume Student', email: 'badresume@student.in', password: 'pass123', resume_url: 'javascript:alert(1)'
+  });
+  const studentsAfterBadResume = await get('admin', '/admin/students');
+  ok(studentsAfterBadResume.body.includes('Resume link must be a valid URL'),
+     'admin creating student with invalid resume link is rejected');
+
+  // 2. Profile password reset preserves squad on re-render
+  db.prepare("UPDATE users SET squad='116' WHERE id=?").run(ts.id);
+  const passResetReRender = await post('newstudent', '/profile/password', {
+    current: 'wrongpass', next1: 'pass123456', next2: 'pass123456'
+  });
+  ok(passResetReRender.body.includes('value="116"'),
+     'password reset re-render preserves student squad in form');
+
+  // 3. Absent candidate feedback is blocked
+  // Create an interview marked absent
+  const absentSlot = db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, status)
+                                 VALUES (?, 'technical', ?, '09:00', '09:30', 'booked')`)
+                       .run(tm.id, h.today());
+  const absentIv = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type, status, attendance)
+                               VALUES (?, ?, ?, 'technical', 'completed', 'absent')`)
+                     .run(pcs.id, tm.id, absentSlot.lastInsertRowid);
+  
+  await login('pastcanceller', 'pastcancel.student@student.in');
+  const absentFeedbackAttempt = await post('pastcanceller', '/student/feedback/' + absentIv.lastInsertRowid, {
+    satisfaction: '5', structured: '1'
+  });
+  ok(!db.prepare('SELECT id FROM student_feedbacks WHERE interview_id=?').get(absentIv.lastInsertRowid),
+     'feedback submission is rejected for absent interviews');
+
+  const absentResults = await get('pastcanceller', '/student/results');
+  ok(absentResults.body.includes('Candidate marked absent / no-show') &&
+     !absentResults.body.includes('Evaluation in progress by mentor'),
+     'results page clearly indicates candidate absent and suppresses evaluation in progress');
 
   server.close();
   console.log(`\n\x1b[1m${pass} passed, ${fail} failed\x1b[0m\n`);
