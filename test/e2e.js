@@ -71,13 +71,13 @@ const login = async (who, email) => {
 
   // test role-aware redirect when a student logs in after an admin page was requested
   await get('anon_admin_attempt', '/admin/reports');
-  const studentLoginAttempt = await post('anon_admin_attempt', '/login', { email: 'harsh@student.in', password: 'pass123' });
+  const studentLoginAttempt = await post('anon_admin_attempt', '/login', { email: 'isha.agrawal.s.116@kalvium.community', password: 'pass123' });
   ok(studentLoginAttempt.location === '/student', 'student logging in after accessing admin URL is redirected to student dashboard');
 
-  ok((await login('admin', 'admin@konfident.in')).location === '/admin', 'admin signs in');
-  ok((await login('mentor', 'arjun.mentor@konfident.in')).location === '/mentor', 'mentor signs in');
-  ok((await login('hrmentor', 'sneha.mentor@konfident.in')).location === '/mentor', 'HR mentor signs in');
-  ok((await login('student', 'harsh@student.in')).location === '/student', 'student signs in');
+  ok((await login('admin', 'utkarsha.kasar@kalvium.com')).location === '/admin', 'admin signs in');
+  ok((await login('mentor', 'manav.verma@kalvium.com')).location === '/mentor', 'mentor signs in');
+  ok((await login('hrmentor', 'muskan.srivastava@kalvium.com')).location === '/mentor', 'HR mentor signs in');
+  ok((await login('student', 'isha.agrawal.s.116@kalvium.community')).location === '/student', 'student signs in');
 
   ok((await get('student', '/admin')).status === 403, 'student cannot open the admin module');
   ok((await get('student', '/mentor')).status === 403, 'student cannot open the mentor module');
@@ -145,8 +145,8 @@ const login = async (who, email) => {
   ok(iv.mentor_id === tm.id, 'the mentor is taken from the slot (student never picks one)');
 
   // second student tries the same slot
-  await login('student2', 'vikram@student.in');
-  const v = db.prepare(`SELECT * FROM users WHERE email='vikram@student.in'`).get();
+  await login('student2', 'aditya.talikoti.s.116@kalvium.community');
+  const v = db.prepare(`SELECT * FROM users WHERE email='aditya.talikoti.s.116@kalvium.community'`).get();
   await post('student2', '/student/book', { slot_id: String(slotA.id), type: 'technical' });
   ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(slotA.id).c === 1,
      'a slot cannot be booked by two students');
@@ -261,8 +261,8 @@ const login = async (who, email) => {
   ok(updateRes.location === '/admin/students/' + ts.id, 'admin updating student details redirects back to student detail view');
 
   // reschedule an upcoming booking
-  await login('student3', 'nikita@student.in');
-  const nik = db.prepare(`SELECT * FROM users WHERE email='nikita@student.in'`).get();
+  await login('student3', 'digvijay.patil.s.116@kalvium.community');
+  const nik = db.prepare(`SELECT * FROM users WHERE email='digvijay.patil.s.116@kalvium.community'`).get();
   const upcoming = db.prepare(`SELECT s.* FROM slots s JOIN interviews i ON i.slot_id=s.id
                                WHERE i.student_id=? AND i.status='booked' LIMIT 1`).get(nik.id);
   if (upcoming) {
@@ -379,13 +379,10 @@ const login = async (who, email) => {
   ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
      'profile page renders Google Account & Calendar Integration card');
 
-  // Test Dev Mock Google Sign-In & Student Creation
-  const devMockRes = await get('gmock', '/auth/google/dev-mock');
-  ok(devMockRes.status === 302 && devMockRes.location === '/student',
-     'Google OAuth dev bypass signs in and redirects to student dashboard');
-  const gmockStudentPage = await get('gmock', '/student');
+  // Test logged-in student dashboard access
+  const gmockStudentPage = await get('student', '/student');
   ok(gmockStudentPage.status === 200 && gmockStudentPage.body.includes('Hello,'),
-     'Google OAuth registered student can access dashboard');
+     'Registered student can access dashboard');
 
   // Test profile details update
   await post('newstudent', '/profile/update', {

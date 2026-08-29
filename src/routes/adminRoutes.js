@@ -72,13 +72,13 @@ router.get('/students', (req, res) => {
 });
 
 router.post('/students', (req, res) => {
-  const { name, email, password, roll_no, branch, phone, resume_url } = req.body;
+  const { name, email, password, roll_no, branch, squad, phone, resume_url } = req.body;
   try {
     if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
-    db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,phone,resume_url)
-                VALUES (?,?,?,'student',?,?,?,?)`)
+    db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,squad,phone,resume_url)
+                VALUES (?,?,?,'student',?,?,?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10),
-           roll_no || null, branch || null, phone || null, resume_url || null);
+           roll_no || null, branch || null, squad || null, phone || null, resume_url || null);
     flash(req, 'ok', `Student ${name} added.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
@@ -87,15 +87,15 @@ router.post('/students', (req, res) => {
 });
 
 router.post('/students/:id/update', validateId('id'), (req, res) => {
-  const { name, roll_no, branch, phone, resume_url, active } = req.body;
+  const { name, roll_no, branch, squad, phone, resume_url, active } = req.body;
   if (!name || !name.trim()) {
     flash(req, 'err', 'Name is required.');
     return res.redirect('/admin/students/' + req.params.id);
   }
   const isActive = active ? 1 : 0;
-  db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, phone=?, resume_url=?, active=?
+  db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, squad=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
-    .run(name.trim(), roll_no || null, branch || null, phone || null, resume_url || null,
+    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, resume_url || null,
          isActive, Number(req.params.id));
   if (!isActive) {
     invalidateUserSessions(req.params.id);
@@ -486,7 +486,7 @@ router.get('/reports', (req, res) => {
 
 router.get('/reports.csv', (req, res) => {
   const rows = q.allStudentSummaries();
-  const head = ['Roll No', 'Student', 'Email', 'Branch',
+  const head = ['Roll No', 'Student', 'Email', 'Branch', 'Squad',
     ...RUBRIC.technical.criteria.map((c) => c.label), 'Technical Total',
     ...RUBRIC.hr.criteria.map((c) => c.label), 'HR Total',
     `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'Technical Attendance', 'HR Status', 'HR Attendance'];
@@ -497,7 +497,7 @@ router.get('/reports.csv', (req, res) => {
     const techMarks = RUBRIC.technical.criteria.map((c) => (t && t.eval_id ? t[c.key] : ''));
     const hrMarks = RUBRIC.hr.criteria.map((c) => (hr && hr.eval_id ? hr[c.key] : ''));
     lines.push([
-      s.student.roll_no, s.student.name, s.student.email, s.student.branch,
+      s.student.roll_no, s.student.name, s.student.email, s.student.branch, s.student.squad,
       ...techMarks, s.techScore,
       ...hrMarks, s.hrScore,
       s.total, s.percent,

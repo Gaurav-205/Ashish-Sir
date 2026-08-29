@@ -34,7 +34,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const adminEmail = process.env.ADMIN_EMAIL || 'admin@konfident.in';
+const adminEmail = process.env.ADMIN_EMAIL || 'utkarsha.kasar@kalvium.com';
 let adminPassword = process.env.ADMIN_PASSWORD;
 let isGenerated = false;
 if (!adminPassword) {
@@ -45,7 +45,7 @@ if (!adminPassword) {
     isGenerated = true;
   }
 }
-const adminName = process.env.ADMIN_NAME || 'Platform Administrator';
+const adminName = process.env.ADMIN_NAME || 'Utkarsha Kasar';
 const PW = bcrypt.hashSync(adminPassword, 10);
 
 // Clear existing tables
@@ -64,45 +64,104 @@ try {
 } catch (_) {}
 
 const addUser = db.prepare(`INSERT INTO users
-  (name,email,password_hash,role,phone,roll_no,branch,resume_url,can_technical,can_hr)
-  VALUES (?,?,?,?,?,?,?,?,?,?)`);
+  (name,email,password_hash,role,phone,roll_no,branch,squad,resume_url,can_technical,can_hr)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
 
-// 1. Root Admin Account (created in clean, dev, and test modes; omitted in empty mode)
+// 1. Kalvium Admin Accounts
 if (mode !== 'empty') {
-  addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, 0, 0);
+  const kalviumAdmins = [
+    { name: 'Utkarsha Kasar', email: 'utkarsha.kasar@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 }, // Admin + HR Mentor
+  ];
+
+  kalviumAdmins.forEach((a) => {
+    try {
+      addUser.run(a.name, a.email.toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, null, a.can_t, a.can_hr);
+    } catch (_) {}
+  });
 }
 
+// 2. Kalvium Mentor Accounts (Strict Tech vs Non-Tech segregation)
+const kalviumMentors = [
+  { name: 'Manav Verma', email: 'manav.verma@kalvium.com', can_t: 1, can_hr: 0 },
+  { name: 'Muskan Srivastava', email: 'muskan.srivastava@kalvium.com', can_t: 0, can_hr: 1 },
+  { name: 'Ritu Soni', email: 'ritu.soni@kalvium.com', can_t: 1, can_hr: 0 },
+  { name: 'Shikhar Agarwal', email: 'shikhar.agarwal@kalvium.com', can_t: 1, can_hr: 0 },
+  { name: 'Shivam Shrivastava', email: 'shivam.shrivastava@kalvium.com', can_t: 1, can_hr: 0 },
+  { name: 'Aditya Kulshreshtha', email: 'aditya.kulshreshtha@kalvium.com', can_t: 1, can_hr: 0 },
+  { name: 'Hrituparno C', email: 'hrituparno.c@kalvium.com', can_t: 1, can_hr: 0 },
+];
+
+const kalviumStudents = [
+  // Squad 116 (18 candidates)
+  { name: 'Isha Agrawal', email: 'isha.agrawal.s.116@kalvium.community', squad: '116', roll_no: 'KAL116001' },
+  { name: 'Aditya Talikoti', email: 'aditya.talikoti.s.116@kalvium.community', squad: '116', roll_no: 'KAL116002' },
+  { name: 'Digvijay Patil', email: 'digvijay.patil.s.116@kalvium.community', squad: '116', roll_no: 'KAL116003' },
+  { name: 'Anisha Santosh Agrawal', email: 'anisha.agrawal.s.116@kalvium.community', squad: '116', roll_no: 'KAL116004' },
+  { name: 'Areesh Ahmed', email: 'areesh.ahmed.s.116@kalvium.community', squad: '116', roll_no: 'KAL116005' },
+  { name: 'Kanishka Nishchal Girnar', email: 'kanishka.girnar.s.116@kalvium.community', squad: '116', roll_no: 'KAL116006' },
+  { name: 'Aditya Sudhir Nagane', email: 'aditya.nagane.s.116@kalvium.community', squad: '116', roll_no: 'KAL116007' },
+  { name: 'Shubham Uddhav Reddy', email: 'shubham.reddy.s.116@kalvium.community', squad: '116', roll_no: 'KAL116008' },
+  { name: 'Yashwardhan Santosh Chaudhari', email: 'yashwardhan.chaudhari.s.116@kalvium.community', squad: '116', roll_no: 'KAL116009' },
+  { name: 'Yashraj Jagtap', email: 'yashraj.jagtap.s.116@kalvium.community', squad: '116', roll_no: 'KAL116010' },
+  { name: 'Aryan Patil', email: 'aryan.patil.s.116@kalvium.community', squad: '116', roll_no: 'KAL116011' },
+  { name: 'Om Lonkar', email: 'om.lonkar.s.116@kalvium.community', squad: '116', roll_no: 'KAL116012' },
+  { name: 'Gauri Mhetre', email: 'gauri.mhetre.s.116@kalvium.community', squad: '116', roll_no: 'KAL116013' },
+  { name: 'Avadhut Murlidhar Pawar', email: 'avadhut.pawar.s.116@kalvium.community', squad: '116', roll_no: 'KAL116014' },
+  { name: 'Riddhima Sinhal', email: 'riddhima.sinhal.s.116@kalvium.community', squad: '116', roll_no: 'KAL116015' },
+  { name: 'Hardik Kaurani', email: 'hardik.kaurani.s.116@kalvium.community', squad: '116', roll_no: 'KAL116016' },
+  { name: 'Tejas Vijaykumar Pujari', email: 'tejas.pujari.s.116@kalvium.com', squad: '116', roll_no: 'KAL116017' },
+  { name: 'Khushal Rajput', email: 'khushal.rajput.s.116@kalvium.community', squad: '116', roll_no: 'KAL116018' },
+
+  // Squad 115 (22 candidates)
+  { name: 'Aayushman Shukla', email: 'aayushman.shukla.s.115@kalvium.community', squad: '115', roll_no: 'KAL115001' },
+  { name: 'Prithvi Rajvanshi', email: 'prithvi.rajvanshi.s.115@kalvium.community', squad: '115', roll_no: 'KAL115002' },
+  { name: 'Palakshi Verma', email: 'palakshi.verma.s.115@kalvium.community', squad: '115', roll_no: 'KAL115003' },
+  { name: 'Ruhaa Bhalerao', email: 'ruhaa.bhalerao.s.115@kalvium.community', squad: '115', roll_no: 'KAL115004' },
+  { name: 'Pratite Acharya', email: 'pratite.a.s.115@kalvium.community', squad: '115', roll_no: 'KAL115005' },
+  { name: 'Ayush Shriam Awchar', email: 'shriram.awchar.s.115@kalvium.community', squad: '115', roll_no: 'KAL115006' },
+  { name: 'varad shahane', email: 'varad.shahane.s.115@kalvium.community', squad: '115', roll_no: 'KAL115007' },
+  { name: 'Raina George', email: 'raina.george.s.115@kalvium.community', squad: '115', roll_no: 'KAL115008' },
+  { name: 'Shauryvardhan Dadasaheb Undre', email: 'shauryvardhan.undre.s.115@kalvium.community', squad: '115', roll_no: 'KAL115009' },
+  { name: 'Om Jagtap', email: 'om.jagtap.s.115@kalvium.community', squad: '115', roll_no: 'KAL115010' },
+  { name: 'Aadi Jain', email: 'aadi.jain.s.115@kalvium.community', squad: '115', roll_no: 'KAL115011' },
+  { name: 'Parnil Vyawhare', email: 'parnil.vyawahare.s.115@kalvium.community', squad: '115', roll_no: 'KAL115012' },
+  { name: 'Atharv Nitin Hargude', email: 'atharv.hargude.s.115@kalvium.community', squad: '115', roll_no: 'KAL115013' },
+  { name: 'Sasmit Narnaware', email: 'sasmit.narnaware.s.115@kalvium.community', squad: '115', roll_no: 'KAL115014' },
+  { name: 'Rakshaad Ashok Kolhe', email: 'rakshaad.kolhe.s.115@kalvium.community', squad: '115', roll_no: 'KAL115015' },
+  { name: 'Sohini Tandon', email: 'sohini.tandon.s.115@kalvium.community', squad: '115', roll_no: 'KAL115016' },
+  { name: 'Rishikesh Bagal', email: 'rishikesh.bagal.s.115@kalvium.community', squad: '115', roll_no: 'KAL115017' },
+  { name: 'vinayak kulkarni', email: 'vinayak.kulkarni.s.115@kalvium.community', squad: '115', roll_no: 'KAL115018' },
+  { name: 'Gitesh Makunda Chaudhari', email: 'gitesh.c.s.115@kalvium.community', squad: '115', roll_no: 'KAL115019' },
+  { name: 'Devansh Subhash Pujari', email: 'devansh.pujari.s.115@kalvium.community', squad: '115', roll_no: 'KAL115020' },
+  { name: 'Mohammad Aamir Patloo', email: 'mohammad.patloo.s.115@kalvium.community', squad: '115', roll_no: 'KAL115021' },
+  { name: 'Shruti Shardul Itkalkar', email: 'shruti.itkalkar.s.115@kalvium.community', squad: '115', roll_no: 'KAL115022' }
+];
+
 if (mode === 'test') {
-  // Test suite fixture
-  const mentors = [
-    ['Arjun Mehta',    'arjun.mentor@konfident.in',  1, 0],
-    ['Priya Nair',     'priya.mentor@konfident.in',  1, 0],
-    ['Rohit Sharma',   'rohit.mentor@konfident.in',  1, 1],
-    ['Sneha Kulkarni', 'sneha.mentor@konfident.in',  0, 1],
-    ['Imran Qureshi',  'imran.mentor@konfident.in',  0, 1],
-  ].map(([name, email, t, hr]) => {
-    addUser.run(name, email, PW, 'mentor', null, null, null, null, t, hr);
-    return db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  // Test suite fixture: Kalvium Mentors + Fallback Test Mentors
+  kalviumMentors.forEach((m) => {
+    try {
+      addUser.run(m.name, m.email.toLowerCase(), PW, 'mentor', null, null, null, null, null, m.can_t, m.can_hr);
+    } catch (_) {}
   });
 
-  const studentData = [
-    ['Aisha Khan',        'aisha@student.in',    'KON2025001', 'CSE'],
-    ['Rahul Verma',       'rahul@student.in',    'KON2025002', 'CSE'],
-    ['Meera Iyer',        'meera@student.in',    'KON2025003', 'IT'],
-    ['Karan Singh',       'karan@student.in',    'KON2025004', 'ECE'],
-    ['Divya Rao',         'divya@student.in',    'KON2025005', 'CSE'],
-    ['Sahil Gupta',       'sahil@student.in',    'KON2025006', 'IT'],
-    ['Nikita Joshi',      'nikita@student.in',   'KON2025007', 'CSE'],
-    ['Aman Tiwari',       'aman@student.in',     'KON2025008', 'ECE'],
-    ['Pooja Deshmukh',    'pooja@student.in',    'KON2025009', 'IT'],
-    ['Vikram Chauhan',    'vikram@student.in',   'KON2025010', 'CSE'],
-    ['Fatima Sheikh',     'fatima@student.in',   'KON2025011', 'CSE'],
-    ['Harsh Patel',       'harsh@student.in',    'KON2025012', 'IT'],
+  const fallbackTestMentors = [
+    ['Arjun Mehta',    'arjun.mentor@konfident.in',  1, 0],
+    ['Sneha Kulkarni', 'sneha.mentor@konfident.in',  0, 1],
   ];
-  const students = studentData.map(([name, email, roll, branch]) => {
-    addUser.run(name, email, PW, 'student', null, roll, branch,
-      `https://example.com/resumes/${roll}.pdf`, 0, 0);
-    return db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  fallbackTestMentors.forEach(([name, email, t, hr]) => {
+    try { addUser.run(name, email, PW, 'mentor', null, null, null, null, null, t, hr); } catch (_) {}
+  });
+
+  const mentors = db.prepare(`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1`).all();
+
+  const students = kalviumStudents.map((st) => {
+    addUser.run(st.name, st.email, PW, 'student', null, st.roll_no, 'CSE', st.squad,
+      `https://example.com/resumes/${st.roll_no}.pdf`, 0, 0);
+    return db.prepare('SELECT * FROM users WHERE email=?').get(st.email);
   });
 
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
@@ -191,51 +250,44 @@ if (mode === 'test') {
     }
   });
 } else if (mode === 'dev' || process.env.SEED_DEV === 'true') {
-  // Exactly 1 account of each role
-  // 2. Technical Mentor
-  addUser.run('Arjun Mehta (Tech Mentor)', 'tech.mentor@konfident.in', PW, 'mentor', '+91 98111 11111', null, null, null, 1, 0);
+  // Kalvium Mentors
+  kalviumMentors.forEach((m) => {
+    try {
+      addUser.run(m.name, m.email.toLowerCase(), PW, 'mentor', null, null, null, null, null, m.can_t, m.can_hr);
+    } catch (_) {}
+  });
 
-  // 3. HR Mentor
-  addUser.run('Sneha Kulkarni (HR Mentor)', 'hr.mentor@konfident.in', PW, 'mentor', '+91 98222 22222', null, null, null, 0, 1);
-
-  // 4. Dual-Skill Mentor (Technical + HR)
-  addUser.run('Rohit Sharma (Tech & HR)', 'mentor@konfident.in', PW, 'mentor', '+91 98333 33333', null, null, null, 1, 1);
-
-  // 5. Student Account
-  addUser.run('Aisha Khan', 'student@konfident.in', PW, 'student', '+91 98444 44444', 'KON2025001', 'CSE',
-    'https://drive.google.com/sample-resume.pdf', 0, 0);
+  // 40 Real Kalvium Candidates (Squads 115 & 116)
+  kalviumStudents.forEach((st) => {
+    try {
+      addUser.run(st.name, st.email, PW, 'student', null, st.roll_no, 'CSE', st.squad, null, 0, 0);
+    } catch (_) {}
+  });
 
   // Seed sample available slots for tomorrow and the upcoming week
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                               VALUES (?,?,?,?,?,?,?)`);
-  
-  const techMentor = db.prepare('SELECT id FROM users WHERE email=?').get('tech.mentor@konfident.in');
-  const hrMentor = db.prepare('SELECT id FROM users WHERE email=?').get('hr.mentor@konfident.in');
-  const dualMentor = db.prepare('SELECT id FROM users WHERE email=?').get('mentor@konfident.in');
 
   const tomorrow = h.addDays(h.today(), 1);
   const dayAfter = h.addDays(h.today(), 2);
   const day3 = h.addDays(h.today(), 3);
 
-  // Technical slots
-  if (techMentor) {
-    addSlot.run(techMentor.id, 'technical', tomorrow, '10:00', '10:30', 'Online', h.generateMeetingLink('technical'));
-    addSlot.run(techMentor.id, 'technical', tomorrow, '10:30', '11:00', 'Online', h.generateMeetingLink('technical'));
-    addSlot.run(techMentor.id, 'technical', dayAfter, '14:00', '14:30', 'Online', h.generateMeetingLink('technical'));
-  }
+  const activeMentors = db.prepare(`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1`).all();
+  activeMentors.forEach((m, idx) => {
+    const timeOffset = (idx % 4) * 30;
+    const sh = 10 + Math.floor(timeOffset / 60);
+    const sm = timeOffset % 60;
+    const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+    const sTime = fmt(sh * 60 + sm);
+    const eTime = fmt(sh * 60 + sm + 30);
 
-  // HR slots
-  if (hrMentor) {
-    addSlot.run(hrMentor.id, 'hr', tomorrow, '11:30', '12:00', 'Online', h.generateMeetingLink('hr'));
-    addSlot.run(hrMentor.id, 'hr', tomorrow, '12:00', '12:30', 'Online', h.generateMeetingLink('hr'));
-    addSlot.run(hrMentor.id, 'hr', dayAfter, '15:00', '15:30', 'Online', h.generateMeetingLink('hr'));
-  }
-
-  // Dual slots
-  if (dualMentor) {
-    addSlot.run(dualMentor.id, 'technical', day3, '10:00', '10:30', 'Online', h.generateMeetingLink('technical'));
-    addSlot.run(dualMentor.id, 'hr', day3, '11:00', '11:30', 'Online', h.generateMeetingLink('hr'));
-  }
+    if (m.can_technical) {
+      try { addSlot.run(m.id, 'technical', tomorrow, sTime, eTime, 'Online', h.generateMeetingLink('technical')); } catch (_) {}
+    }
+    if (m.can_hr) {
+      try { addSlot.run(m.id, 'hr', dayAfter, sTime, eTime, 'Online', h.generateMeetingLink('hr')); } catch (_) {}
+    }
+  });
 }
 
 const c = (s) => db.prepare(s).get().c;
@@ -246,33 +298,32 @@ if (mode === 'dev') {
   }
   console.log(`
   =============================================================
-  [Development Dataset Initialized — 1 Account of Each Role]
+  [Development Dataset Initialized — Kalvium Cohort 2025]
   =============================================================
   ${pwString}
 
-  1. Admin Account:
-     Email:    admin@konfident.in
-     Role:     Platform Administrator
+  1. Kalvium Admin Accounts (4):
+     • utkarsha.kasar@kalvium.com
+     • prachi.sharma@kalvium.com
+     • ashish.suresh@kalvium.com
+     • akshata.sanap@kalvium.com (Admin & Non-Tech Evaluator)
 
-  2. Technical Mentor Account:
-     Email:    tech.mentor@konfident.in
-     Role:     Mentor (Technical Interviews)
+  2. Kalvium Mentor Accounts (7):
+     • manav.verma@kalvium.com (Tech)
+     • muskan.srivastava@kalvium.com (Non-Tech / HR)
+     • ritu.soni@kalvium.com (Tech)
+     • shikhar.agarwal@kalvium.com (Tech)
+     • shivam.shrivastava@kalvium.com (Tech)
+     • aditya.kulshreshtha@kalvium.com (Tech)
+     • hrituparno.c@kalvium.com (Tech)
 
-  3. HR Mentor Account:
-     Email:    hr.mentor@konfident.in
-     Role:     Mentor (HR Interviews)
-
-  4. Dual-Skill Mentor Account:
-     Email:    mentor@konfident.in
-     Role:     Mentor (Technical + HR Interviews)
-
-  5. Student Account:
-     Email:    student@konfident.in
-     Role:     Student (Candidate: Aisha Khan · Roll: KON2025001)
+  3. 40 Kalvium Candidate Accounts (Squads 115 & 116):
+     • 18 Candidates in Squad 116 (e.g. isha.agrawal.s.116@kalvium.community)
+     • 22 Candidates in Squad 115 (e.g. aayushman.shukla.s.115@kalvium.community)
 
   -------------------------------------------------------------
   Open Slots Generated: ${c("SELECT COUNT(*) c FROM slots WHERE status='open'")} available slots
-  Total Accounts:       ${c('SELECT COUNT(*) c FROM users')}
+  Total Accounts:       ${c('SELECT COUNT(*) c FROM users')} (${c("SELECT COUNT(*) c FROM users WHERE role='admin'")} Admins, ${c("SELECT COUNT(*) c FROM users WHERE role='mentor'")} Mentors, ${c("SELECT COUNT(*) c FROM users WHERE role='student'")} Students)
   =============================================================
   `);
 } else if (mode === 'clean') {

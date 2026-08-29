@@ -2,7 +2,7 @@
 <div class="page-head">
   <div>
     <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
-      Student Workspace · Cohort 2025–26
+      Student Workspace · Cohort 2025–26<%= s.student.squad ? ' · Squad ' + s.student.squad : '' %>
     </div>
     <h1>Hello, <%= (s.student.name || '').trim().split(/\s+/)[0] || 'Student' %></h1>
     <p class="sub">Complete your mandatory <strong>Technical Interview (30 marks)</strong> and <strong>HR Interview (20 marks)</strong> this week.</p>

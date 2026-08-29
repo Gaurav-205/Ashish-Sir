@@ -5,7 +5,7 @@ const { RUBRIC, GRAND_TOTAL } = require('./rubric');
 const INTERVIEW_SELECT = `
   SELECT i.*, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
          m.name AS mentor_name, m.email AS mentor_email,
-         st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.resume_url,
+         st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.squad, st.resume_url,
          e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
          e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at
     FROM interviews i
@@ -39,7 +39,7 @@ function allInterviews(filters = {}) {
                      ORDER BY s.slot_date DESC, s.start_time`).all(...args);
 }
 
-const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, resume_url,
+const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, squad, resume_url,
                         can_technical, can_hr, active, google_id, google_calendar_enabled, created_at`;
 
 /** Per-student roll-up used by student dashboard, admin reports and exports. */
@@ -81,7 +81,7 @@ function allStudentSummaries() {
   const allIvs = db.prepare(`
     SELECT i.*, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
            m.name AS mentor_name, m.email AS mentor_email,
-           st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.resume_url,
+           st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.squad, st.resume_url,
            e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
            e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at
       FROM interviews i
@@ -162,8 +162,8 @@ function adminStats() {
 
 function mentorsList(type) {
   const col = type === 'hr' ? 'can_hr' : 'can_technical';
-  const extra = type ? ` AND ${col} = 1` : '';
-  return db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE role='mentor' AND active=1${extra} ORDER BY name`).all();
+  const extra = type ? ` AND ${col} = 1` : ' AND (can_technical=1 OR can_hr=1)';
+  return db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1${extra} ORDER BY name`).all();
 }
 
 function mentorsWithOpenSlots() {
@@ -179,7 +179,7 @@ function mentorsWithOpenSlots() {
         WHERE s.mentor_id = m.id AND s.status = 'open'
           AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS total_open_slots
      FROM users m
-    WHERE m.role = 'mentor' AND m.active = 1
+    WHERE (m.role = 'mentor' OR m.can_technical = 1 OR m.can_hr = 1) AND m.active = 1
     ORDER BY m.name
   `).all();
 }

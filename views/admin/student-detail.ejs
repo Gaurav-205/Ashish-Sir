@@ -5,7 +5,7 @@
       Candidate Record · Profile &amp; Interview History
     </div>
     <h1><%= s.student.name %></h1>
-    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · Roll No: ' + s.student.roll_no : '' %><%= s.student.branch ? ' · Branch: ' + s.student.branch : '' %></p>
+    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · Roll No: ' + s.student.roll_no : '' %><%= s.student.squad ? ' · Squad ' + s.student.squad : '' %><%= s.student.branch ? ' · Branch: ' + s.student.branch : '' %></p>
   </div>
   <div class="btn-row">
     <% if (s.student.resume_url) { %>
@@ -82,6 +82,7 @@
         <div class="row">
           <div class="field"><label>Full Name</label><input name="name" value="<%= s.student.name %>" required></div>
           <div class="field"><label>Roll Number</label><input name="roll_no" value="<%= s.student.roll_no || '' %>"></div>
+          <div class="field"><label>Squad</label><input name="squad" value="<%= s.student.squad || '' %>" placeholder="115 or 116"></div>
           <div class="field"><label>Branch / Major</label><input name="branch" value="<%= s.student.branch || '' %>"></div>
           <div class="field"><label>Phone Number</label><input name="phone" value="<%= s.student.phone || '' %>"></div>
         </div>

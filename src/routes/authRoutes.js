@@ -218,23 +218,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
   }
 });
 
-router.get('/auth/google/dev-mock', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).send('Dev mock is disabled in production.');
-  }
-  let student = db.prepare(`SELECT id, name, email, role FROM users WHERE role='student' LIMIT 1`).get();
-  if (!student) {
-    const ins = db.prepare(`INSERT INTO users (name, email, password_hash, role, can_technical, can_hr)
-                            VALUES ('Google Demo Student', 'student.demo@gmail.com', 'dummy', 'student', 0, 0)`).run();
-    student = db.prepare('SELECT id, name, email, role FROM users WHERE id=?').get(ins.lastInsertRowid);
-  }
-  req.session.regenerate((err) => {
-    if (err) return res.redirect('/login');
-    req.session.user = { id: student.id, name: student.name, email: student.email, role: student.role };
-    logAudit(req, 'AUTH_DEV_GOOGLE_LOGIN', { email: student.email }, student.id);
-    res.redirect('/student');
-  });
-});
+
 
 router.post('/logout', (req, res) => {
   logAudit(req, 'AUTH_LOGOUT');
@@ -242,7 +226,7 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/profile', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profile', {
     title: 'My profile',
     me,
@@ -253,7 +237,7 @@ router.get('/profile', requireLogin, (req, res) => {
 });
 
 router.post('/profile/update', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active FROM users WHERE id = ?').get(req.session.user.id);
   const name = String(req.body.name || '').trim();
   if (!name) {
     return res.status(400).render('profile', {
@@ -266,10 +250,11 @@ router.post('/profile/update', requireLogin, (req, res) => {
   }
   const phone = String(req.body.phone || '').trim() || null;
   const branch = me.role === 'student' ? (String(req.body.branch || '').trim() || null) : me.branch;
+  const squad = me.role === 'student' ? (String(req.body.squad || '').trim() || null) : me.squad;
   const resume_url = me.role === 'student' ? (String(req.body.resume_url || '').trim() || null) : me.resume_url;
 
-  db.prepare('UPDATE users SET name=?, phone=?, branch=?, resume_url=? WHERE id=?')
-    .run(name, phone, branch, resume_url, me.id);
+  db.prepare('UPDATE users SET name=?, phone=?, branch=?, squad=?, resume_url=? WHERE id=?')
+    .run(name, phone, branch, squad, resume_url, me.id);
   req.session.user.name = name;
   req.session.flash = { type: 'ok', msg: 'Profile details updated successfully.' };
   res.redirect('/profile');

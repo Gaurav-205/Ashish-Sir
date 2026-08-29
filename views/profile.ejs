@@ -21,6 +21,10 @@
           </div>
           <% if (me.role === 'student') { %>
             <div class="field">
+              <label>Squad</label>
+              <input name="squad" value="<%= me.squad || '' %>" placeholder="115 or 116">
+            </div>
+            <div class="field">
               <label>Branch / Specialization</label>
               <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE">
             </div>
@@ -35,6 +39,7 @@
         <p class="faint" style="margin-bottom:12px">
           Role: <strong><%= me.role %></strong>
           <% if (me.roll_no) { %> · Roll No: <strong><%= me.roll_no %></strong><% } %>
+          <% if (me.squad) { %> · Squad: <strong><%= me.squad %></strong><% } %>
           <% if (me.role === 'mentor') { %>
             · Capabilities:
             <% if (me.can_technical) { %><span class="pill p-technical">Technical</span><% } %>
@@ -45,17 +50,24 @@
       </form>
     </div>
   </div>
-  <div class="card"><div class="card-head"><h2>Change password</h2></div><div class="card-body">
-    <% if (error) { %><div class="flash err"><%= error %></div><% } %>
-    <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>
-    <form method="post" action="/profile/password">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <div class="field"><label>Current password</label><input type="password" name="current" required></div>
-      <div class="field"><label>New password</label><input type="password" name="next1" required minlength="6"></div>
-      <div class="field"><label>Confirm new password</label><input type="password" name="next2" required minlength="6"></div>
-      <button class="btn primary sm">Update password</button>
-    </form>
-  </div></div>
+  <div class="card" id="password">
+    <div class="card-head"><h2>Reset Password</h2></div>
+    <div class="card-body">
+      <div class="hint" style="margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:6px;background:var(--bg-muted, #f8fafc);padding:10px 12px;border-radius:6px;border:1px solid var(--border-color, #e2e8f0)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>Initial accounts default to <code>pass123</code>. You can set a custom private password below.</span>
+      </div>
+      <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+      <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>
+      <form method="post" action="/profile/password">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="field"><label>Current password</label><input type="password" name="current" placeholder="Current password (default: pass123)" required></div>
+        <div class="field"><label>New password</label><input type="password" name="next1" placeholder="Minimum 6 characters" required minlength="6"></div>
+        <div class="field"><label>Confirm new password</label><input type="password" name="next2" placeholder="Re-enter new password" required minlength="6"></div>
+        <button class="btn primary sm">Reset Password</button>
+      </form>
+    </div>
+  </div>
 </div>
 
 <div class="card" style="margin-top:24px">
