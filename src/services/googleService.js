@@ -2,14 +2,14 @@
 const db = require('../db');
 const h = require('../helpers');
 
-const getClientId = () => (process.env.GOOGLE_CLIENT_ID || '').trim();
-const getClientSecret = () => (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+const getClientId = () => (process.env.GOOGLE_CLIENT_ID || '').replace(/[\r\n\s]+$/, '').trim();
+const getClientSecret = () => (process.env.GOOGLE_CLIENT_SECRET || '').replace(/[\r\n\s]+$/, '').trim();
 const getRedirectUri = () => {
   if (process.env.GOOGLE_REDIRECT_URI) {
-    return process.env.GOOGLE_REDIRECT_URI.trim();
+    return process.env.GOOGLE_REDIRECT_URI.replace(/[\r\n\s]+$/, '').trim();
   }
   if (process.env.VERCEL_URL) {
-    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, '');
+    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, '').replace(/[\r\n\s]+$/, '').trim();
     return `https://${host}/api/auth/callback/google`;
   }
   return 'http://localhost:3000/api/auth/callback/google';
