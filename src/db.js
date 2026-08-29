@@ -5,6 +5,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 const DATABASE_URL = process.env.DATABASE_URL || process.env.DATABASE_URL_UNPOOLED;
+const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME);
 let db = {};
 
 // Helper to convert SQLite '?' placeholders to PostgreSQL '$1', '$2'...
@@ -21,20 +22,36 @@ function convertSql(sql) {
 let usePostgres = false;
 if (DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWORD')) {
   // Test connection to Neon Postgres
-  const code = `
-    const { Pool } = require('pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 3000 });
-    pool.query('SELECT 1').then(() => { process.exit(0); }).catch(() => { process.exit(1); });
-  `;
   try {
-    execFileSync(process.execPath, ['-e', code], {
-      env: { ...process.env, DATABASE_URL },
-      encoding: 'utf8',
-      timeout: 4000,
-    });
-    usePostgres = true;
+    const u = new URL(DATABASE_URL);
+    const httpUrl = `https://${u.hostname}/sql`;
+    const payload = JSON.stringify({ query: 'SELECT 1 as conn_test', params: [] });
+    const out = execFileSync('curl', [
+      '-s', '-X', 'POST', httpUrl,
+      '-H', 'Content-Type: application/json',
+      '-H', `Neon-Connection-String: ${DATABASE_URL}`,
+      '--data-binary', payload
+    ], { encoding: 'utf8', timeout: 4000 });
+    if (out && out.includes('conn_test')) {
+      usePostgres = true;
+    }
   } catch (_) {
-    usePostgres = false;
+    // Secondary probe fallback via node child process
+    const code = `
+      const { Pool } = require('pg');
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 3000 });
+      pool.query('SELECT 1').then(() => { process.exit(0); }).catch(() => { process.exit(1); });
+    `;
+    try {
+      execFileSync(process.execPath, ['-e', code], {
+        env: { ...process.env, DATABASE_URL },
+        encoding: 'utf8',
+        timeout: 4000,
+      });
+      usePostgres = true;
+    } catch (e2) {
+      usePostgres = false;
+    }
   }
 }
 
@@ -48,6 +65,31 @@ if (usePostgres) {
 
   const runPgQuerySync = (sql, params = []) => {
     const converted = convertSql(sql);
+
+    // Method 1: Ultra-fast HTTP REST query via curl (ideal for Vercel / serverless Lambda)
+    if (DATABASE_URL && DATABASE_URL.includes('@')) {
+      try {
+        const u = new URL(DATABASE_URL);
+        const httpUrl = `https://${u.hostname}/sql`;
+        const payload = JSON.stringify({ query: converted, params });
+        const out = execFileSync('curl', [
+          '-s', '-X', 'POST', httpUrl,
+          '-H', 'Content-Type: application/json',
+          '-H', `Neon-Connection-String: ${DATABASE_URL}`,
+          '--data-binary', payload
+        ], { encoding: 'utf8', timeout: 5000 });
+
+        if (out && out.trim()) {
+          const parsed = JSON.parse(out.trim());
+          if (parsed.rows) return parsed.rows;
+          if (parsed.message) console.error('Neon HTTP SQL Error:', parsed.message);
+        }
+      } catch (e) {
+        // Fallback to Method 2 below if curl fails
+      }
+    }
+
+    // Method 2: Node pg query fallback
     const code = `
       const { Pool } = require('pg');
       const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -59,6 +101,7 @@ if (usePostgres) {
       const out = execFileSync(process.execPath, ['-e', code], {
         env: { ...process.env, DATABASE_URL },
         encoding: 'utf8',
+        timeout: 5000,
       });
       return JSON.parse(out.trim() || '[]');
     } catch (e) {
@@ -100,9 +143,13 @@ if (usePostgres) {
 } else {
   // --- SQLite Mode (Local / Fallback) ---
   const { DatabaseSync } = require('node:sqlite');
-  const DATA_DIR = path.join(__dirname, '..', 'data');
+  const DATA_DIR = isVercel
+    ? '/tmp/data'
+    : (process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '..', 'data'));
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'konfident.db');
+  const DB_PATH = isVercel
+    ? path.join(DATA_DIR, 'konfident.db')
+    : (process.env.DB_PATH || path.join(DATA_DIR, 'konfident.db'));
   const sqliteDb = new DatabaseSync(DB_PATH);
 
   sqliteDb.exec('PRAGMA foreign_keys = ON');
