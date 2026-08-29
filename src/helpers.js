@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function fmtDate(ymd) {
@@ -55,32 +56,28 @@ function isPast(slot) {
 
 function generateMeetingLink(type = 'interview') {
   const cleanType = String(type).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const id = Math.random().toString(36).substring(2, 8);
+  const prefix = cleanType ? cleanType.charAt(0).toUpperCase() + cleanType.slice(1) : 'Interview';
+  const id = crypto.randomBytes(4).toString('hex');
   const time = Date.now().toString(36);
-  return `https://meet.jit.si/konfident-${cleanType || 'mock'}-${time}-${id}`;
+  return `https://meet.jit.si/Konfident-${prefix}-${time}-${id}`;
 }
 
 function linkify(str) {
   if (!str) return '';
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  const parts = str.split(urlRegex);
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      const url = escapeHtml(part);
-      let label = `${url} ↗`;
-      if (url.includes('calendar.google.com') || url.includes('appointments/schedules')) {
-        label = 'Google Calendar Appointment ↗';
-      } else if (url.includes('meet.google.com')) {
-        label = 'Google Meet ↗';
-      } else if (url.includes('meet.jit.si') || url.includes('meet.konfident')) {
-        label = 'Join Video Meeting ↗';
-      } else if (url.includes('zoom.us')) {
-        label = 'Zoom Meeting ↗';
-      }
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
-    } else {
-      return escapeHtml(part);
+  const safe = escapeHtml(str);
+  const urlRegex = /(https?:\/\/[^\s<&"']+)/g;
+  return safe.replace(urlRegex, (url) => {
+    let label = `${url} ↗`;
+    if (url.includes('calendar.google.com') || url.includes('appointments/schedules')) {
+      label = 'Google Calendar Appointment ↗';
+    } else if (url.includes('meet.google.com')) {
+      label = 'Google Meet ↗';
+    } else if (url.includes('meet.jit.si') || url.includes('meet.konfident')) {
+      label = 'Join Video Meeting ↗';
+    } else if (url.includes('zoom.us')) {
+      label = 'Zoom Meeting ↗';
     }
-  }).join('');
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
+  });
 }
 module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify, escapeHtml, generateMeetingLink };

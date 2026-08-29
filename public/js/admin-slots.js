@@ -32,6 +32,7 @@
     var loc = document.querySelector('input[name="location"]');
     var id = Math.random().toString(36).substring(2, 8);
     var time = Date.now().toString(36);
-    if (loc) loc.value = 'https://meet.jit.si/konfident-' + type + '-' + time + '-' + id;
+    var prefix = type.charAt(0).toUpperCase() + type.slice(1);
+    if (loc) loc.value = 'https://meet.jit.si/Konfident-' + prefix + '-' + time + '-' + id;
   };
 })();

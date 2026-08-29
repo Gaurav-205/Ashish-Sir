@@ -168,7 +168,7 @@ function mentorsList(type) {
 
 function mentorsWithOpenSlots() {
   return db.prepare(`
-    SELECT m.id, m.name, m.email, m.phone, m.can_technical, m.can_hr, m.active,
+    SELECT m.id, m.name, m.email, m.can_technical, m.can_hr, m.active,
       (SELECT COUNT(*) FROM slots s
         WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'technical'
           AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS tech_open_slots,

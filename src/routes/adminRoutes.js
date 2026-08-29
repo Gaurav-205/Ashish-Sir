@@ -92,10 +92,14 @@ router.post('/students/:id/update', validateId('id'), (req, res) => {
     flash(req, 'err', 'Name is required.');
     return res.redirect('/admin/students/' + req.params.id);
   }
+  const isActive = active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
     .run(name.trim(), roll_no || null, branch || null, phone || null, resume_url || null,
-         active ? 1 : 0, Number(req.params.id));
+         isActive, Number(req.params.id));
+  if (!isActive) {
+    invalidateUserSessions(req.params.id);
+  }
   flash(req, 'ok', 'Student updated.');
   res.redirect('/admin/students/' + req.params.id);
 });
@@ -157,11 +161,15 @@ router.post('/mentors/:id/update', validateId('id'), (req, res) => {
     flash(req, 'err', 'Name is required.');
     return res.redirect('/admin/mentors');
   }
+  const isActive = req.body.active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, phone=?, can_technical=?, can_hr=?, active=?
               WHERE id=? AND role='mentor'`)
     .run(name, req.body.phone || null,
          req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0,
-         req.body.active ? 1 : 0, Number(req.params.id));
+         isActive, Number(req.params.id));
+  if (!isActive) {
+    invalidateUserSessions(req.params.id);
+  }
   flash(req, 'ok', 'Mentor updated.');
   res.redirect('/admin/mentors');
 });
@@ -209,9 +217,11 @@ router.get('/slots', (req, res) => {
       LEFT JOIN users st ON st.id = i.student_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY s.slot_date, s.start_time`).all(...args);
+  const students = db.prepare("SELECT id, name, roll_no, email FROM users WHERE role='student' AND active=1 ORDER BY name").all();
   res.render('admin/slots', {
     title: 'Interview slots', slots, filter,
     techMentors: q.mentorsList('technical'), hrMentors: q.mentorsList('hr'),
+    students,
     defaultDate: h.addDays(h.today(), 1),
   });
 });
@@ -377,6 +387,71 @@ router.post('/slots/:id/release', validateId('id'), async (req, res) => {
   } catch (e) {
     try { db.exec('ROLLBACK'); } catch (_) {}
     flash(req, 'err', 'Could not release slot: ' + e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/:id/allot', validateId('id'), async (req, res) => {
+  const slotId = Number(req.params.id);
+  const studentId = Number(req.body.student_id);
+  if (!studentId || isNaN(studentId)) {
+    flash(req, 'err', 'Please select a student to allot this slot to.');
+    return res.redirect('/admin/slots');
+  }
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    const slot = db.prepare(`SELECT s.*, m.active AS mentor_active, m.name AS mentor_name,
+                             m.email AS mentor_email, m.google_calendar_enabled AS mentor_cal,
+                             m.google_access_token AS mentor_token, m.google_refresh_token AS mentor_ref,
+                             m.google_token_expiry AS mentor_exp
+                             FROM slots s
+                             JOIN users m ON m.id = s.mentor_id WHERE s.id = ?`).get(slotId);
+    if (!slot) throw new Error('That slot does not exist.');
+    if (slot.status !== 'open') throw new Error('This slot is already booked or cancelled.');
+    if (!slot.mentor_active) throw new Error('The assigned mentor is inactive.');
+    if (h.isPast(slot)) throw new Error('Cannot allot a past slot.');
+
+    const student = db.prepare(`SELECT id, name, email, role, active,
+                                google_calendar_enabled, google_access_token,
+                                google_refresh_token, google_token_expiry
+                                FROM users WHERE id = ? AND role = 'student'`).get(studentId);
+    if (!student) throw new Error('Student not found.');
+    if (!student.active) throw new Error('This student account is inactive.');
+
+    const existing = db.prepare(`SELECT id FROM interviews
+                                 WHERE student_id = ? AND type = ? AND status <> 'cancelled'`).get(studentId, slot.type);
+    if (existing) throw new Error(`${student.name} already has an active ${h.titleCase(slot.type)} interview.`);
+
+    // check clash for student at that date/time
+    const clash = db.prepare(`
+      SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
+       WHERE i.student_id = ? AND i.status <> 'cancelled'
+         AND s2.slot_date = ? AND s2.start_time < ? AND s2.end_time > ?`)
+      .get(studentId, slot.slot_date, slot.end_time, slot.start_time);
+    if (clash) throw new Error(`${student.name} already has another interview at that date and time.`);
+
+    const insert = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
+                               VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
+    db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
+    db.exec('COMMIT');
+
+    const mentor = {
+      id: slot.mentor_id,
+      name: slot.mentor_name,
+      email: slot.mentor_email,
+      google_calendar_enabled: slot.mentor_cal,
+      google_access_token: slot.mentor_token,
+      google_refresh_token: slot.mentor_ref,
+      google_token_expiry: slot.mentor_exp,
+    };
+    google.syncCalendarEvent({ student, mentor, slot, interviewId: insert.lastInsertRowid }).catch(() => {});
+
+    logAudit(req, 'ADMIN_ALLOT_SLOT', { slot_id: slot.id, student_id: student.id, type: slot.type });
+    flash(req, 'ok', `Slot successfully allotted to ${student.name} for ${h.fmtSlot(slot)}.`);
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not allot slot: ' + e.message);
   }
   res.redirect('/admin/slots');
 });

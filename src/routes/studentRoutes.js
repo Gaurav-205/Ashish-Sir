@@ -58,7 +58,7 @@ router.get('/slots', (req, res) => {
   }
 
   const slots = db.prepare(`
-    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email, m.phone AS mentor_phone
+    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email
       FROM slots s JOIN users m ON m.id = s.mentor_id
      WHERE ${where.join(' AND ')}
      ORDER BY s.slot_date, s.start_time`).all(...args);
@@ -102,7 +102,7 @@ router.get('/api/slots/available', (req, res) => {
   }
 
   const slots = db.prepare(`
-    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email, m.phone AS mentor_phone
+    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email
       FROM slots s JOIN users m ON m.id = s.mentor_id
      WHERE ${where.join(' AND ')}
      ORDER BY s.slot_date, s.start_time`).all(...args);
@@ -193,6 +193,8 @@ router.post('/cancel/:id', validateId('id'), async (req, res) => {
     flash(req, 'err', 'Booking not found.');
   } else if (iv.status !== 'booked') {
     flash(req, 'err', 'Only upcoming interviews can be cancelled.');
+  } else if (iv.attendance !== 'pending') {
+    flash(req, 'err', 'Cannot cancel an interview once attendance has been recorded.');
   } else {
     const slot = db.prepare(`SELECT * FROM slots WHERE id=?`).get(iv.slot_id);
     if (slot && h.isPast(slot)) {

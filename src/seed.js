@@ -16,14 +16,29 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const h = require('./helpers');
 
-const mode = process.env.SEED_MODE || (process.env.DB_PATH && process.env.DB_PATH.includes('test.db') ? 'test' : 'dev');
+const isCleanArg = process.argv.includes('--clean');
+const isEmptyArg = process.argv.includes('--empty');
+const isDevArg = process.argv.includes('--dev');
+
+let mode = 'dev';
+if (isEmptyArg || process.env.SEED_MODE === 'empty') {
+  mode = 'empty';
+} else if (isCleanArg || process.env.SEED_MODE === 'clean') {
+  mode = 'clean';
+} else if (process.env.DB_PATH && process.env.DB_PATH.includes('test.db')) {
+  mode = 'test';
+} else if (process.env.SEED_MODE) {
+  mode = process.env.SEED_MODE;
+}
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const adminEmail = process.env.ADMIN_EMAIL || 'admin@konfident.in';
 let adminPassword = process.env.ADMIN_PASSWORD;
 let isGenerated = false;
 if (!adminPassword) {
-  if (mode === 'test') {
+  if (mode === 'test' || mode === 'dev') {
     adminPassword = 'pass123';
   } else {
     adminPassword = crypto.randomBytes(12).toString('base64url');
@@ -34,15 +49,28 @@ const adminName = process.env.ADMIN_NAME || 'Platform Administrator';
 const PW = bcrypt.hashSync(adminPassword, 10);
 
 // Clear existing tables
-db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users; DELETE FROM audit_logs;
+db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users; DELETE FROM audit_logs; DELETE FROM settings;
          DELETE FROM sqlite_sequence WHERE name IN ('users','slots','interviews','evaluations','audit_logs');`);
+
+// Clear session store if exists
+try {
+  const sessionsDbPath = path.join(__dirname, '..', 'data', 'sessions.db');
+  if (fs.existsSync(sessionsDbPath)) {
+    const { DatabaseSync } = require('node:sqlite');
+    const sdb = new DatabaseSync(sessionsDbPath);
+    sdb.exec('DELETE FROM sessions;');
+    sdb.close();
+  }
+} catch (_) {}
 
 const addUser = db.prepare(`INSERT INTO users
   (name,email,password_hash,role,phone,roll_no,branch,resume_url,can_technical,can_hr)
   VALUES (?,?,?,?,?,?,?,?,?,?)`);
 
-// 1. Root Admin Account
-addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, 0, 0);
+// 1. Root Admin Account (created in clean, dev, and test modes; omitted in empty mode)
+if (mode !== 'empty') {
+  addUser.run(adminName, adminEmail.trim().toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, 0, 0);
+}
 
 if (mode === 'test') {
   // Test suite fixture
@@ -80,21 +108,25 @@ if (mode === 'test') {
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                               VALUES (?,?,?,?,?,?,?)`);
   const start = h.addDays(h.today(), -2);
-  const times = ['10:00', '10:30', '11:00', '11:30', '14:00', '14:30'];
+  const techTimes = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30'];
+  const hrTimes = ['14:00', '14:30', '15:00', '15:30', '16:00', '16:30'];
   const fmt = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
   for (let d = 0; d < 7; d++) {
     const date = h.addDays(start, d);
     for (const m of mentors) {
-      for (const t of times) {
-        const [hh, mm] = t.split(':').map(Number);
-        const s = hh * 60 + mm;
-        if (m.can_technical) {
-          try { addSlot.run(m.id, 'technical', date, t, fmt(s + 30), 'Online', 'https://meet.konfident.in/tech-' + m.id); } catch (_) {}
+      if (m.can_technical) {
+        for (const t of techTimes) {
+          const [hh, mm] = t.split(':').map(Number);
+          const s = hh * 60 + mm;
+          try { addSlot.run(m.id, 'technical', date, t, fmt(s + 30), 'Online', h.generateMeetingLink('technical')); } catch (_) {}
         }
-        if (m.can_hr) {
-          const s2 = s + 15;
-          try { addSlot.run(m.id, 'hr', date, fmt(s2), fmt(s2 + 30), 'Online', 'https://meet.konfident.in/hr-' + m.id); } catch (_) {}
+      }
+      if (m.can_hr) {
+        for (const t of hrTimes) {
+          const [hh, mm] = t.split(':').map(Number);
+          const s = hh * 60 + mm;
+          try { addSlot.run(m.id, 'hr', date, t, fmt(s + 30), 'Online', h.generateMeetingLink('hr')); } catch (_) {}
         }
       }
     }
@@ -110,15 +142,24 @@ if (mode === 'test') {
     const when = past
       ? `datetime(slot_date || ' ' || end_time) < datetime('now','localtime')`
       : `datetime(slot_date || ' ' || start_time) > datetime('now','localtime')`;
-    const slot = db.prepare(`SELECT * FROM slots WHERE type=? AND status='open' AND ${when}
-        ORDER BY slot_date ${past ? 'DESC' : 'ASC'}, start_time LIMIT 1`).get(type);
-    if (!slot) return null;
-    db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
-    const status = past ? 'completed' : 'booked';
-    const attendance = past ? 'attended' : 'pending';
-    const completedAt = past ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
-    addInterview.run(student.id, slot.mentor_id, slot.id, type, status, attendance, completedAt, completedAt);
-    return db.prepare('SELECT * FROM interviews WHERE slot_id=?').get(slot.id);
+    const slots = db.prepare(`SELECT * FROM slots WHERE type=? AND status='open' AND ${when}
+        ORDER BY slot_date ${past ? 'DESC' : 'ASC'}, start_time ASC`).all(type);
+    for (const slot of slots) {
+      const clash = db.prepare(`
+        SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
+         WHERE i.student_id = ? AND i.status <> 'cancelled'
+           AND s2.slot_date = ? AND s2.start_time < ? AND s2.end_time > ?`)
+        .get(student.id, slot.slot_date, slot.end_time, slot.start_time);
+      if (!clash) {
+        db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
+        const status = past ? 'completed' : 'booked';
+        const attendance = past ? 'attended' : 'pending';
+        const completedAt = past ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+        addInterview.run(student.id, slot.mentor_id, slot.id, type, status, attendance, completedAt, completedAt);
+        return db.prepare('SELECT * FROM interviews WHERE slot_id=?').get(slot.id);
+      }
+    }
+    return null;
   }
 
   const rnd = (min, max, i) => min + ((i * 7 + 3) % (max - min + 1));
@@ -178,22 +219,22 @@ if (mode === 'test') {
 
   // Technical slots
   if (techMentor) {
-    addSlot.run(techMentor.id, 'technical', tomorrow, '10:00', '10:30', 'Online', 'https://meet.google.com/tech-session-1');
-    addSlot.run(techMentor.id, 'technical', tomorrow, '10:30', '11:00', 'Online', 'https://meet.google.com/tech-session-2');
-    addSlot.run(techMentor.id, 'technical', dayAfter, '14:00', '14:30', 'Online', 'https://meet.google.com/tech-session-3');
+    addSlot.run(techMentor.id, 'technical', tomorrow, '10:00', '10:30', 'Online', h.generateMeetingLink('technical'));
+    addSlot.run(techMentor.id, 'technical', tomorrow, '10:30', '11:00', 'Online', h.generateMeetingLink('technical'));
+    addSlot.run(techMentor.id, 'technical', dayAfter, '14:00', '14:30', 'Online', h.generateMeetingLink('technical'));
   }
 
   // HR slots
   if (hrMentor) {
-    addSlot.run(hrMentor.id, 'hr', tomorrow, '11:30', '12:00', 'Online', 'https://meet.google.com/hr-session-1');
-    addSlot.run(hrMentor.id, 'hr', tomorrow, '12:00', '12:30', 'Online', 'https://meet.google.com/hr-session-2');
-    addSlot.run(hrMentor.id, 'hr', dayAfter, '15:00', '15:30', 'Online', 'https://meet.google.com/hr-session-3');
+    addSlot.run(hrMentor.id, 'hr', tomorrow, '11:30', '12:00', 'Online', h.generateMeetingLink('hr'));
+    addSlot.run(hrMentor.id, 'hr', tomorrow, '12:00', '12:30', 'Online', h.generateMeetingLink('hr'));
+    addSlot.run(hrMentor.id, 'hr', dayAfter, '15:00', '15:30', 'Online', h.generateMeetingLink('hr'));
   }
 
   // Dual slots
   if (dualMentor) {
-    addSlot.run(dualMentor.id, 'technical', day3, '10:00', '10:30', 'Online', 'https://meet.google.com/dual-tech');
-    addSlot.run(dualMentor.id, 'hr', day3, '11:00', '11:30', 'Online', 'https://meet.google.com/dual-hr');
+    addSlot.run(dualMentor.id, 'technical', day3, '10:00', '10:30', 'Online', h.generateMeetingLink('technical'));
+    addSlot.run(dualMentor.id, 'hr', day3, '11:00', '11:30', 'Online', h.generateMeetingLink('hr'));
   }
 }
 
@@ -245,6 +286,21 @@ if (mode === 'dev') {
   Slots:       0
   Interviews:  0
   Evaluations: 0
+  =============================================================
+  `);
+} else if (mode === 'empty') {
+  console.log(`
+  =============================================================
+  [Database Emptied — All Records Cleared]
+  =============================================================
+  Users:       0
+  Students:    0
+  Mentors:     0
+  Slots:       0
+  Interviews:  0
+  Evaluations: 0
+  Audit Logs:  0
+  Sessions:    Cleared
   =============================================================
   `);
 }

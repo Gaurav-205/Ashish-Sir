@@ -284,6 +284,30 @@ const login = async (who, email) => {
      && db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(rel.id).c === 0,
      'admin releases a booking and the slot reopens');
 
+  // Admin directly allots an open slot to a student
+  const studentToAllot = db.prepare(`SELECT u.* FROM users u WHERE u.role='student'
+                                     AND (SELECT COUNT(*) FROM interviews i WHERE i.student_id=u.id AND i.type='technical' AND i.status<>'cancelled') = 0
+                                     LIMIT 1`).get();
+  if (studentToAllot) {
+    const allotSlot = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
+                                  AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime') LIMIT 1`).get();
+    if (allotSlot) {
+      await post('admin', '/admin/slots/' + allotSlot.id + '/allot', { student_id: String(studentToAllot.id) });
+      ok(db.prepare('SELECT status FROM slots WHERE id=?').get(allotSlot.id).status === 'booked'
+         && db.prepare(`SELECT student_id FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(allotSlot.id).student_id === studentToAllot.id,
+         'admin can allot an open slot directly to a student');
+
+      // Duplicate allotment of same type to same student is rejected
+      const anotherOpen = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
+                                      AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime') LIMIT 1`).get();
+      if (anotherOpen) {
+        await post('admin', '/admin/slots/' + anotherOpen.id + '/allot', { student_id: String(studentToAllot.id) });
+        ok(db.prepare('SELECT status FROM slots WHERE id=?').get(anotherOpen.id).status === 'open',
+           'duplicate allotment of same interview type to student is rejected');
+      }
+    }
+  }
+
   // completed interviews are protected against cancel and reschedule
   const doneSlot = db.prepare(`SELECT s.id FROM slots s JOIN interviews i ON i.slot_id=s.id
                                WHERE i.status='completed' LIMIT 1`).get();
