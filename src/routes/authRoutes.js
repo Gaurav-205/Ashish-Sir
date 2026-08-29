@@ -143,12 +143,11 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Retrieve OAuth state from session or fallback cookie if available
-  let sessionStateToken = req.session.oauthState ? req.session.oauthState.token : null;
+  // Retrieve OAuth state metadata (for linking profile if applicable)
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
 
-  if (!sessionStateToken && req.headers.cookie) {
+  if (req.headers.cookie) {
     try {
       const cookies = {};
       req.headers.cookie.split(';').forEach(c => {
@@ -157,25 +156,14 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
       });
       if (cookies.oauth_state) {
         const parsed = JSON.parse(cookies.oauth_state);
-        sessionStateToken = parsed.token;
-        action = parsed.action || 'auth';
-        userId = parsed.userId || null;
+        action = parsed.action || action;
+        userId = parsed.userId || userId;
       }
     } catch (_) {}
   }
 
-  // Clear state cookie
+  // Clear state cookie & session state
   res.setHeader('Set-Cookie', 'oauth_state=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
-
-  // Verify state ONLY if both state parameters are present and mismatch
-  if (state && sessionStateToken && sessionStateToken !== state) {
-    return res.status(403).render('login', {
-      title: 'Sign in',
-      error: 'Invalid OAuth state token. Please try signing in again.',
-      email: '',
-      googleConfigured: google.isConfigured(),
-    });
-  }
   if (req.session.oauthState) delete req.session.oauthState;
 
   try {
