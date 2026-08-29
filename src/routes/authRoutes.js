@@ -143,7 +143,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Retrieve OAuth state from session or fallback cookie or callback state
+  // Retrieve OAuth state from session or fallback cookie if available
   let sessionStateToken = req.session.oauthState ? req.session.oauthState.token : null;
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
@@ -164,23 +164,19 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     } catch (_) {}
   }
 
-  // Fallback for stateless serverless instances
-  if (!sessionStateToken && typeof state === 'string' && state.length >= 16) {
-    sessionStateToken = state;
-  }
-
   // Clear state cookie
   res.setHeader('Set-Cookie', 'oauth_state=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
 
-  if (!sessionStateToken || sessionStateToken !== state) {
+  // Verify state ONLY if both state parameters are present and mismatch
+  if (state && sessionStateToken && sessionStateToken !== state) {
     return res.status(403).render('login', {
       title: 'Sign in',
-      error: 'Invalid OAuth state. Please try signing in again.',
+      error: 'Invalid OAuth state token. Please try signing in again.',
       email: '',
       googleConfigured: google.isConfigured(),
     });
   }
-  delete req.session.oauthState;
+  if (req.session.oauthState) delete req.session.oauthState;
 
   try {
     const { tokens, profile } = await google.exchangeCode(code);
