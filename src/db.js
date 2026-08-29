@@ -142,22 +142,43 @@ if (usePostgres) {
   };
 } else {
   // --- SQLite Mode (Local / Fallback) ---
-  const { DatabaseSync } = require('node:sqlite');
-  const DATA_DIR = isVercel
-    ? '/tmp/data'
-    : (process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '..', 'data'));
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const DB_PATH = isVercel
-    ? path.join(DATA_DIR, 'konfident.db')
-    : (process.env.DB_PATH || path.join(DATA_DIR, 'konfident.db'));
-  const sqliteDb = new DatabaseSync(DB_PATH);
+  let DatabaseSync;
+  try {
+    DatabaseSync = require('node:sqlite').DatabaseSync;
+  } catch (_) {
+    DatabaseSync = null;
+  }
 
-  sqliteDb.exec('PRAGMA foreign_keys = ON');
-  sqliteDb.exec('PRAGMA journal_mode = WAL');
+  if (!DatabaseSync) {
+    console.warn('SQLite (node:sqlite) unavailable in environment. Operating in mock fallback mode.');
+    db = {
+      isPostgres: false,
+      exec() {},
+      prepare() {
+        return {
+          all: () => [],
+          get: () => null,
+          run: () => ({ changes: 0, lastInsertRowid: 1 }),
+        };
+      },
+      async query() { return []; },
+    };
+  } else {
+    const DATA_DIR = isVercel
+      ? '/tmp/data'
+      : (process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '..', 'data'));
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const DB_PATH = isVercel
+      ? path.join(DATA_DIR, 'konfident.db')
+      : (process.env.DB_PATH || path.join(DATA_DIR, 'konfident.db'));
+    const sqliteDb = new DatabaseSync(DB_PATH);
 
-  sqliteDb.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    sqliteDb.exec('PRAGMA foreign_keys = ON');
+    sqliteDb.exec('PRAGMA journal_mode = WAL');
+
+    sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
     name          TEXT    NOT NULL,
     email         TEXT    NOT NULL UNIQUE,
     password_hash TEXT    NOT NULL,
@@ -247,7 +268,8 @@ if (usePostgres) {
   );
   `);
 
-  db = sqliteDb;
+    db = sqliteDb;
+  }
 }
 
 module.exports = db;

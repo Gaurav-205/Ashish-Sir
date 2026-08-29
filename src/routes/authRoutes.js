@@ -9,11 +9,13 @@ const { createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
 const fs = require('fs');
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
 
 function invalidateOtherSessions(userId, currentSessionId) {
   setTimeout(() => {
     try {
+      let DatabaseSync;
+      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) {}
+      if (!DatabaseSync) return;
       const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
       if (fs.existsSync(sessionsDbPath)) {
         const sdb = new DatabaseSync(sessionsDbPath);

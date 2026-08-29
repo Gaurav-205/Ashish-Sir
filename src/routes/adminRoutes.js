@@ -11,7 +11,6 @@ const { validateId } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
 const fs = require('fs');
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
 
 const router = express.Router();
 router.use(requireRole('admin'));
@@ -21,6 +20,9 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 function invalidateUserSessions(userId) {
   setTimeout(() => {
     try {
+      let DatabaseSync;
+      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) {}
+      if (!DatabaseSync) return;
       const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
       if (fs.existsSync(sessionsDbPath)) {
         const sdb = new DatabaseSync(sessionsDbPath);

@@ -3,6 +3,7 @@ if (typeof process.loadEnvFile === 'function') {
   try { process.loadEnvFile(); } catch (_) {}
 }
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
@@ -29,8 +30,18 @@ if (!sessionSecret && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
+const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const sessionDir = isVercel ? '/tmp/data' : path.join(__dirname, '..', 'data');
+if (!fs.existsSync(sessionDir)) {
+  try { fs.mkdirSync(sessionDir, { recursive: true }); } catch (_) {}
+}
+
+const sessionStore = isVercel
+  ? new session.MemoryStore()
+  : new SQLiteStore({ db: 'sessions.db', dir: sessionDir });
+
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, '..', 'data') }),
+  store: sessionStore,
   secret: sessionSecret || 'konfident-interview-2025-dev-secret',
   resave: false,
   saveUninitialized: false,
