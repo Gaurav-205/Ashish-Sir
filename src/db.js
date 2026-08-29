@@ -19,8 +19,8 @@ function convertSql(sql) {
   return converted;
 }
 
-// On Vercel or when DATABASE_URL is provided, default directly to Postgres mode
-const usePostgres = Boolean(DATABASE_URL && !DATABASE_URL.includes('YOUR_PASSWORD'));
+// On Vercel or when DATABASE_URL is provided (and no DB_PATH override is set), default to Postgres mode
+const usePostgres = Boolean(DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWORD'));
 
 if (usePostgres) {
   // --- Neon Postgres Mode ---

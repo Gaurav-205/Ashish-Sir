@@ -4,7 +4,16 @@ const h = require('../helpers');
 
 const getClientId = () => (process.env.GOOGLE_CLIENT_ID || '').trim();
 const getClientSecret = () => (process.env.GOOGLE_CLIENT_SECRET || '').trim();
-const getRedirectUri = () => (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/callback/google').trim();
+const getRedirectUri = () => {
+  if (process.env.GOOGLE_REDIRECT_URI) {
+    return process.env.GOOGLE_REDIRECT_URI.trim();
+  }
+  if (process.env.VERCEL_URL) {
+    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, '');
+    return `https://${host}/api/auth/callback/google`;
+  }
+  return 'http://localhost:3000/api/auth/callback/google';
+};
 
 const SCOPES = [
   'openid',
