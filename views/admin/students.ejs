@@ -18,7 +18,8 @@
         <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Aisha Sharma" required></div>
         <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="aisha@college.edu" required></div>
         <div class="field"><label>Initial Password *</label><input type="password" name="password" placeholder="At least 6 characters" required minlength="6"></div>
-        <div class="field"><label>Roll Number</label><input name="roll_no" placeholder="KON2025001"></div>
+        <div class="field"><label>Roll Number</label><input name="roll_no" placeholder="KAL116001"></div>
+        <div class="field"><label>Squad</label><input name="squad" placeholder="115 or 116"></div>
         <div class="field"><label>Branch / Major</label><input name="branch" placeholder="CSE, IT, ECE"></div>
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
         <div class="field"><label>Resume Link</label><input type="url" name="resume_url" placeholder="https://drive.google.com/…"></div>
@@ -34,13 +35,20 @@
   </div>
   <div class="card-body tight">
     <div class="table-scroll"><table>
-      <thead><tr><th>Roll No</th><th>Candidate</th><th>Technical Interview</th><th>HR Interview</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
+      <thead><tr><th>Roll No</th><th>Candidate</th><th>Squad</th><th>Technical Interview</th><th>HR Interview</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
       <tbody>
       <% summaries.forEach(function(s){ %>
         <tr>
           <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
           <td><strong><%= s.student.name %></strong><br><span class="faint"><%= s.student.email %><%= s.student.branch ? ' · ' + s.student.branch : '' %></span>
             <% if (!s.student.active) { %> <span class="pill p-cancelled">inactive</span><% } %></td>
+          <td>
+            <% if (s.student.squad) { %>
+              <span class="pill p-<%= s.student.squad === '116' ? 'technical' : 'hr' %>">Squad <%= s.student.squad %></span>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
           <td><% if (!s.technical) { %><span class="pill p-cancelled">not booked</span>
               <% } else { %><span class="pill p-<%= s.technical.status %>"><%= s.technical.status %></span>
               <div class="faint"><%= h.fmtDate(s.technical.slot_date) %> · <%= s.technical.mentor_name %><% if (s.technical.location) { %><br><%- h.linkify ? h.linkify(s.technical.location) : s.technical.location %><% } %></div><% } %></td>
@@ -52,7 +60,7 @@
           <td class="num"><a class="btn sm" href="/admin/students/<%= s.student.id %>">View record →</a></td>
         </tr>
       <% }); %>
-      <% if (!summaries.length) { %><tr><td colspan="6" class="empty">No students registered yet.</td></tr><% } %>
+      <% if (!summaries.length) { %><tr><td colspan="7" class="empty">No students registered yet.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>

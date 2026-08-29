@@ -53,7 +53,7 @@
         <div class="field"><label>Interview domain *</label>
           <select name="type" required>
             <% if (mentor && mentor.can_technical) { %><option value="technical">Technical</option><% } %>
-            <% if (mentor && mentor.can_hr) { %><option value="hr">HR (Non-Technical)</option><% } %>
+            <% if (mentor && mentor.can_hr) { %><option value="hr">HR</option><% } %>
             <% if (mentor && !mentor.can_technical && !mentor.can_hr) { %><option value="technical">Technical</option><% } %>
           </select></div>
         <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" required></div>
@@ -86,7 +86,11 @@
         <tr>
           <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-          <td><strong><%= i.student_name %></strong><br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span></td>
+          <td>
+            <strong><%= i.student_name %></strong>
+            <% if (i.squad) { %> <span class="pill p-<%= i.squad === '116' ? 'technical' : 'hr' %>" style="font-size:10px;padding:2px 6px">Squad <%= i.squad %></span><% } %>
+            <br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span>
+          </td>
           <td class="faint"><%= i.mode %><% if (i.location) { %> · <%- h.linkify ? h.linkify(i.location) : i.location %><% } %></td>
           <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a></td>
         </tr>
@@ -109,7 +113,10 @@
         <tr>
           <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
-          <td><strong><%= i.student_name %></strong></td>
+          <td>
+            <strong><%= i.student_name %></strong>
+            <% if (i.squad) { %> <span class="pill p-<%= i.squad === '116' ? 'technical' : 'hr' %>" style="font-size:10px;padding:2px 6px">Squad <%= i.squad %></span><% } %>
+          </td>
           <td>
             <% if (i.attendance === 'attended') { %>
               <span class="pill p-completed">Attended</span>

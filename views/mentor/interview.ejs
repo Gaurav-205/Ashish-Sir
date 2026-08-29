@@ -21,9 +21,9 @@
       </div>
     </div>
     <div class="card-body">
-      <p><strong><%= iv.student_name %></strong><br>
+      <p><strong><%= iv.student_name %></strong><% if (iv.squad) { %> <span class="pill p-<%= iv.squad === '116' ? 'technical' : 'hr' %>" style="font-size:11px;margin-left:6px">Squad <%= iv.squad %></span><% } %><br>
         <span class="muted"><%= iv.student_email %></span><br>
-        <span class="muted"><%= iv.roll_no || '—' %><%= iv.branch ? ' · ' + iv.branch : '' %></span></p>
+        <span class="muted"><%= iv.roll_no || '—' %><%= iv.squad ? ' · Squad ' + iv.squad : '' %><%= iv.branch ? ' · ' + iv.branch : '' %></span></p>
       <% if (iv.resume_url) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener">Open resume ↗</a></p>
       <% } else { %><p class="faint">No resume link on file.</p><% } %>
 

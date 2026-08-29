@@ -25,8 +25,8 @@
     <div class="card">
       <div class="card-head">
         <div style="display:flex;align-items:center;gap:8px">
-          <span class="pill p-<%= t %>"><%= t === 'hr' ? 'Non-Technical (HR)' : 'Technical' %></span>
-          <h2 style="margin:0"><%= t === 'hr' ? 'Non-Technical (HR)' : 'Technical' %> Interview (This Week)</h2>
+          <span class="pill p-<%= t %>"><%= t === 'hr' ? 'HR' : 'Technical' %></span>
+          <h2 style="margin:0"><%= t === 'hr' ? 'HR' : 'Technical' %> Interview (This Week)</h2>
         </div>
         <% if (iv && iv.eval_id) { %>
           <strong style="font-family:var(--font-display);font-size:16px"><%= iv.score %> / <%= RUBRIC[t].total %></strong>
@@ -90,7 +90,7 @@
           <div class="bar"><span style="width:<%= (s.techScore / RUBRIC.technical.total * 100).toFixed(0) %>%"></span></div>
         </div>
         <div>
-          <div class="l">Non-Technical (HR) Score</div>
+          <div class="l">HR Score</div>
           <div class="big-score"><%= s.hrScore %><small>/<%= RUBRIC.hr.total %></small></div>
           <div class="bar"><span style="width:<%= (s.hrScore / RUBRIC.hr.total * 100).toFixed(0) %>%"></span></div>
         </div>
@@ -132,7 +132,7 @@
         <% historyList.forEach(function(iv){ %>
           <tr>
             <td><%= h.fmtDate(iv.slot_date) %><br><span class="faint"><%= h.fmtTime(iv.start_time) %> – <%= h.fmtTime(iv.end_time) %></span></td>
-            <td><span class="pill p-<%= iv.type %>"><%= iv.type === 'hr' ? 'Non-Technical (HR)' : 'Technical' %></span></td>
+            <td><span class="pill p-<%= iv.type %>"><%= iv.type === 'hr' ? 'HR' : 'Technical' %></span></td>
             <td>
               <strong><%= iv.mentor_name %></strong>
               <% if (iv.location) { %><br><span class="faint"><%- h.linkify ? h.linkify(iv.location) : iv.location %></span><% } %>

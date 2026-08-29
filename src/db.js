@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   -- student-only fields
   roll_no       TEXT,
   branch        TEXT,
+  squad         TEXT,
   resume_url    TEXT,
   -- mentor-only fields: which interview types they can take
   can_technical INTEGER NOT NULL DEFAULT 0,
@@ -125,6 +126,7 @@ const migrations = [
   'ALTER TABLE interviews ADD COLUMN google_event_id TEXT',
   "ALTER TABLE interviews ADD COLUMN attendance TEXT NOT NULL DEFAULT 'pending'",
   'ALTER TABLE interviews ADD COLUMN attendance_marked_at TEXT',
+  'ALTER TABLE users ADD COLUMN squad TEXT',
 ];
 for (const m of migrations) {
   try { db.exec(m); } catch (_) {}

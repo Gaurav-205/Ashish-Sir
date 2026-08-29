@@ -35,6 +35,7 @@
       <thead><tr>
         <th>Roll No</th>
         <th>Student</th>
+        <th>Squad</th>
         <% RUBRIC.technical.criteria.forEach(function(c){ %><th class="num"><%= c.label %></th><% }); %>
         <th class="num">Tech /<%= RUBRIC.technical.total %></th>
         <% RUBRIC.hr.criteria.forEach(function(c){ %><th class="num"><%= c.label %></th><% }); %>
@@ -47,6 +48,13 @@
         <tr>
           <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
           <td><a href="/admin/students/<%= s.student.id %>"><strong><%= s.student.name %></strong></a><br><span class="faint"><%= s.student.email %></span></td>
+          <td>
+            <% if (s.student.squad) { %>
+              <span class="pill p-<%= s.student.squad === '116' ? 'technical' : 'hr' %>">Squad <%= s.student.squad %></span>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
           <% RUBRIC.technical.criteria.forEach(function(c){ %>
             <td class="num"><%= s.technical && s.technical.eval_id ? s.technical[c.key] : '—' %></td><% }); %>
           <td class="num"><strong style="font-family:var(--font-display)"><%= s.techScore == null ? '—' : s.techScore %></strong></td>
@@ -63,7 +71,7 @@
           </td>
         </tr>
       <% }); %>
-      <% if (!summaries.length) { %><tr><td colspan="11" class="empty">No student records found.</td></tr><% } %>
+      <% if (!summaries.length) { %><tr><td colspan="12" class="empty">No student records found.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>
