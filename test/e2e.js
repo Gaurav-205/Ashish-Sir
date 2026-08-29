@@ -244,6 +244,48 @@ const login = async (who, email) => {
   ok(sum.techScore === 24 && sum.hrScore === 17 && sum.total === 41 && sum.percent === 82,
      'summary maths: 24 + 17 = 41/50 (82%)');
 
+  section('Student Mentor Feedback');
+  // Attempt feedback without hr_relevant on HR interview
+  const badHrFb = await post('newstudent', '/student/feedback/' + hrIv.id, {
+    satisfaction: '5',
+    structured: '1'
+    // missing hr_relevant
+  });
+  ok(badHrFb.status === 302, 'HR interview feedback missing hr_relevant redirects back');
+  ok(!db.prepare('SELECT * FROM student_feedbacks WHERE interview_id=?').get(hrIv.id),
+     'HR interview feedback without hr_relevant is refused');
+
+  // Submit valid feedback for HR interview
+  await post('newstudent', '/student/feedback/' + hrIv.id, {
+    satisfaction: '5',
+    structured: '1',
+    hr_relevant: '1',
+    feedback_text: 'Great HR interview session!'
+  });
+  const hrFbRow = db.prepare('SELECT * FROM student_feedbacks WHERE interview_id=?').get(hrIv.id);
+  ok(hrFbRow && hrFbRow.satisfaction === 5 && hrFbRow.structured === 1 && hrFbRow.hr_relevant === 1,
+     'student submits valid feedback for HR interview');
+
+  // Submit valid feedback for Technical interview
+  await post('newstudent', '/student/feedback/' + techIv.id, {
+    satisfaction: '4',
+    structured: '1',
+    feedback_text: 'Very good technical discussion.'
+  });
+  const techFbRow = db.prepare('SELECT * FROM student_feedbacks WHERE interview_id=?').get(techIv.id);
+  ok(techFbRow && techFbRow.satisfaction === 4 && techFbRow.structured === 1 && techFbRow.hr_relevant === null,
+     'student submits valid feedback for Technical interview (hr_relevant is null)');
+
+  // Update existing feedback
+  await post('newstudent', '/student/feedback/' + techIv.id, {
+    satisfaction: '5',
+    structured: '1',
+    feedback_text: 'Updated: Excellent technical session!'
+  });
+  const updatedTechFbRow = db.prepare('SELECT * FROM student_feedbacks WHERE interview_id=?').get(techIv.id);
+  ok(updatedTechFbRow && updatedTechFbRow.satisfaction === 5 && updatedTechFbRow.feedback_text.includes('Updated'),
+     'student can update existing mentor feedback');
+
   section('Admin — monitoring, rescheduling and reports');
   const rep = await get('admin', '/admin/reports');
   ok(rep.body.includes('Test Student') && rep.body.includes('41'), 'report shows the student total');

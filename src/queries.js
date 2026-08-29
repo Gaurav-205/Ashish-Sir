@@ -7,12 +7,16 @@ const INTERVIEW_SELECT = `
          m.name AS mentor_name, m.email AS mentor_email,
          st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.squad, st.resume_url,
          e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
-         e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at
+         e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at,
+         sf.id AS student_feedback_id, sf.satisfaction AS feedback_satisfaction,
+         sf.structured AS feedback_structured, sf.hr_relevant AS feedback_hr_relevant,
+         sf.feedback_text AS feedback_comments, sf.submitted_at AS feedback_submitted_at
     FROM interviews i
     JOIN slots s ON s.id = i.slot_id
     JOIN users m ON m.id = i.mentor_id
     JOIN users st ON st.id = i.student_id
     LEFT JOIN evaluations e ON e.interview_id = i.id
+    LEFT JOIN student_feedbacks sf ON sf.interview_id = i.id
 `;
 
 function interviewsForStudent(studentId) {
@@ -78,19 +82,7 @@ function studentSummary(studentId) {
 function allStudentSummaries() {
   const students = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE role = 'student' ORDER BY name`).all();
   
-  const allIvs = db.prepare(`
-    SELECT i.*, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
-           m.name AS mentor_name, m.email AS mentor_email,
-           st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.squad, st.resume_url,
-           e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
-           e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at
-      FROM interviews i
-      JOIN slots s ON s.id = i.slot_id
-      JOIN users m ON m.id = i.mentor_id
-      JOIN users st ON st.id = i.student_id
-      LEFT JOIN evaluations e ON e.interview_id = i.id
-     WHERE i.status <> 'cancelled'
-  `).all();
+  const allIvs = db.prepare(`${INTERVIEW_SELECT} WHERE i.status <> 'cancelled'`).all();
 
   const ivsByStudent = {};
   for (const iv of allIvs) {

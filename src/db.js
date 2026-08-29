@@ -18,8 +18,27 @@ function convertSql(sql) {
   return converted;
 }
 
-// Use Neon Postgres unless DB_PATH is explicitly set for file-based tests or URL is a template placeholder
+let usePostgres = false;
 if (DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWORD')) {
+  // Test connection to Neon Postgres
+  const code = `
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 3000 });
+    pool.query('SELECT 1').then(() => { process.exit(0); }).catch(() => { process.exit(1); });
+  `;
+  try {
+    execFileSync(process.execPath, ['-e', code], {
+      env: { ...process.env, DATABASE_URL },
+      encoding: 'utf8',
+      timeout: 4000,
+    });
+    usePostgres = true;
+  } catch (_) {
+    usePostgres = false;
+  }
+}
+
+if (usePostgres) {
   // --- Neon Postgres Mode ---
   const { Pool } = require('pg');
   const pool = new Pool({
@@ -79,7 +98,7 @@ if (DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWOR
     },
   };
 } else {
-  // --- SQLite Mode (Local / Test Fallback) ---
+  // --- SQLite Mode (Local / Fallback) ---
   const { DatabaseSync } = require('node:sqlite');
   const DATA_DIR = path.join(__dirname, '..', 'data');
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -151,6 +170,18 @@ if (DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWOR
     hr_perf_marks   INTEGER,
     total          INTEGER NOT NULL,
     feedback       TEXT,
+    submitted_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS student_feedbacks (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    interview_id   INTEGER NOT NULL UNIQUE REFERENCES interviews(id) ON DELETE CASCADE,
+    student_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mentor_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    satisfaction   INTEGER NOT NULL CHECK (satisfaction BETWEEN 1 AND 5),
+    structured     INTEGER NOT NULL CHECK (structured IN (0, 1)),
+    hr_relevant    INTEGER CHECK (hr_relevant IN (0, 1)),
+    feedback_text  TEXT,
     submitted_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
 

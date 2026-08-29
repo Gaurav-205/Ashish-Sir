@@ -233,4 +233,60 @@ router.get('/results', (req, res) => {
   res.render('student/results', { title: 'My results', s });
 });
 
+router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
+  const interviewId = Number(req.params.interviewId);
+  const studentId = req.session.user.id;
+  const iv = db.prepare(`SELECT i.*, s.type FROM interviews i JOIN slots s ON s.id = i.slot_id WHERE i.id = ? AND i.student_id = ?`).get(interviewId, studentId);
+  if (!iv) {
+    flash(req, 'err', 'Interview not found.');
+    return res.redirect('/student');
+  }
+  if (iv.status !== 'completed' && iv.attendance !== 'attended') {
+    flash(req, 'err', 'Feedback can only be submitted for completed interviews.');
+    return res.redirect('/student');
+  }
+
+  const satisfaction = Number(req.body.satisfaction);
+  if (!Number.isInteger(satisfaction) || satisfaction < 1 || satisfaction > 5) {
+    flash(req, 'err', 'Please select an overall satisfaction rating from 1 to 5.');
+    return res.redirect(req.headers.referer || '/student/results');
+  }
+
+  const structured = Number(req.body.structured);
+  if (structured !== 0 && structured !== 1) {
+    flash(req, 'err', 'Please answer whether the interview felt structured and well organized.');
+    return res.redirect(req.headers.referer || '/student/results');
+  }
+
+  let hr_relevant = null;
+  if (iv.type === 'hr') {
+    hr_relevant = Number(req.body.hr_relevant);
+    if (hr_relevant !== 0 && hr_relevant !== 1) {
+      flash(req, 'err', 'Please answer whether the HR questions were relevant to placement/job preparation.');
+      return res.redirect(req.headers.referer || '/student/results');
+    }
+  }
+
+  const feedbackText = String(req.body.feedback_text || '').trim() || null;
+
+  try {
+    const existing = db.prepare('SELECT id FROM student_feedbacks WHERE interview_id = ?').get(interviewId);
+    if (existing) {
+      db.prepare(`UPDATE student_feedbacks SET satisfaction=?, structured=?, hr_relevant=?, feedback_text=?, submitted_at=datetime('now') WHERE interview_id=?`)
+        .run(satisfaction, structured, hr_relevant, feedbackText, interviewId);
+    } else {
+      db.prepare(`INSERT INTO student_feedbacks (interview_id, student_id, mentor_id, satisfaction, structured, hr_relevant, feedback_text) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(interviewId, studentId, iv.mentor_id, satisfaction, structured, hr_relevant, feedbackText);
+    }
+    logAudit(req, 'STUDENT_SUBMIT_FEEDBACK', { interview_id: interviewId, mentor_id: iv.mentor_id });
+    flash(req, 'ok', 'Thank you! Your feedback for the mentor has been submitted.');
+  } catch (err) {
+    console.error('Error saving student feedback:', err);
+    flash(req, 'err', 'Could not save feedback: ' + err.message);
+  }
+
+  return res.redirect(req.headers.referer || '/student/results');
+});
+
 module.exports = router;
+

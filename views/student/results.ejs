@@ -153,9 +153,9 @@
               <% } %>
             </td>
           </tr>
-          <% if (iv.eval_id || iv.feedback) { %>
+          <% if (iv.eval_id || iv.feedback || iv.status === 'completed' || iv.attendance === 'attended') { %>
             <tr>
-              <td colspan="5" style="background:var(--surface-hover);padding:10px 16px;border-bottom:1px solid var(--line-soft)">
+              <td colspan="5" style="background:var(--surface-hover);padding:12px 16px;border-bottom:1px solid var(--line-soft)">
                 <% if (iv.eval_id) { %>
                   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
                     <% RUBRIC[iv.type].criteria.forEach(function(c){ %>
@@ -164,9 +164,95 @@
                   </div>
                 <% } %>
                 <% if (iv.feedback) { %>
-                  <p class="muted" style="margin:4px 0 0;font-style:italic;font-size:13px">
-                    Qualitative Feedback: “<%= iv.feedback %>”
+                  <p class="muted" style="margin:4px 0 8px;font-style:italic;font-size:13px">
+                    Mentor Evaluation Feedback: “<%= iv.feedback %>”
                   </p>
+                <% } %>
+
+                <% if (iv.status === 'completed' || iv.attendance === 'attended') { %>
+                  <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-soft)">
+                    <div style="font-weight:600;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+                      <span>Student Feedback on Mentor (<%= iv.mentor_name %>)</span>
+                      <% if (iv.student_feedback_id) { %>
+                        <span class="pill p-completed">✓ Feedback Submitted</span>
+                      <% } %>
+                    </div>
+
+                    <% if (iv.student_feedback_id) { %>
+                      <div style="background:var(--surface);padding:10px;border-radius:6px;font-size:12px;margin-bottom:6px" class="muted">
+                        <div style="display:flex;gap:12px;flex-wrap:wrap">
+                          <span>Overall Experience: <strong><%= iv.feedback_satisfaction %>/5 ⭐</strong></span>
+                          <span>Structured: <strong><%= iv.feedback_structured === 1 ? 'Yes' : 'No' %></strong></span>
+                          <% if (iv.type === 'hr') { %>
+                            <span>HR Questions Relevant: <strong><%= iv.feedback_hr_relevant === 1 ? 'Yes' : 'No' %></strong></span>
+                          <% } %>
+                        </div>
+                        <% if (iv.feedback_comments) { %>
+                          <div style="margin-top:4px;font-style:italic">“<%= iv.feedback_comments %>”</div>
+                        <% } %>
+                        <details style="margin-top:6px">
+                          <summary style="cursor:pointer;color:var(--action-blue)">Edit Feedback</summary>
+                    <% } %>
+
+                    <form method="post" action="/student/feedback/<%= iv.id %>" style="margin-top:6px;background:var(--surface);padding:12px;border-radius:8px;border:1px solid var(--line-soft)">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      
+                      <div style="margin-bottom:10px">
+                        <label style="display:block;font-weight:600;margin-bottom:4px;font-size:12px">
+                          1. How satisfied are you with your overall interview experience with this mentor?
+                        </label>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                          <% [5, 4, 3, 2, 1].forEach(function(val){ %>
+                            <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
+                              <input type="radio" name="satisfaction" value="<%= val %>" <%= iv.feedback_satisfaction === val ? 'checked' : (val === 5 ? 'checked' : '') %> required>
+                              <%= val === 5 ? '5 - Very Satisfied' : val === 4 ? '4 - Satisfied' : val === 3 ? '3 - Neutral' : val === 2 ? '2 - Dissatisfied' : '1 - Very Dissatisfied' %>
+                            </label>
+                          <% }); %>
+                        </div>
+                      </div>
+
+                      <div style="margin-bottom:10px">
+                        <label style="display:block;font-weight:600;margin-bottom:4px;font-size:12px">
+                          2. Did the interview feel structured and well organized?
+                        </label>
+                        <div style="display:flex;gap:14px;align-items:center">
+                          <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
+                            <input type="radio" name="structured" value="1" <%= iv.feedback_structured === 1 ? 'checked' : (iv.feedback_structured !== 0 ? 'checked' : '') %> required> Yes
+                          </label>
+                          <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
+                            <input type="radio" name="structured" value="0" <%= iv.feedback_structured === 0 ? 'checked' : '' %> required> No
+                          </label>
+                        </div>
+                      </div>
+
+                      <% if (iv.type === 'hr') { %>
+                        <div style="margin-bottom:10px">
+                          <label style="display:block;font-weight:600;margin-bottom:4px;font-size:12px">
+                            3. Were the HR questions relevant to placement/job preparation?
+                          </label>
+                          <div style="display:flex;gap:14px;align-items:center">
+                            <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
+                              <input type="radio" name="hr_relevant" value="1" <%= iv.feedback_hr_relevant === 1 ? 'checked' : (iv.feedback_hr_relevant !== 0 ? 'checked' : '') %> required> Yes
+                            </label>
+                            <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
+                              <input type="radio" name="hr_relevant" value="0" <%= iv.feedback_hr_relevant === 0 ? 'checked' : '' %> required> No
+                            </label>
+                          </div>
+                        </div>
+                      <% } %>
+
+                      <div style="margin-bottom:10px">
+                        <textarea name="feedback_text" rows="2" style="width:100%;font-size:12px" placeholder="Additional comments for mentor (optional)..."><%= iv.feedback_comments || '' %></textarea>
+                      </div>
+
+                      <button class="btn sm primary"><%= iv.student_feedback_id ? 'Update Feedback' : 'Submit Feedback' %></button>
+                    </form>
+
+                    <% if (iv.student_feedback_id) { %>
+                        </details>
+                      </div>
+                    <% } %>
+                  </div>
                 <% } %>
               </td>
             </tr>
