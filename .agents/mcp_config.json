@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "neon": {
+      "command": "npx",
+      "args": ["-y", "@neondatabase/mcp-server-neon", "start"],
+      "env": {
+        "NEON_PROJECT_ID": "lively-mouse-78881067",
+        "NEON_ORG_ID": "org-silent-fog-65557318"
+      }
+    }
+  }
+}
