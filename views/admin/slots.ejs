@@ -79,6 +79,21 @@
           <td class="num">
             <details class="inline"><summary>Manage</summary>
               <div class="panel" style="text-align:left;min-width:280px">
+                <% if (s.status === 'open') { %>
+                <form method="post" action="/admin/slots/<%= s.id %>/allot" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <div class="field">
+                    <label style="font-weight:600">Allot Slot to Student</label>
+                    <select name="student_id" required>
+                      <option value="">— Select student —</option>
+                      <% (students || []).forEach(function(st){ %>
+                        <option value="<%= st.id %>"><%= st.name %> (<%= st.roll_no || st.email %>)</option>
+                      <% }); %>
+                    </select>
+                  </div>
+                  <button class="btn primary sm" style="width:100%">Allot slot to student →</button>
+                </form>
+                <% } %>
                 <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
                 <form method="post" action="/admin/slots/<%= s.id %>/reschedule">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">

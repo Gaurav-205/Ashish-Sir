@@ -6,6 +6,15 @@
   const csrfToken = container.dataset.csrf || '';
   const isAlreadyBooked = container.dataset.alreadyBooked === 'true';
 
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   async function fetchLatestSlots() {
     const mentorSelect = document.getElementById('mentor-select');
     const mentorId = mentorSelect ? mentorSelect.value : '';
@@ -27,7 +36,7 @@
 
       // Handle Smart Match Banner
       if (data.earliest && !isAlreadyBooked) {
-        if (autoText) autoText.innerHTML = `<strong>${data.earliest.slotFormatted}</strong> with <strong>${data.earliest.mentor_name}</strong> (${data.earliest.mode})`;
+        if (autoText) autoText.innerHTML = `<strong>${escHtml(data.earliest.slotFormatted)}</strong> with <strong>${escHtml(data.earliest.mentor_name)}</strong> (${escHtml(data.earliest.mode)})`;
         if (autoSlotId) autoSlotId.value = data.earliest.id;
         if (banner) banner.style.display = 'block';
       } else {
@@ -36,25 +45,25 @@
 
       // Render Slots
       if (!data.byDate || data.byDate.length === 0) {
-        container.innerHTML = `<div class="empty">No open ${currentType.toUpperCase()} slots available currently. The system will auto-detect when new slots are published.</div>`;
+        container.innerHTML = `<div class="empty">No open ${escHtml(currentType.toUpperCase())} slots available currently. The system will auto-detect when new slots are published.</div>`;
         return;
       }
 
       let html = '';
       for (const g of data.byDate) {
         html += `
-          <div class="slot-day" data-date="${g.date}">
-            <h3>${g.dateFormatted || g.date}</h3>
+          <div class="slot-day" data-date="${escHtml(g.date)}">
+            <h3>${escHtml(g.dateFormatted || g.date)}</h3>
             <div class="slot-list">`;
         for (const sl of g.slots) {
           html += `
             <div class="slot" id="slot-card-${sl.id}">
-              <div class="t">${sl.timeFormatted}</div>
-              <div class="m">Mentor: <strong>${sl.mentor_name}</strong><br>${sl.mode}${sl.locationFormatted ? ' · ' + sl.locationFormatted : ''}</div>
+              <div class="t">${escHtml(sl.timeFormatted)}</div>
+              <div class="m">Mentor: <strong>${escHtml(sl.mentor_name)}</strong><br>${escHtml(sl.mode)}${sl.locationFormatted ? ' · ' + sl.locationFormatted : ''}</div>
               <form method="post" action="/student/book" style="margin:0">
                 <input type="hidden" name="_csrf" value="${csrfToken}">
                 <input type="hidden" name="slot_id" value="${sl.id}">
-                <input type="hidden" name="type" value="${currentType}">
+                <input type="hidden" name="type" value="${escHtml(currentType)}">
                 <button class="btn primary sm" style="width:100%" ${isAlreadyBooked ? 'disabled' : ''}>
                   ${isAlreadyBooked ? 'Already booked' : 'Book this slot →'}
                 </button>

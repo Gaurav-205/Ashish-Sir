@@ -5,9 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "init": "node src/seed.js",
-    "clean-db": "node src/seed.js",
-    "seed:demo": "cross-env SEED_MOCK=true node src/seed.js",
+    "init": "node src/seed.js --clean",
+    "clean-db": "node src/seed.js --clean",
+    "empty-db": "node src/seed.js --empty",
+    "seed:demo": "node src/seed.js --dev",
     "test": "node test/e2e.js"
   },
   "keywords": [],
