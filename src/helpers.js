@@ -57,11 +57,15 @@ function isPast(slot) {
 }
 
 function generateMeetingLink(type = 'interview') {
-  const cleanType = String(type).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const prefix = cleanType ? cleanType.charAt(0).toUpperCase() + cleanType.slice(1) : 'Interview';
-  const id = crypto.randomBytes(4).toString('hex');
-  const time = Date.now().toString(36);
-  return `https://meet.jit.si/Konfident-${prefix}-${time}-${id}`;
+  const randStr = (len) => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    let res = '';
+    for (let i = 0; i < len; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+  return `https://meet.google.com/${randStr(3)}-${randStr(4)}-${randStr(3)}`;
 }
 
 function linkify(str) {

@@ -162,7 +162,7 @@
           <td><%= h.fmtDate(s.slot_date) %></td>
           <td><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
-          <td class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify(s.location) %><% } %></td>
+          <td class="faint"><%= s.mode %></td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>
