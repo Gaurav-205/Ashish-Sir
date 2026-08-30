@@ -7,6 +7,7 @@ const { requireLogin } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
+const { setAuthSession, clearAuthSession } = require('../middleware/sessionAuth');
 const fs = require('fs');
 const path = require('path');
 
@@ -99,7 +100,7 @@ router.post('/login', authLimiter, (req, res) => {
         message: 'Could not complete login. Please try again.',
       });
     }
-    req.session.user = userData;
+    setAuthSession(req, res, row);
     logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row.id);
     res.redirect(redirectTo);
   });
@@ -118,7 +119,8 @@ router.get('/auth/google', (req, res) => {
   const stateToken = crypto.randomBytes(32).toString('hex');
   const action = req.query.link === '1' && req.session.user ? 'link' : 'auth';
   const userId = req.session.user ? req.session.user.id : null;
-  const oauthData = { token: stateToken, action, userId };
+  const redirectUri = google.getRedirectUri(req);
+  const oauthData = { token: stateToken, action, userId, redirectUri };
   req.session.oauthState = oauthData;
 
   // Set stateless backup cookie for serverless (Vercel Lambda) instances
@@ -128,7 +130,7 @@ router.get('/auth/google', (req, res) => {
 
   req.session.save((err) => {
     if (err) console.error('OAuth state session save error:', err);
-    res.redirect(google.getAuthUrl(stateToken));
+    res.redirect(google.getAuthUrl(stateToken, redirectUri));
   });
 });
 
@@ -143,9 +145,10 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Retrieve OAuth state metadata (for linking profile if applicable)
+  // Retrieve OAuth state metadata (for linking profile and exact redirect URI matching)
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
+  let redirectUri = req.session.oauthState ? req.session.oauthState.redirectUri : null;
 
   if (req.headers.cookie) {
     try {
@@ -158,8 +161,14 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         const parsed = JSON.parse(cookies.oauth_state);
         action = parsed.action || action;
         userId = parsed.userId || userId;
+        redirectUri = parsed.redirectUri || redirectUri;
       }
     } catch (_) {}
+  }
+
+  // Fallback to current request path if redirectUri was not preserved in state
+  if (!redirectUri) {
+    redirectUri = google.getRedirectUri(req, req.baseUrl ? `${req.baseUrl}${req.path}` : req.path);
   }
 
   // Clear state cookie & session state
@@ -167,7 +176,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
   if (req.session.oauthState) delete req.session.oauthState;
 
   try {
-    const { tokens, profile } = await google.exchangeCode(code);
+    const { tokens, profile } = await google.exchangeCode(code, redirectUri);
     const email = profile.email.toLowerCase();
 
     // Check if this was a profile link request
@@ -219,10 +228,9 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
       else if (to.startsWith('/student') && user.role !== 'student') to = null;
       else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
     }
-    const userData = { id: user.id, name: user.name, email: user.email, role: user.role };
     const redirectTo = to || HOME[user.role];
 
-    req.session.user = userData;
+    setAuthSession(req, res, user);
     req.session.save(() => {
       logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
       res.redirect(redirectTo);
@@ -231,18 +239,57 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     console.error('Google OAuth callback error:', err);
     res.render('login', {
       title: 'Sign in',
-      error: `Google login failed: ${err.message}. Please click "Sign in with Google" again to start a fresh authorization request.`,
+      error: `Google login failed: ${err.message}`,
       email: '',
       googleConfigured: google.isConfigured(),
     });
   }
 });
 
+/* Diagnostic endpoint to verify Google OAuth configuration on production URLs */
+router.get('/auth/google/debug', (req, res) => {
+  const currentRedirectUri = google.getRedirectUri(req);
+  const proto = (req.headers && req.headers['x-forwarded-proto']
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+    : (req.connection && req.connection.encrypted ? 'https' : (req.protocol || 'https')));
+  const host = (req.headers && req.headers['x-forwarded-host']
+    ? req.headers['x-forwarded-host'].split(',')[0].trim()
+    : (req.headers && req.headers.host ? req.headers.host : 'localhost:3000'));
+  const origin = `${proto}://${host}`;
 
+  const clientId = google.getClientId();
+  const maskedClientId = clientId ? `${clientId.slice(0, 10)}...${clientId.slice(-18)}` : null;
+
+  res.json({
+    status: 'ok',
+    environment: {
+      isVercel: Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME),
+      nodeEnv: process.env.NODE_ENV || 'development',
+      currentOrigin: origin,
+      detectedHost: host,
+      detectedProto: proto,
+    },
+    googleOAuthConfig: {
+      isConfigured: google.isConfigured(),
+      clientIdMasked: maskedClientId,
+      customRedirectEnvVar: process.env.GOOGLE_REDIRECT_URI || null,
+      resolvedRedirectUri: currentRedirectUri,
+    },
+    googleCloudConsoleInstructions: {
+      step1_authorizedOrigins: [origin],
+      step2_authorizedRedirectUris: [
+        currentRedirectUri,
+        `${origin}/api/auth/callback/google`,
+        `${origin}/auth/google/callback`,
+      ],
+      notice: 'Copy all URIs from step2_authorizedRedirectUris into your Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0 Client ID -> Authorized redirect URIs.'
+    }
+  });
+});
 
 router.post('/logout', (req, res) => {
   logAudit(req, 'AUTH_LOGOUT');
-  req.session.destroy(() => res.redirect('/login'));
+  clearAuthSession(req, res, () => res.redirect('/login'));
 });
 
 router.get('/profile', requireLogin, (req, res) => {
@@ -273,8 +320,19 @@ router.post('/profile/update', requireLogin, (req, res) => {
   const squad = me.role === 'student' ? (String(req.body.squad || '').trim() || null) : me.squad;
   const resume_url = me.role === 'student' ? (String(req.body.resume_url || '').trim() || null) : me.resume_url;
 
+  if (resume_url && !/^https?:\/\//i.test(resume_url)) {
+    return res.status(400).render('profile', {
+      title: 'My profile',
+      me,
+      error: 'Resume link must be a valid URL starting with http:// or https://',
+      ok: null,
+      googleConfigured: google.isConfigured(),
+    });
+  }
+
   db.prepare('UPDATE users SET name=?, phone=?, branch=?, squad=?, resume_url=? WHERE id=?')
     .run(name, phone, branch, squad, resume_url, me.id);
+  logAudit(req, 'AUTH_PROFILE_UPDATE', { name, phone }, me.id);
   req.session.user.name = name;
   req.session.flash = { type: 'ok', msg: 'Profile details updated successfully.' };
   res.redirect('/profile');
@@ -313,7 +371,7 @@ router.post('/profile/password', requireLogin, (req, res) => {
     logAudit(req, 'AUTH_PASSWORD_CHANGE', null, user.id);
     ok = 'Password updated.';
   }
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
+  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profile', {
     title: 'My profile',
     me,

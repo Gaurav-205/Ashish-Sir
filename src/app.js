@@ -10,6 +10,7 @@ const session = require('express-session');
 const helpers = require('./helpers');
 const { RUBRIC, GRAND_TOTAL, grade } = require('./rubric');
 const { securityHeaders, csrfProtection } = require('./middleware/security');
+const { sessionRehydrateMiddleware } = require('./middleware/sessionAuth');
 
 const app = express();
 
@@ -52,10 +53,11 @@ app.use(session({
     maxAge: 1000 * 60 * 60 * 8,
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: 'auto',
   },
 }));
 
+app.use(sessionRehydrateMiddleware);
 app.use(csrfProtection);
 
 // flash messages

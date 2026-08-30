@@ -2,7 +2,7 @@
 <div class="page-head">
   <div><h1><%= iv.student_name %></h1>
     <p class="sub"><span class="pill p-<%= iv.type %>"><%= h.titleCase(iv.type) %></span>
-      <%= h.fmtSlot(iv) %> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %></p></div>
+      <%= h.fmtSlot(iv) %> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %></p></div>
   <a class="btn" href="/mentor">← Back</a>
 </div>
 
@@ -24,7 +24,7 @@
       <p><strong><%= iv.student_name %></strong><% if (iv.squad) { %> <span class="pill p-<%= iv.squad === '116' ? 'technical' : 'hr' %>" style="font-size:11px;margin-left:6px">Squad <%= iv.squad %></span><% } %><br>
         <span class="muted"><%= iv.student_email %></span><br>
         <span class="muted"><%= iv.roll_no || '—' %><%= iv.squad ? ' · Squad ' + iv.squad : '' %><%= iv.branch ? ' · ' + iv.branch : '' %></span></p>
-      <% if (iv.resume_url) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener">Open resume ↗</a></p>
+      <% if (iv.resume_url && /^https?:\/\//i.test(iv.resume_url)) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener noreferrer">Open resume ↗</a></p>
       <% } else { %><p class="faint">No resume link on file.</p><% } %>
 
       <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">

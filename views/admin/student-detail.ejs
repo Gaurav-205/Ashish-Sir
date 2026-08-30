@@ -1,21 +1,30 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
-<div class="page-head">
-  <div>
-    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
-      Candidate Record · Profile &amp; Interview History
+<%
+const sInitials = s.student.name ? s.student.name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?';
+%>
+<div class="dossier-hero">
+  <div class="dossier-profile">
+    <div class="dossier-avatar"><%= sInitials %></div>
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <h1 style="margin:0;font-size:24px"><%= s.student.name %></h1>
+        <% if (s.student.squad) { %><span class="squad-pill">Squad <%= s.student.squad %></span><% } %>
+        <% if (!s.student.active) { %><span class="pill p-cancelled">Deactivated</span><% } else { %><span class="badge-attended">Active</span><% } %>
+      </div>
+      <p class="sub" style="margin:0">
+        <%= s.student.email %> · Roll No: <strong><%= s.student.roll_no || '—' %></strong> · Branch: <%= s.student.branch || '—' %> · Phone: <%= s.student.phone || '—' %>
+      </p>
     </div>
-    <h1><%= s.student.name %></h1>
-    <p class="sub"><%= s.student.email %><%= s.student.roll_no ? ' · Roll No: ' + s.student.roll_no : '' %><%= s.student.squad ? ' · Squad ' + s.student.squad : '' %><%= s.student.branch ? ' · Branch: ' + s.student.branch : '' %></p>
   </div>
   <div class="btn-row">
-    <% if (s.student.resume_url) { %>
-      <a class="btn sm" href="<%= s.student.resume_url %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
+    <% if (s.student.resume_url && /^https?:\/\//i.test(s.student.resume_url)) { %>
+      <a class="btn sm primary" href="<%= s.student.resume_url %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
           <polyline points="15 3 21 3 21 9"></polyline>
           <line x1="10" y1="14" x2="21" y2="3"></line>
         </svg>
-        View Resume Link
+        Open Resume
       </a>
     <% } %>
     <a class="btn sm" href="/admin/students">← All students</a>
@@ -44,7 +53,7 @@
 
           <% if (iv) { %>
             <div class="faint" style="margin-top:5px;font-size:13px">
-              <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify ? h.linkify(iv.location) : iv.location %><% } %>
+              <%= h.fmtSlot(iv) %> · Mentor: <strong><%= iv.mentor_name %></strong> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %>
             </div>
             <% if (iv.eval_id) { %>
               <div style="margin-top:10px">

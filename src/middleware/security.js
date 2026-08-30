@@ -37,7 +37,8 @@ function createRateLimiter(options = {}) {
   }, 60 * 1000).unref();
 
   return function rateLimitMiddleware(req, res, next) {
-    const key = (req.body && req.body.email) ? req.body.email.toLowerCase() : (req.ip || req.connection.remoteAddress || 'unknown-ip');
+    const emailKey = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
+    const key = emailKey || (req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip');
     const now = Date.now();
     let record = hits.get(key);
 

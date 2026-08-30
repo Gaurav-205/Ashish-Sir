@@ -26,7 +26,10 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
     <div class="who">
       <a href="/profile" title="My profile & password settings" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
         <span class="avatar"><%= initials %></span>
-        <span class="name"><strong><%= user.name %></strong> <span class="faint">(<%= user.role %>)</span></span>
+        <span class="name" style="display:inline-flex;align-items:center;gap:6px">
+          <strong><%= user.name %></strong>
+          <span class="pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>" style="font-size:10px;padding:2px 7px;text-transform:uppercase;font-weight:700"><%= user.role %></span>
+        </span>
       </a>
       <a href="/profile#password" class="btn sm outline" style="padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;text-decoration:none">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>

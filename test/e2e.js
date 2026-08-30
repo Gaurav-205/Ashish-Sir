@@ -27,8 +27,8 @@ const section = (s) => console.log('\n\x1b[1m' + s + '\x1b[0m');
 
 let base;
 const jars = {};
-async function req(who, method, url, form) {
-  const opts = { method, redirect: 'manual', headers: {} };
+async function req(who, method, url, form, extraHeaders = {}) {
+  const opts = { method, redirect: 'manual', headers: { ...extraHeaders } };
   if (jars[who]) opts.headers.cookie = jars[who];
   if (form) {
     opts.headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -40,8 +40,8 @@ async function req(who, method, url, form) {
   const body = await res.text();
   return { status: res.status, location: res.headers.get('location'), headers: res.headers, body };
 }
-const get = (w, u) => req(w, 'GET', u);
-const post = (w, u, f) => req(w, 'POST', u, f);
+const get = (w, u, h) => req(w, 'GET', u, null, h);
+const post = (w, u, f, h) => req(w, 'POST', u, f, h);
 const login = async (who, email) => {
   const r = await post(who, '/login', { email, password: 'pass123' });
   return r;
@@ -411,11 +411,40 @@ const login = async (who, email) => {
 
   section('Google OAuth & Calendar Integration');
   const google = require('../src/services/googleService');
+  const sessionAuth = require('../src/middleware/sessionAuth');
   ok(typeof google.isConfigured === 'function', 'googleService exports isConfigured check');
   ok(typeof google.syncCalendarEvent === 'function', 'googleService exports syncCalendarEvent');
 
   const gLogin = await get('anon', '/auth/google');
   ok(gLogin.status === 200 || gLogin.status === 302, 'GET /auth/google handles request cleanly');
+
+  // Verify diagnostic endpoint for production URLs
+  const debugResp = await get('anon', '/auth/google/debug');
+  ok(debugResp.status === 200, 'GET /auth/google/debug returns 200 OK');
+  const debugJson = JSON.parse(debugResp.body);
+  ok(debugJson.status === 'ok' && !!debugJson.environment.currentOrigin && !!debugJson.googleCloudConsoleInstructions,
+     'debug endpoint provides complete Google Cloud Console setup guidance');
+
+  // Verify dynamic redirect URI resolver
+  const mockReq = {
+    headers: { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'custom.konfident.edu' },
+    protocol: 'http',
+  };
+  const dynamicUri = google.getRedirectUri(mockReq);
+  ok(dynamicUri.startsWith('https://custom.konfident.edu'), 'dynamic redirect URI derives from request host and proto');
+
+  // Verify stateless signed cookie rehydration across serverless instances
+  const testUser = db.prepare("SELECT * FROM users WHERE role='student' LIMIT 1").get();
+  const signedToken = sessionAuth.signToken({ id: testUser.id, role: testUser.role, ts: Date.now() });
+  const serverlessJar = `konfident_auth=${signedToken}`;
+  const statelessResp = await req('stateless_student', 'GET', '/student', null);
+  // Initially anon redirects to login
+  ok(statelessResp.status === 302 && statelessResp.location === '/login', 'anonymous request is redirected');
+  // With konfident_auth signed cookie, session is rehydrated automatically without in-memory store
+  jars['stateless_student'] = serverlessJar;
+  const rehydratedResp = await req('stateless_student', 'GET', '/student', null);
+  ok(rehydratedResp.status === 200 && rehydratedResp.body.includes('Hello,'),
+     'stateless backup cookie rehydrates session across serverless instances');
 
   const prof = await get('newstudent', '/profile');
   ok(prof.body.includes('Google Account') && prof.body.includes('Calendar Integration'),
@@ -594,6 +623,120 @@ const login = async (who, email) => {
   const healthRes = await get('anon', '/health');
   ok(healthRes.status === 200 && JSON.parse(healthRes.body).status === 'healthy', 'GET /health returns healthy status');
   ok((await get('admin', '/no-such-page')).status === 404, 'unknown URL returns 404');
+
+  section('Bugfix & Security Regression Tests');
+  // 1. Resume URL XSS validation
+  const xssResumeUpdate = await post('newstudent', '/profile/update', {
+    name: 'Test Student Updated', resume_url: 'javascript:alert(document.cookie)'
+  });
+  ok(xssResumeUpdate.status === 400 && xssResumeUpdate.body.includes('Resume link must be a valid URL'),
+     'javascript: protocol in resume_url is rejected');
+
+  // Admin student creation with invalid resume URL
+  await post('admin', '/admin/students', {
+    name: 'Bad Resume Student', email: 'badresume@student.in', password: 'pass123', resume_url: 'javascript:alert(1)'
+  });
+  const studentsAfterBadResume = await get('admin', '/admin/students');
+  ok(studentsAfterBadResume.body.includes('Resume link must be a valid URL'),
+     'admin creating student with invalid resume link is rejected');
+
+  // 2. Profile password reset preserves squad on re-render
+  db.prepare("UPDATE users SET squad='116' WHERE id=?").run(ts.id);
+  const passResetReRender = await post('newstudent', '/profile/password', {
+    current: 'wrongpass', next1: 'pass123456', next2: 'pass123456'
+  });
+  ok(passResetReRender.body.includes('value="116"'),
+     'password reset re-render preserves student squad in form');
+
+  // 3. Absent candidate feedback is blocked
+  // Create an interview marked absent
+  const absentSlot = db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, status)
+                                 VALUES (?, 'technical', ?, '09:00', '09:30', 'booked')`)
+                       .run(tm.id, h.today());
+  const absentIv = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type, status, attendance)
+                               VALUES (?, ?, ?, 'technical', 'completed', 'absent')`)
+                     .run(pcs.id, tm.id, absentSlot.lastInsertRowid);
+  
+  await login('pastcanceller', 'pastcancel.student@student.in');
+  const absentFeedbackAttempt = await post('pastcanceller', '/student/feedback/' + absentIv.lastInsertRowid, {
+    satisfaction: '5', structured: '1'
+  });
+  ok(!db.prepare('SELECT id FROM student_feedbacks WHERE interview_id=?').get(absentIv.lastInsertRowid),
+     'feedback submission is rejected for absent interviews');
+
+  const absentResults = await get('pastcanceller', '/student/results');
+  ok(absentResults.body.includes('Candidate marked absent / no-show') &&
+     !absentResults.body.includes('Evaluation in progress by mentor'),
+     'results page clearly indicates candidate absent and suppresses evaluation in progress');
+
+  // 4. Client-side script attaches fetchLatestSlots to window to avoid ReferenceError
+  const studentSlotsScript = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'student-slots.js'), 'utf8');
+  ok(studentSlotsScript.includes('window.fetchLatestSlots = fetchLatestSlots;'),
+     'public/js/student-slots.js attaches fetchLatestSlots to window to prevent ReferenceError');
+
+  // 5. Open redirect prevention in student feedback
+  const openRedirectAttempt = await post('newstudent', '/student/feedback/' + techIv.id, {
+    satisfaction: '5', structured: '1', feedback_text: 'Open redirect test'
+  }, { referer: 'https://evil.attacker.com/phishing' });
+  ok(openRedirectAttempt.location !== 'https://evil.attacker.com/phishing' && openRedirectAttempt.location.startsWith('/student'),
+     'feedback submission prevents open redirect attacks when malicious referer header is provided');
+
+  // 6. Mentor cannot change attendance on an interview that has already been evaluated
+  await post('testmentor', '/mentor/interview/' + techIv.id + '/attendance', { attendance: 'absent' });
+  ok(db.prepare('SELECT attendance FROM interviews WHERE id=?').get(techIv.id).attendance === 'attended',
+     'mentor cannot change attendance to absent on an interview that has already been evaluated');
+
+  // 7. Invalid slot types rejected cleanly without DB crashes
+  await post('admin', '/admin/slots', {
+    type: 'invalid_type', mentor_id: String(tm.id), slot_date: date, start_time: '18:00', count: '1'
+  });
+  ok(db.prepare(`SELECT COUNT(*) c FROM slots WHERE type='invalid_type'`).get().c === 0,
+     'admin creating slot with invalid type is rejected cleanly');
+
+  await post('testmentor', '/mentor/slots', {
+    type: 'invalid_type', slot_date: date, start_time: '18:00', count: '1'
+  });
+  ok(db.prepare(`SELECT COUNT(*) c FROM slots WHERE type='invalid_type'`).get().c === 0,
+     'mentor creating slot with invalid type is rejected cleanly');
+
+  // 8. Student cancel never reopens admin-cancelled slot
+  const cancelTestDate = h.addDays(h.today(), 6);
+  const ctSlot = db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+                             VALUES (?, 'technical', ?, '16:00', '16:30', 'Online', 'https://meet.test/ct', 'booked')`)
+                   .run(tm.id, cancelTestDate);
+  const ctIv = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type, status)
+                           VALUES (?, ?, ?, 'technical', 'booked')`)
+                 .run(pcs.id, tm.id, ctSlot.lastInsertRowid);
+  db.prepare(`UPDATE slots SET status='cancelled' WHERE id=?`).run(ctSlot.lastInsertRowid);
+  await post('pastcanceller', '/student/cancel/' + ctIv.lastInsertRowid);
+  ok(db.prepare('SELECT status FROM slots WHERE id=?').get(ctSlot.lastInsertRowid).status === 'cancelled',
+     'student cancelling booking never reopens an admin-cancelled slot');
+
+  // 9. Postgres SQL converter translates BEGIN IMMEDIATE and date functions
+  const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'db.js'), 'utf8');
+  const convertSqlMatch = dbSrc.match(/function convertSql\(sql\) \{([\s\S]*?)\n\}/);
+  if (convertSqlMatch) {
+    const testConvertSql = new Function('sql', convertSqlMatch[1]);
+    const convertedBegin = testConvertSql('BEGIN IMMEDIATE');
+    ok(convertedBegin.includes('BEGIN') && !convertedBegin.includes('IMMEDIATE'),
+       'convertSql transforms BEGIN IMMEDIATE to BEGIN for Postgres');
+    const convertedDate = testConvertSql("SELECT * FROM slots WHERE s.slot_date >= date('now','localtime')");
+    ok(convertedDate.includes('::date)::text'),
+       'convertSql transforms date(now) to IST date text for Postgres');
+    const convertedDatetimeComp = testConvertSql("SELECT * FROM slots WHERE datetime(slot_date || ' ' || start_time) > datetime('now','localtime')");
+    ok(convertedDatetimeComp.includes('::timestamp') && convertedDatetimeComp.includes("AT TIME ZONE 'Asia/Kolkata'"),
+       'convertSql transforms datetime comparison to timezone-aware timestamp comparison for Postgres');
+  }
+
+  // 10. Audit logging verification across mentor operations and admin user actions
+  const mentorAuditSlot = db.prepare("SELECT * FROM audit_logs WHERE action='MENTOR_CREATE_SLOTS'").get();
+  ok(!!mentorAuditSlot, 'mentor slot creation is recorded in audit_logs');
+  const mentorAuditAtt = db.prepare("SELECT * FROM audit_logs WHERE action='MENTOR_MARK_ATTENDANCE'").get();
+  ok(!!mentorAuditAtt, 'mentor attendance recording is recorded in audit_logs');
+  const mentorAuditEval = db.prepare("SELECT * FROM audit_logs WHERE action='MENTOR_SUBMIT_EVALUATION'").get();
+  ok(!!mentorAuditEval, 'mentor evaluation submission is recorded in audit_logs');
+  const adminAuditStudent = db.prepare("SELECT * FROM audit_logs WHERE action='ADMIN_CREATE_STUDENT'").get();
+  ok(!!adminAuditStudent, 'admin student registration is recorded in audit_logs');
 
   server.close();
   console.log(`\n\x1b[1m${pass} passed, ${fail} failed\x1b[0m\n`);

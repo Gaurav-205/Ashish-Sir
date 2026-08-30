@@ -123,6 +123,7 @@ async function seedFullNeon() {
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 },
+    { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0 },
   ];
 
   await Promise.all(kalviumAdmins.map(a => sql`

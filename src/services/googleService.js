@@ -2,16 +2,54 @@
 const db = require('../db');
 const h = require('../helpers');
 
-const getClientId = () => (process.env.GOOGLE_CLIENT_ID || '').replace(/[\r\n\s]+$/, '').trim();
-const getClientSecret = () => (process.env.GOOGLE_CLIENT_SECRET || '').replace(/[\r\n\s]+$/, '').trim();
-const getRedirectUri = () => {
+function cleanEnvVal(val) {
+  if (!val) return '';
+  return String(val)
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/[\r\n\s]+$/, '')
+    .trim();
+}
+
+const getClientId = () => cleanEnvVal(process.env.GOOGLE_CLIENT_ID);
+const getClientSecret = () => cleanEnvVal(process.env.GOOGLE_CLIENT_SECRET);
+
+const getRedirectUri = (req = null, explicitPath = null) => {
+  // 1. Explicit environment variable override (if not a stale localhost entry for a remote request)
   if (process.env.GOOGLE_REDIRECT_URI) {
-    return process.env.GOOGLE_REDIRECT_URI.replace(/[\r\n\s]+$/, '').trim();
+    const raw = cleanEnvVal(process.env.GOOGLE_REDIRECT_URI).replace(/\/+$/, '');
+    const isLocalUri = raw.includes('localhost') || raw.includes('127.0.0.1');
+    const reqHost = req && req.headers ? (req.headers['x-forwarded-host'] || req.headers.host || '') : '';
+    const reqIsRemote = reqHost && !reqHost.includes('localhost') && !reqHost.includes('127.0.0.1');
+
+    if (!isLocalUri || !reqIsRemote) {
+      return raw;
+    }
   }
-  if (process.env.VERCEL_URL) {
-    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, '').replace(/[\r\n\s]+$/, '').trim();
-    return `https://${host}/api/auth/callback/google`;
+
+  // 2. Derive dynamically from current request host & protocol (ideal for production / custom domains)
+  if (req) {
+    const proto = (req.headers && req.headers['x-forwarded-proto']
+      ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+      : (req.connection && req.connection.encrypted ? 'https' : (req.protocol || 'https')));
+    const host = (req.headers && req.headers['x-forwarded-host']
+      ? req.headers['x-forwarded-host'].split(',')[0].trim()
+      : (req.headers && req.headers.host ? req.headers.host : ''));
+    if (host) {
+      const path = explicitPath || '/api/auth/callback/google';
+      return `${proto}://${host}${path}`;
+    }
   }
+
+  // 3. Vercel deployment / production domain fallback
+  const vercelHost = cleanEnvVal(process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL)
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '');
+  if (vercelHost) {
+    return `https://${vercelHost}/api/auth/callback/google`;
+  }
+
+  // 4. Local development default
   return 'http://localhost:3000/api/auth/callback/google';
 };
 
@@ -26,10 +64,11 @@ function isConfigured() {
   return !!(getClientId() && getClientSecret());
 }
 
-function getAuthUrl(state = '') {
+function getAuthUrl(state = '', redirectUri = null) {
+  const rUri = redirectUri || getRedirectUri();
   const params = new URLSearchParams({
     client_id: getClientId(),
-    redirect_uri: getRedirectUri(),
+    redirect_uri: rUri,
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
@@ -40,10 +79,10 @@ function getAuthUrl(state = '') {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-async function exchangeCode(code) {
+async function exchangeCode(code, redirectUri = null) {
   const clientId = getClientId();
   const clientSecret = getClientSecret();
-  const redirectUri = getRedirectUri();
+  const rUri = redirectUri || getRedirectUri();
 
   let tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -52,7 +91,7 @@ async function exchangeCode(code) {
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: redirectUri,
+      redirect_uri: rUri,
       grant_type: 'authorization_code',
     }).toString(),
   });
@@ -69,7 +108,7 @@ async function exchangeCode(code) {
       },
       body: new URLSearchParams({
         code,
-        redirect_uri: redirectUri,
+        redirect_uri: rUri,
         grant_type: 'authorization_code',
       }).toString(),
     });
@@ -78,7 +117,11 @@ async function exchangeCode(code) {
 
   if (!tokenRes.ok || tokenData.error) {
     console.error('Google token exchange error details:', tokenData);
-    throw new Error(tokenData.error_description || tokenData.error || 'Failed to exchange Google OAuth code.');
+    let errMsg = tokenData.error_description || tokenData.error || 'Failed to exchange Google OAuth code.';
+    if (tokenData.error === 'redirect_uri_mismatch') {
+      errMsg = `Google OAuth redirect_uri_mismatch: Google rejected "${rUri}". Add this exact URL to "Authorized redirect URIs" in your Google Cloud Console OAuth Client settings.`;
+    }
+    throw new Error(errMsg);
   }
 
   const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -270,4 +313,7 @@ module.exports = {
   syncCalendarEvent,
   updateCalendarEvent,
   removeCalendarEvent,
+  getRedirectUri,
+  cleanEnvVal,
+  getClientId,
 };

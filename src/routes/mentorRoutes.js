@@ -6,6 +6,7 @@ const h = require('../helpers');
 const { requireRole } = require('../auth');
 const { RUBRIC } = require('../rubric');
 const { validateId } = require('../middleware/security');
+const { logAudit } = require('../middleware/auditLog');
 
 const router = express.Router();
 router.use(requireRole('mentor'));
@@ -39,6 +40,7 @@ router.post('/slots', (req, res) => {
   try {
     const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=? AND role='mentor'`).get(mentorId);
     if (!mentor) throw new Error('Mentor account not found.');
+    if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview domain. Must be technical or hr.');
     if (type === 'technical' && !mentor.can_technical) throw new Error('Your profile is not enabled for Technical interviews.');
     if (type === 'hr' && !mentor.can_hr) throw new Error('Your profile is not enabled for HR interviews.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
@@ -83,6 +85,7 @@ router.post('/slots', (req, res) => {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
       }
     }
+    logAudit(req, 'MENTOR_CREATE_SLOTS', { type, count: made });
     flash(req, made ? 'ok' : 'err',
       `${made} slot(s) published for your profile${skipped ? `, ${skipped} skipped (overlapping slot)` : ''}.`);
   } catch (e) {
@@ -107,17 +110,23 @@ router.post('/interview/:id/attendance', validateId('id'), (req, res) => {
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
+  if (iv.eval_id) {
+    flash(req, 'err', 'Cannot alter attendance after an evaluation has already been submitted.');
+    return res.redirect('/mentor/interview/' + iv.id);
+  }
   const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
 
   if (attendance === 'attended') {
     db.prepare(`UPDATE interviews SET attendance='attended', status='completed',
                 completed_at=COALESCE(completed_at, datetime('now')),
                 attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'attended' });
     flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
   } else {
     db.prepare(`UPDATE interviews SET attendance='absent', status='completed',
                 completed_at=COALESCE(completed_at, datetime('now')),
                 attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'absent' });
     flash(req, 'err', 'Candidate marked as Absent / No-Show.');
   }
   res.redirect('/mentor/interview/' + iv.id);
@@ -128,10 +137,15 @@ router.post('/interview/:id/complete', validateId('id'), (req, res) => {
   if (!iv || iv.mentor_id !== req.session.user.id) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
+  if (iv.eval_id) {
+    flash(req, 'err', 'Interview has already been completed and evaluated.');
+    return res.redirect('/mentor/interview/' + iv.id);
+  }
   if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
   else {
     db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=datetime('now'),
                 attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    logAudit(req, 'MENTOR_COMPLETE_INTERVIEW', { interview_id: iv.id });
     flash(req, 'ok', 'Marked as completed and attended. You can now submit the evaluation.');
   }
   res.redirect('/mentor/interview/' + iv.id);
@@ -170,6 +184,7 @@ router.post('/interview/:id/evaluate', validateId('id'), (req, res) => {
     return rerender('Could not save evaluation: ' + e.message);
   }
 
+  logAudit(req, 'MENTOR_SUBMIT_EVALUATION', { interview_id: iv.id, score: total });
   flash(req, 'ok', `Evaluation submitted — ${total}/${RUBRIC[iv.type].total}. The student can now see the result.`);
   res.redirect('/mentor');
 });

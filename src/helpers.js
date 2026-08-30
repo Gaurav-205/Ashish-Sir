@@ -26,7 +26,9 @@ function fmtSlot(s) {
   return `${fmtDate(s.slot_date)} · ${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}`;
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
 }
 function addDays(ymd, n) {
   const d = new Date(ymd + 'T00:00:00Z');
@@ -50,7 +52,7 @@ function isPast(slot) {
   if (!slot || !slot.slot_date) return false;
   const now = new Date();
   const timeStr = slot.start_time || '00:00';
-  const start = new Date(`${slot.slot_date}T${timeStr}:00`);
+  const start = new Date(`${slot.slot_date}T${timeStr}:00+05:30`);
   return !isNaN(start.getTime()) && start <= now;
 }
 

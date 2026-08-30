@@ -29,32 +29,51 @@
   </div>
 </div>
 
+<div class="search-toolbar">
+  <div class="search-input-wrap">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" id="candidateSearchInput" placeholder="Search candidate by name, roll no, email, branch..." onkeyup="filterCandidatesTable()">
+  </div>
+  <div class="filter-chips">
+    <button type="button" class="filter-chip active" onclick="setSquadFilter('all', this)">All (<%= summaries.length %>)</button>
+    <button type="button" class="filter-chip" onclick="setSquadFilter('116', this)">Squad 116</button>
+    <button type="button" class="filter-chip" onclick="setSquadFilter('115', this)">Squad 115</button>
+    <button type="button" class="filter-chip" onclick="setSquadFilter('unbooked', this)">Needs Booking</button>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-head">
     <h2>All Registered Candidates (<%= summaries.length %>)</h2>
+    <span class="faint" id="filteredCountLabel">Showing all <%= summaries.length %> candidate(s)</span>
   </div>
   <div class="card-body tight">
-    <div class="table-scroll"><table>
+    <div class="table-scroll"><table id="candidatesTable">
       <thead><tr><th>Roll No</th><th>Candidate</th><th>Squad</th><th>Technical Interview</th><th>HR Interview</th><th class="num">Score</th><th class="num">Action</th></tr></thead>
       <tbody>
-      <% summaries.forEach(function(s){ %>
-        <tr>
+      <% summaries.forEach(function(s){ 
+         const squadVal = s.student.squad || '';
+         const isUnbooked = (!s.technical || !s.hr);
+      %>
+        <tr data-squad="<%= squadVal %>" data-unbooked="<%= isUnbooked ? '1' : '0' %>">
           <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
           <td><strong><%= s.student.name %></strong><br><span class="faint"><%= s.student.email %><%= s.student.branch ? ' · ' + s.student.branch : '' %></span>
             <% if (!s.student.active) { %> <span class="pill p-cancelled">inactive</span><% } %></td>
           <td>
             <% if (s.student.squad) { %>
-              <span class="pill p-<%= s.student.squad === '116' ? 'technical' : 'hr' %>">Squad <%= s.student.squad %></span>
+              <span class="squad-pill">Squad <%= s.student.squad %></span>
             <% } else { %>
               <span class="faint">—</span>
             <% } %>
           </td>
           <td><% if (!s.technical) { %><span class="pill p-cancelled">not booked</span>
               <% } else { %><span class="pill p-<%= s.technical.status %>"><%= s.technical.status %></span>
-              <div class="faint"><%= h.fmtDate(s.technical.slot_date) %> · <%= s.technical.mentor_name %><% if (s.technical.location) { %><br><%- h.linkify ? h.linkify(s.technical.location) : s.technical.location %><% } %></div><% } %></td>
+              <div class="faint"><%= h.fmtDate(s.technical.slot_date) %> · <%= s.technical.mentor_name %><% if (s.technical.location) { %><br><%- h.linkify(s.technical.location) %><% } %></div><% } %></td>
           <td><% if (!s.hr) { %><span class="pill p-cancelled">not booked</span>
               <% } else { %><span class="pill p-<%= s.hr.status %>"><%= s.hr.status %></span>
-              <div class="faint"><%= h.fmtDate(s.hr.slot_date) %> · <%= s.hr.mentor_name %><% if (s.hr.location) { %><br><%- h.linkify ? h.linkify(s.hr.location) : s.hr.location %><% } %></div><% } %></td>
+              <div class="faint"><%= h.fmtDate(s.hr.slot_date) %> · <%= s.hr.mentor_name %><% if (s.hr.location) { %><br><%- h.linkify(s.hr.location) %><% } %></div><% } %></td>
           <td class="num"><% if (s.allEvaluated) { %><strong><%= s.total %></strong><span class="faint">/<%= GRAND_TOTAL %></span>
             <% } else { %><span class="faint">—</span><% } %></td>
           <td class="num"><a class="btn sm" href="/admin/students/<%= s.student.id %>">View record →</a></td>
@@ -65,4 +84,46 @@
     </table></div>
   </div>
 </div>
+
+<script>
+let currentSquadFilter = 'all';
+
+function setSquadFilter(squad, btn) {
+  currentSquadFilter = squad;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  filterCandidatesTable();
+}
+
+function filterCandidatesTable() {
+  const query = (document.getElementById('candidateSearchInput').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#candidatesTable tbody tr');
+  let visibleCount = 0;
+
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    const rowSquad = r.getAttribute('data-squad') || '';
+    const rowUnbooked = r.getAttribute('data-unbooked') === '1';
+
+    let matchesSquad = true;
+    if (currentSquadFilter === '116') matchesSquad = (rowSquad === '116');
+    else if (currentSquadFilter === '115') matchesSquad = (rowSquad === '115');
+    else if (currentSquadFilter === 'unbooked') matchesSquad = rowUnbooked;
+
+    const matchesSearch = !query || text.includes(query);
+
+    if (matchesSquad && matchesSearch) {
+      r.style.display = '';
+      visibleCount++;
+    } else {
+      r.style.display = 'none';
+    }
+  });
+
+  const label = document.getElementById('filteredCountLabel');
+  if (label) {
+    label.textContent = `Showing ${visibleCount} candidate(s)`;
+  }
+}
+</script>
 <%- include('../partials/foot') %>

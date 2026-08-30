@@ -78,10 +78,15 @@ router.post('/students', (req, res) => {
   const { name, email, password, roll_no, branch, squad, phone, resume_url } = req.body;
   try {
     if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
+    const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
+    if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+      throw new Error('Resume link must be a valid URL starting with http:// or https://');
+    }
     db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,squad,phone,resume_url)
                 VALUES (?,?,?,'student',?,?,?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10),
-           roll_no || null, branch || null, squad || null, phone || null, resume_url || null);
+           roll_no || null, branch || null, squad || null, phone || null, cleanResume);
+    logAudit(req, 'ADMIN_CREATE_STUDENT', { email: email.trim().toLowerCase() });
     flash(req, 'ok', `Student ${name} added.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
@@ -95,14 +100,20 @@ router.post('/students/:id/update', validateId('id'), (req, res) => {
     flash(req, 'err', 'Name is required.');
     return res.redirect('/admin/students/' + req.params.id);
   }
+  const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
+  if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+    flash(req, 'err', 'Resume link must be a valid URL starting with http:// or https://');
+    return res.redirect('/admin/students/' + req.params.id);
+  }
   const isActive = active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, squad=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
-    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, resume_url || null,
+    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, cleanResume,
          isActive, Number(req.params.id));
   if (!isActive) {
     invalidateUserSessions(req.params.id);
   }
+  logAudit(req, 'ADMIN_UPDATE_STUDENT', { target_user_id: req.params.id });
   flash(req, 'ok', 'Student updated.');
   res.redirect('/admin/students/' + req.params.id);
 });
@@ -151,6 +162,7 @@ router.post('/mentors', (req, res) => {
                 VALUES (?,?,?,'mentor',?,?,?)`)
       .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10), phone || null,
            req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0);
+    logAudit(req, 'ADMIN_CREATE_MENTOR', { email: email.trim().toLowerCase() });
     flash(req, 'ok', `Mentor ${name} added.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
@@ -173,6 +185,7 @@ router.post('/mentors/:id/update', validateId('id'), (req, res) => {
   if (!isActive) {
     invalidateUserSessions(req.params.id);
   }
+  logAudit(req, 'ADMIN_UPDATE_MENTOR', { target_user_id: req.params.id });
   flash(req, 'ok', 'Mentor updated.');
   res.redirect('/admin/mentors');
 });
@@ -232,6 +245,7 @@ router.get('/slots', (req, res) => {
 router.post('/slots', (req, res) => {
   const { type, mentor_id, slot_date, start_time, duration, count, mode, location } = req.body;
   try {
+    if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview type. Must be technical or hr.');
     const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     if (type === 'technical' && !mentor.can_technical) throw new Error(`${mentor.name} is not enabled for Technical interviews.`);
@@ -278,6 +292,7 @@ router.post('/slots', (req, res) => {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
       }
     }
+    logAudit(req, 'ADMIN_CREATE_SLOTS', { type, mentor_id: mentor.id, count: made });
     flash(req, made ? 'ok' : 'err',
       `${made} slot(s) created${skipped ? `, ${skipped} skipped (mentor already has an overlapping slot at that time)` : ''}.`);
   } catch (e) {

@@ -37,8 +37,10 @@ const path = require('path');
 const adminEmail = process.env.ADMIN_EMAIL || 'utkarsha.kasar@kalvium.com';
 let adminPassword = process.env.ADMIN_PASSWORD;
 let isGenerated = false;
-if (!adminPassword) {
-  if (mode === 'test' || mode === 'dev') {
+if (mode === 'test') {
+  adminPassword = 'pass123';
+} else if (!adminPassword) {
+  if (mode === 'dev') {
     adminPassword = 'pass123';
   } else {
     adminPassword = crypto.randomBytes(12).toString('base64url');
@@ -74,6 +76,7 @@ if (mode !== 'empty') {
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 }, // Admin + HR Mentor
+    { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0 },
   ];
 
   kalviumAdmins.forEach((a) => {

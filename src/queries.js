@@ -54,7 +54,17 @@ function studentSummary(studentId) {
   const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
                                ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);
   const byType = { technical: null, hr: null };
-  for (const iv of list) byType[iv.type] = iv;
+  for (const iv of list) {
+    if (!byType[iv.type]) {
+      byType[iv.type] = iv;
+    } else if (iv.eval_id != null) {
+      byType[iv.type] = iv;
+    } else if (byType[iv.type].eval_id == null && iv.attendance === 'attended') {
+      byType[iv.type] = iv;
+    } else if (byType[iv.type].eval_id == null && byType[iv.type].attendance !== 'attended') {
+      byType[iv.type] = iv;
+    }
+  }
 
   const scored = (iv) => (iv && iv.status === 'completed' && iv.eval_id != null);
   const techScore = scored(byType.technical) ? byType.technical.score : null;
@@ -107,7 +117,15 @@ function allStudentSummaries() {
 
     const byType = { technical: null, hr: null };
     for (const iv of sortedList) {
-      byType[iv.type] = iv;
+      if (!byType[iv.type]) {
+        byType[iv.type] = iv;
+      } else if (iv.eval_id != null) {
+        byType[iv.type] = iv;
+      } else if (byType[iv.type].eval_id == null && iv.attendance === 'attended') {
+        byType[iv.type] = iv;
+      } else if (byType[iv.type].eval_id == null && byType[iv.type].attendance !== 'attended') {
+        byType[iv.type] = iv;
+      }
     }
 
     const scored = (iv) => (iv && iv.status === 'completed' && iv.eval_id != null);
