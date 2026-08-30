@@ -55,6 +55,7 @@ async function seedFullNeon() {
       mode          TEXT    NOT NULL DEFAULT 'Online',
       location      TEXT,
       status        TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open','booked','cancelled')),
+      google_event_id TEXT,
       created_at    TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP::text),
       UNIQUE (mentor_id, slot_date, start_time)
     );
@@ -113,7 +114,29 @@ async function seedFullNeon() {
     );
   `;
 
-  console.log('✓ All 7 tables verified in Neon DB');
+  await sql`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER,
+      action     TEXT NOT NULL,
+      details    TEXT,
+      ip         TEXT,
+      created_at TEXT NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text)
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT    NOT NULL UNIQUE,
+      expires_at TEXT    NOT NULL,
+      used_at    TEXT,
+      created_at TEXT    NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text)
+    );
+  `;
+
+  console.log('\u2713 All 9 tables verified in Neon DB (canonical schema: sql/schema.postgres.sql)');
 
   const PW = bcrypt.hashSync('pass123', 10);
 

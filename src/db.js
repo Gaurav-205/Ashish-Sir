@@ -26,14 +26,43 @@ function convertSql(sql) {
   converted = converted.replace(/datetime\(([^)]+)\)/gi, '($1)::timestamp');
   converted = converted.replace(/BEGIN\s+IMMEDIATE/gi, 'BEGIN');
   converted = converted.replace(/AUTOINCREMENT/gi, '');
-  if (/^\s*INSERT\s+INTO/i.test(converted) && !/RETURNING/i.test(converted)) {
-    converted += ' RETURNING *';
+  // Postgres has no lastInsertRowid / changes counter, so every mutation is
+  // asked to return its affected rows. That is what backs `run()` below.
+  //
+  // Only for a *single* statement: exec() is also used for multi-statement
+  // batches (the seeder) and for BEGIN/COMMIT, where a trailing RETURNING is a
+  // syntax error.
+  const trimmed = converted.trim().replace(/;+\s*$/, '');
+  const isSingleStatement = !trimmed.includes(';');
+  if (isSingleStatement
+      && /^\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b/i.test(trimmed)
+      && !/\bRETURNING\b/i.test(trimmed)) {
+    return `${trimmed} RETURNING *`;
   }
   return converted;
 }
 
-// On Vercel or when DATABASE_URL is provided (and no DB_PATH override is set), default to Postgres mode
-const usePostgres = Boolean(DATABASE_URL && !process.env.DB_PATH && !DATABASE_URL.includes('YOUR_PASSWORD'));
+/*
+ * Driver selection.
+ *   DB_DRIVER=sqlite | postgres  -> explicit, always wins.
+ *   otherwise                    -> Postgres when a usable DATABASE_URL is set
+ *                                   and no DB_PATH override forces a local file.
+ * The active driver is logged once at startup so a misconfigured environment is
+ * obvious instead of silently reading from the wrong database.
+ */
+const driverOverride = String(process.env.DB_DRIVER || '').trim().toLowerCase();
+const hasUsableUrl = Boolean(DATABASE_URL && !DATABASE_URL.includes('YOUR_PASSWORD'));
+
+if (driverOverride && !['sqlite', 'postgres'].includes(driverOverride)) {
+  throw new Error(`Invalid DB_DRIVER "${process.env.DB_DRIVER}". Use "sqlite" or "postgres".`);
+}
+if (driverOverride === 'postgres' && !hasUsableUrl) {
+  throw new Error('DB_DRIVER=postgres requires a valid DATABASE_URL.');
+}
+
+const usePostgres = driverOverride
+  ? driverOverride === 'postgres'
+  : Boolean(hasUsableUrl && !process.env.DB_PATH);
 
 if (usePostgres) {
   // --- Neon Postgres Mode ---
@@ -43,51 +72,76 @@ if (usePostgres) {
     ssl: { rejectUnauthorized: false },
   });
 
+  const QUERY_TIMEOUT_MS = Number(process.env.DB_QUERY_TIMEOUT_MS) || 15000;
+
+  /*
+   * The application layer is synchronous throughout (it was written against
+   * node:sqlite's synchronous API), so Postgres access goes through a blocking
+   * shim: Neon's HTTP SQL endpoint via curl, falling back to a short-lived `pg`
+   * subprocess when curl is unavailable.
+   *
+   * Failures throw. Returning an empty result set on error is what makes a UI
+   * silently disagree with the database, so that is never done here.
+   */
   const runPgQuerySync = (sql, params = []) => {
     const converted = convertSql(sql);
+    const problems = [];
 
-    // Method 1: Fast HTTP REST query via curl (ideal for Vercel / serverless Lambda)
-    if (DATABASE_URL && DATABASE_URL.includes('@')) {
+    // Method 1: Neon HTTP SQL endpoint (fast, and the only option on Lambda).
+    if (DATABASE_URL.includes('@')) {
       try {
         const u = new URL(DATABASE_URL);
-        const httpUrl = `https://${u.hostname}/sql`;
         const payload = JSON.stringify({ query: converted, params });
         const out = execFileSync('curl', [
-          '-s', '-X', 'POST', httpUrl,
+          '-sS', '--fail-with-body', '-X', 'POST', `https://${u.hostname}/sql`,
           '-H', 'Content-Type: application/json',
           '-H', `Neon-Connection-String: ${DATABASE_URL}`,
-          '--data-binary', payload
-        ], { encoding: 'utf8', timeout: 5000 });
+          '--data-binary', payload,
+        ], { encoding: 'utf8', timeout: QUERY_TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] });
 
         if (out && out.trim()) {
           const parsed = JSON.parse(out.trim());
-          if (parsed.rows) return parsed.rows;
-          if (parsed.message) console.error('Neon HTTP SQL Error:', parsed.message);
+          if (Array.isArray(parsed.rows)) return parsed.rows;
+          problems.push(`Neon HTTP: ${parsed.message || parsed.error || 'unexpected response'}`);
+        } else {
+          problems.push('Neon HTTP: empty response');
         }
       } catch (e) {
-        // Fallback to Method 2 below if curl fails
+        problems.push(`Neon HTTP: ${e.message}`);
       }
     }
 
-    // Method 2: Node pg query fallback
+    // Method 2: `pg` in a child process.
     const code = `
+      process.removeAllListeners('warning');
       const { Pool } = require('pg');
       const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
       pool.query(${JSON.stringify(converted)}, ${JSON.stringify(params)})
-        .then(res => { console.log(JSON.stringify(res.rows)); process.exit(0); })
-        .catch(err => { console.error(JSON.stringify({ error: err.message })); process.exit(1); });
+        .then(res => {
+          // A multi-statement batch resolves to an array of results.
+          const rows = Array.isArray(res)
+            ? (res.length ? (res[res.length - 1].rows || []) : [])
+            : (res.rows || []);
+          process.stdout.write(JSON.stringify(rows));
+          process.exit(0);
+        })
+        .catch(err => { process.stderr.write(String(err && err.message || err)); process.exit(1); });
     `;
     try {
       const out = execFileSync(process.execPath, ['-e', code], {
+        cwd: path.join(__dirname, '..'),
         env: { ...process.env, DATABASE_URL },
         encoding: 'utf8',
-        timeout: 5000,
+        timeout: QUERY_TIMEOUT_MS,
       });
       return JSON.parse(out.trim() || '[]');
     } catch (e) {
-      console.error('Neon Query Error:', e.stderr || e.message);
-      return [];
+      problems.push(`pg: ${(e.stderr || e.message || '').toString().trim()}`);
     }
+
+    const err = new Error(`Database query failed. ${problems.join(' | ')}`);
+    err.sql = converted;
+    throw err;
   };
 
   db = {
@@ -110,7 +164,8 @@ if (usePostgres) {
         run(...args) {
           const params = Array.isArray(args[0]) ? args[0] : args;
           const rows = runPgQuerySync(sql, params);
-          return { changes: rows.length, lastInsertRowid: rows[0]?.id || 1 };
+          const id = rows[0] && rows[0].id != null ? rows[0].id : null;
+          return { changes: rows.length, lastInsertRowid: id };
         },
       };
     },
@@ -120,6 +175,26 @@ if (usePostgres) {
       return res.rows;
     },
   };
+
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS audit_logs (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER,
+      action     TEXT NOT NULL,
+      details    TEXT,
+      ip         TEXT,
+      created_at TEXT NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text)
+    )`);
+    db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT    NOT NULL UNIQUE,
+      expires_at TEXT    NOT NULL,
+      used_at    TEXT,
+      created_at TEXT    NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text)
+    )`);
+    db.exec(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS google_event_id TEXT`);
+  } catch (_) {}
 } else {
   // --- SQLite Mode (Local / Fallback) ---
   let DatabaseSync;
@@ -177,7 +252,7 @@ if (usePostgres) {
         google_refresh_token TEXT,
         google_token_expiry INTEGER,
         google_calendar_enabled INTEGER NOT NULL DEFAULT 1,
-        created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes'))
       );
 
       CREATE TABLE IF NOT EXISTS slots (
@@ -190,7 +265,8 @@ if (usePostgres) {
         mode          TEXT    NOT NULL DEFAULT 'Online',
         location      TEXT,
         status        TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open','booked','cancelled')),
-        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        google_event_id TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes')),
         UNIQUE (mentor_id, slot_date, start_time)
       );
 
@@ -204,7 +280,7 @@ if (usePostgres) {
         attendance    TEXT    NOT NULL DEFAULT 'pending' CHECK (attendance IN ('pending','attended','absent')),
         attendance_marked_at TEXT,
         google_event_id TEXT,
-        booked_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+        booked_at     TEXT    NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes')),
         completed_at  TEXT
       );
 
@@ -219,7 +295,7 @@ if (usePostgres) {
         hr_perf_marks   INTEGER,
         total          INTEGER NOT NULL,
         feedback       TEXT,
-        submitted_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        submitted_at   TEXT NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes'))
       );
 
       CREATE TABLE IF NOT EXISTS student_feedbacks (
@@ -231,12 +307,21 @@ if (usePostgres) {
         structured     INTEGER NOT NULL CHECK (structured IN (0, 1)),
         hr_relevant    INTEGER CHECK (hr_relevant IN (0, 1)),
         feedback_text  TEXT,
-        submitted_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        submitted_at   TEXT NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes'))
       );
 
       CREATE TABLE IF NOT EXISTS settings (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash  TEXT    NOT NULL UNIQUE,
+        expires_at  TEXT    NOT NULL,
+        used_at     TEXT,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes'))
       );
 
       CREATE TABLE IF NOT EXISTS audit_logs (
@@ -245,9 +330,13 @@ if (usePostgres) {
         action     TEXT NOT NULL,
         details    TEXT,
         ip         TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (datetime('now','+5 hours','+30 minutes'))
       );
       `);
+
+      try {
+        sqliteDb.exec("ALTER TABLE slots ADD COLUMN google_event_id TEXT;");
+      } catch (_) {}
 
       db = sqliteDb;
     } catch (sqliteErr) {
@@ -266,6 +355,11 @@ if (usePostgres) {
       };
     }
   }
+}
+
+db.driver = usePostgres ? 'postgres' : (db.isPostgres === false ? 'sqlite-fallback' : 'sqlite');
+if (process.env.NODE_ENV !== 'test' && !process.env.DB_QUIET) {
+  console.log(`  [db] driver: ${db.driver}`);
 }
 
 module.exports = db;

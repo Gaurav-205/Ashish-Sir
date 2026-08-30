@@ -1,5 +1,6 @@
 'use strict';
 const db = require('./db');
+const h = require('./helpers');
 const { RUBRIC, GRAND_TOTAL } = require('./rubric');
 
 const INTERVIEW_SELECT = `
@@ -153,7 +154,10 @@ function allStudentSummaries() {
 }
 
 function adminStats() {
-  const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+  // Postgres returns COUNT(*) as a bigint *string*; SQLite returns a number.
+  // Normalising here keeps every caller (and every `=== 0` in a view) correct
+  // on both drivers.
+  const one = (sql, ...a) => Number(db.prepare(sql).get(...a).c) || 0;
   return {
     students: one(`SELECT COUNT(*) c FROM users WHERE role='student'`),
     mentors:  one(`SELECT COUNT(*) c FROM users WHERE role='mentor'`),
@@ -166,7 +170,7 @@ function adminStats() {
     evaluated: one(`SELECT COUNT(*) c FROM evaluations`),
     fullyBooked: one(`SELECT COUNT(*) c FROM (
         SELECT student_id FROM interviews WHERE status<>'cancelled'
-        GROUP BY student_id HAVING COUNT(DISTINCT type) = 2)`),
+        GROUP BY student_id HAVING COUNT(DISTINCT type) = 2) AS fully_booked`),
   };
 }
 
@@ -177,21 +181,27 @@ function mentorsList(type) {
 }
 
 function mentorsWithOpenSlots() {
+  const now = h.nowMinute();
   return db.prepare(`
     SELECT m.id, m.name, m.email, m.can_technical, m.can_hr, m.active,
       (SELECT COUNT(*) FROM slots s
         WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'technical'
-          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS tech_open_slots,
+          AND (s.slot_date || ' ' || s.start_time) > ?) AS tech_open_slots,
       (SELECT COUNT(*) FROM slots s
         WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'hr'
-          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS hr_open_slots,
+          AND (s.slot_date || ' ' || s.start_time) > ?) AS hr_open_slots,
       (SELECT COUNT(*) FROM slots s
         WHERE s.mentor_id = m.id AND s.status = 'open'
-          AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime')) AS total_open_slots
+          AND (s.slot_date || ' ' || s.start_time) > ?) AS total_open_slots
      FROM users m
     WHERE (m.role = 'mentor' OR m.can_technical = 1 OR m.can_hr = 1) AND m.active = 1
     ORDER BY m.name
-  `).all();
+  `).all(now, now, now).map((m) => ({
+    ...m,
+    tech_open_slots: Number(m.tech_open_slots) || 0,
+    hr_open_slots: Number(m.hr_open_slots) || 0,
+    total_open_slots: Number(m.total_open_slots) || 0,
+  }));
 }
 
 function computeTotal(type, body) {
