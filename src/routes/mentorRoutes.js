@@ -9,6 +9,7 @@ const { validateId } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
 
 const router = express.Router();
+const google = require('../services/googleService');
 router.use(requireRole('mentor'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
@@ -21,8 +22,8 @@ router.get('/', (req, res) => {
   const completed = all.filter((i) => i.status === 'completed');
   const pending = completed.filter((i) => i.eval_id == null);
   const slots = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND status='open'
-                            AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime')
-                            ORDER BY slot_date, start_time`).all(id);
+                            AND (slot_date || ' ' || start_time) > ?
+                            ORDER BY slot_date, start_time`).all(id, h.nowMinute());
   res.render('mentor/dashboard', {
     title: 'My interviews',
     upcoming,
@@ -79,8 +80,19 @@ router.post('/slots', (req, res) => {
       }
 
       try {
-        ins.run(mentorId, type, slot_date, s_time, e_time, mode || 'Online', loc);
+        const resIns = ins.run(mentorId, type, slot_date, s_time, e_time, mode || 'Online', loc);
         made++;
+        const newSlot = {
+          id: resIns.lastInsertRowid,
+          mentor_id: mentorId,
+          type,
+          slot_date,
+          start_time: s_time,
+          end_time: e_time,
+          mode: mode || 'Online',
+          location: loc,
+        };
+        google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
       } catch (e) {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
       }
@@ -117,15 +129,17 @@ router.post('/interview/:id/attendance', validateId('id'), (req, res) => {
   const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
 
   if (attendance === 'attended') {
+    const now = h.nowStamp();
     db.prepare(`UPDATE interviews SET attendance='attended', status='completed',
-                completed_at=COALESCE(completed_at, datetime('now')),
-                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+                completed_at=COALESCE(completed_at, ?),
+                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
     logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'attended' });
     flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
   } else {
+    const now = h.nowStamp();
     db.prepare(`UPDATE interviews SET attendance='absent', status='completed',
-                completed_at=COALESCE(completed_at, datetime('now')),
-                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+                completed_at=COALESCE(completed_at, ?),
+                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
     logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'absent' });
     flash(req, 'err', 'Candidate marked as Absent / No-Show.');
   }
@@ -143,8 +157,9 @@ router.post('/interview/:id/complete', validateId('id'), (req, res) => {
   }
   if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
   else {
-    db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=datetime('now'),
-                attendance_marked_at=datetime('now') WHERE id=?`).run(iv.id);
+    const now = h.nowStamp();
+    db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=?,
+                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
     logAudit(req, 'MENTOR_COMPLETE_INTERVIEW', { interview_id: iv.id });
     flash(req, 'ok', 'Marked as completed and attended. You can now submit the evaluation.');
   }

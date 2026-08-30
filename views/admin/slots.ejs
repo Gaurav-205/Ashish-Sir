@@ -6,13 +6,19 @@
 <div class="card">
   <div class="card-head"><h2>Create slots</h2><span class="faint">Generate several back-to-back slots at once</span></div>
   <div class="card-body">
+    <% if (!techMentors.length && !hrMentors.length) { %>
+      <div class="note" style="margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <span>No evaluators are enabled for Technical or HR interviews yet, so there is nobody to publish slots for.</span>
+        <a class="btn sm primary" href="/admin/mentors">Register a mentor →</a>
+      </div>
+    <% } else { %>
     <form method="post" action="/admin/slots">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Interview type *</label>
           <select name="type" id="typeSel" required>
-            <option value="technical">Technical</option>
-            <option value="hr">HR</option>
+            <% if (techMentors.length) { %><option value="technical">Technical</option><% } %>
+            <% if (hrMentors.length) { %><option value="hr">HR</option><% } %>
           </select></div>
         <div class="field"><label>Mentor *</label>
           <select name="mentor_id" id="mentorSel" required>
@@ -37,12 +43,13 @@
         <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00 - 20:00, 4 slots)</button>
       </div>
     </form>
+    <% } %>
   </div>
 </div>
 
 <div class="card">
   <div class="card-head">
-    <h2>All slots (<%= slots.length %>)</h2>
+    <h2>All slots (<%= total %>)</h2>
     <form method="get" class="btn-row">
       <select name="when" onchange="this.form.submit()">
         <option value="upcoming" <%= filter.when==='upcoming'?'selected':'' %>>Today &amp; upcoming</option>
@@ -133,9 +140,21 @@
           </td>
         </tr>
       <% }); %>
-      <% if (!slots.length) { %><tr><td colspan="6" class="empty">No slots match.</td></tr><% } %>
+      <% if (!slots.length) { %><tr><td colspan="6" class="empty">No slots match the selected filters.</td></tr><% } %>
       </tbody>
     </table></div>
+    <% if (pageCount > 1) { %>
+      <nav class="pager" aria-label="Slot pages">
+        <% const qs = baseQuery ? baseQuery + '&' : ''; %>
+        <a class="btn sm <%= page <= 1 ? 'is-disabled' : '' %>"
+           href="?<%= qs %>page=<%= page - 1 %>"
+           <%= page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' %>>← Previous</a>
+        <span class="faint">Page <%= page %> of <%= pageCount %> · <%= total %> slot(s)</span>
+        <a class="btn sm <%= page >= pageCount ? 'is-disabled' : '' %>"
+           href="?<%= qs %>page=<%= page + 1 %>"
+           <%= page >= pageCount ? 'aria-disabled="true" tabindex="-1"' : '' %>>Next →</a>
+      </nav>
+    <% } %>
   </div>
 </div>
 <script src="/js/admin-slots.js"></script>

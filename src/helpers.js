@@ -25,10 +25,35 @@ function fmtSlot(s) {
   if (!s) return '—';
   return `${fmtDate(s.slot_date)} · ${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}`;
 }
+// ---------------------------------------------------------------------------
+// Time handling.
+// The whole product runs on a single institutional timezone (IST). Every
+// "now" comparison — in SQL and in JS — goes through these helpers so the
+// database and the application can never disagree about what "past" means,
+// regardless of the timezone the server process happens to run in.
+// ---------------------------------------------------------------------------
+const TZ_OFFSET_MS = 5.5 * 60 * 60 * 1000; // Asia/Kolkata, no DST
+
+/** Current instant in IST as 'YYYY-MM-DD HH:MM:SS'. */
+function nowStamp() {
+  return new Date(Date.now() + TZ_OFFSET_MS).toISOString().slice(0, 19).replace('T', ' ');
+}
+/** Current instant in IST as 'YYYY-MM-DD HH:MM' — matches `slot_date || ' ' || start_time`. */
+function nowMinute() {
+  return nowStamp().slice(0, 16);
+}
+/** Today's date in IST as 'YYYY-MM-DD'. */
 function today() {
-  const d = new Date();
-  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().slice(0, 10);
+  return nowStamp().slice(0, 10);
+}
+/** Renders a stored 'YYYY-MM-DD HH:MM:SS' timestamp for humans. */
+function fmtStamp(stamp) {
+  if (!stamp) return '—';
+  const str = String(stamp).replace('T', ' ');
+  const date = str.slice(0, 10);
+  const time = str.slice(11, 16);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return str;
+  return time ? `${fmtDate(date)} · ${fmtTime(time)}` : fmtDate(date);
 }
 function addDays(ymd, n) {
   const d = new Date(ymd + 'T00:00:00Z');
@@ -48,20 +73,29 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * True when a slot's start time is already in the past (IST).
+ * Compares plain 'YYYY-MM-DD HH:MM' strings so it matches the SQL filters
+ * byte-for-byte and never depends on the host timezone.
+ */
 function isPast(slot) {
   if (!slot || !slot.slot_date) return false;
-  const now = new Date();
-  const timeStr = slot.start_time || '00:00';
-  const start = new Date(`${slot.slot_date}T${timeStr}:00+05:30`);
-  return !isNaN(start.getTime()) && start <= now;
+  const startsAt = `${slot.slot_date} ${slot.start_time || '00:00'}`.slice(0, 16);
+  return startsAt <= nowMinute();
 }
 
 function generateMeetingLink(type = 'interview') {
-  const cleanType = String(type).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const prefix = cleanType ? cleanType.charAt(0).toUpperCase() + cleanType.slice(1) : 'Interview';
-  const id = crypto.randomBytes(4).toString('hex');
-  const time = Date.now().toString(36);
-  return `https://meet.jit.si/Konfident-${prefix}-${time}-${id}`;
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const randLetters = (len) => {
+    const bytes = crypto.randomBytes(len);
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      out += letters[bytes[i] % letters.length];
+    }
+    return out;
+  };
+  const meetCode = `${randLetters(3)}-${randLetters(4)}-${randLetters(3)}`;
+  return `https://meet.google.com/${meetCode}`;
 }
 
 function linkify(str) {
@@ -82,4 +116,7 @@ function linkify(str) {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
   });
 }
-module.exports = { fmtDate, fmtTime, fmtSlot, today, addDays, titleCase, isPast, linkify, escapeHtml, generateMeetingLink };
+module.exports = {
+  fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowStamp, nowMinute, addDays,
+  titleCase, isPast, linkify, escapeHtml, generateMeetingLink,
+};
