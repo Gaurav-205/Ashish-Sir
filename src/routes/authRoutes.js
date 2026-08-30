@@ -3,34 +3,11 @@ const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { requireLogin } = require('../auth');
+const { requireLogin, homeFor } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
-const { setAuthSession, clearAuthSession } = require('../middleware/sessionAuth');
-const fs = require('fs');
-const path = require('path');
-
-function invalidateOtherSessions(userId, currentSessionId) {
-  if (process.env.VERCEL || process.env.NOW_REGION) return;
-  setTimeout(() => {
-    try {
-      let DatabaseSync;
-      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) {}
-      if (!DatabaseSync) return;
-      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
-      if (fs.existsSync(sessionsDbPath)) {
-        const sdb = new DatabaseSync(sessionsDbPath);
-        sdb.exec('PRAGMA busy_timeout = 5000');
-        sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ? AND sid <> ?")
-           .run(Number(userId), String(currentSessionId));
-        sdb.close();
-      }
-    } catch (err) {
-      console.error('Failed to invalidate other sessions:', err);
-    }
-  }, 100);
-}
+const { setAuthSession, clearAuthSession, invalidateUserSessions } = require('../middleware/sessionAuth');
 
 const router = express.Router();
 const authLimiter = createRateLimiter({
@@ -39,15 +16,13 @@ const authLimiter = createRateLimiter({
   message: 'Too many login attempts. Please wait 15 minutes before trying again.',
 });
 
-const HOME = { admin: '/admin', mentor: '/mentor', student: '/student' };
-
 router.get('/', (req, res) => {
-  if (req.session.user) return res.redirect(HOME[req.session.user.role]);
+  if (req.session.user) return res.redirect(homeFor(req.session.user.role));
   res.redirect('/login');
 });
 
 router.get('/login', (req, res) => {
-  if (req.session.user) return res.redirect(HOME[req.session.user.role]);
+  if (req.session.user) return res.redirect(homeFor(req.session.user.role));
   res.render('login', {
     title: 'Sign in',
     error: null,
@@ -89,7 +64,7 @@ router.post('/login', authLimiter, (req, res) => {
 
   // Session fixation protection
   const userData = { id: row.id, name: row.name, email: row.email, role: row.role };
-  const redirectTo = to || HOME[row.role];
+  const redirectTo = to || homeFor(row.role);
   delete req.session.redirectTo;
 
   req.session.regenerate((err) => {
@@ -228,7 +203,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
       else if (to.startsWith('/student') && user.role !== 'student') to = null;
       else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
     }
-    const redirectTo = to || HOME[user.role];
+    const redirectTo = to || homeFor(user.role);
 
     setAuthSession(req, res, user);
     req.session.save(() => {
@@ -285,6 +260,125 @@ router.get('/auth/google/debug', (req, res) => {
       notice: 'Copy all URIs from step2_authorizedRedirectUris into your Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0 Client ID -> Authorized redirect URIs.'
     }
   });
+});
+
+
+/* --------------------------- Password recovery --------------------------- */
+/*
+ * No transactional mail provider is wired into this deployment, so the reset
+ * link is not emailed. It is written to the server log and — unless this is a
+ * production deployment that opted out — shown on screen so the placement cell
+ * can hand it to the candidate. Set RESET_LINK_VISIBLE=false to force the
+ * log-only behaviour, or wire sendResetLink() to a mailer.
+ */
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const resetLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many password reset requests. Please wait 15 minutes before trying again.',
+});
+
+const hashToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
+
+function resetLinkIsVisible() {
+  if (process.env.RESET_LINK_VISIBLE === 'false') return false;
+  if (process.env.RESET_LINK_VISIBLE === 'true') return true;
+  return process.env.NODE_ENV !== 'production';
+}
+
+function absoluteUrl(req, path) {
+  const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || req.protocol || 'http';
+  const host = (req.headers['x-forwarded-host'] || '').split(',')[0].trim() || req.headers.host || 'localhost:3000';
+  return `${proto}://${host}${path}`;
+}
+
+router.get('/forgot-password', (req, res) => {
+  if (req.session.user) return res.redirect('/profile#password');
+  res.render('forgot-password', { title: 'Forgot password', error: null, sent: false, resetUrl: null, email: '' });
+});
+
+router.post('/forgot-password', resetLimiter, (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).render('forgot-password', {
+      title: 'Forgot password',
+      error: 'Enter the email address you sign in with.',
+      sent: false, resetUrl: null, email: req.body.email || '',
+    });
+  }
+
+  let resetUrl = null;
+  const user = db.prepare('SELECT id, name, email, active FROM users WHERE lower(email) = ?').get(email);
+  if (user && user.active) {
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS + 5.5 * 3600000)
+      .toISOString().slice(0, 19).replace('T', ' ');
+    // Any earlier outstanding link for this account stops working immediately.
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+    db.prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?,?,?)')
+      .run(user.id, hashToken(token), expiresAt);
+
+    resetUrl = absoluteUrl(req, `/reset-password/${token}`);
+    console.log(`[password-reset] link for ${user.email}: ${resetUrl}`);
+    logAudit(req, 'AUTH_PASSWORD_RESET_REQUESTED', { email: user.email }, user.id);
+  } else {
+    logAudit(req, 'AUTH_PASSWORD_RESET_UNKNOWN_EMAIL', { email });
+  }
+
+  // Identical response either way: never confirm whether an address is registered.
+  res.render('forgot-password', {
+    title: 'Forgot password',
+    error: null,
+    sent: true,
+    resetUrl: resetLinkIsVisible() ? resetUrl : null,
+    email,
+  });
+});
+
+function findResetToken(rawToken) {
+  if (!rawToken || typeof rawToken !== 'string') return null;
+  const row = db.prepare(`SELECT pr.*, u.email, u.name, u.active
+                            FROM password_resets pr JOIN users u ON u.id = pr.user_id
+                           WHERE pr.token_hash = ?`).get(hashToken(rawToken));
+  if (!row || row.used_at || !row.active) return null;
+  const nowStamp = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
+  if (String(row.expires_at) <= nowStamp) return null;
+  return row;
+}
+
+router.get('/reset-password/:token', (req, res) => {
+  const row = findResetToken(req.params.token);
+  if (!row) {
+    return res.status(400).render('reset-password', {
+      title: 'Reset password', token: null, error: 'This reset link is invalid or has expired. Request a new one.', email: null,
+    });
+  }
+  res.render('reset-password', { title: 'Reset password', token: req.params.token, error: null, email: row.email });
+});
+
+router.post('/reset-password/:token', resetLimiter, (req, res) => {
+  const row = findResetToken(req.params.token);
+  if (!row) {
+    return res.status(400).render('reset-password', {
+      title: 'Reset password', token: null, error: 'This reset link is invalid or has expired. Request a new one.', email: null,
+    });
+  }
+  const next1 = String(req.body.next1 || '');
+  const next2 = String(req.body.next2 || '');
+  const rerender = (error) => res.status(400).render('reset-password', {
+    title: 'Reset password', token: req.params.token, error, email: row.email,
+  });
+  if (next1.length < 6) return rerender('New password must be at least 6 characters.');
+  if (next1 !== next2) return rerender('The two passwords do not match.');
+
+  const usedAt = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(next1, 10), row.user_id);
+  db.prepare('UPDATE password_resets SET used_at = ? WHERE id = ?').run(usedAt, row.id);
+  invalidateUserSessions(row.user_id);
+  logAudit(req, 'AUTH_PASSWORD_RESET_COMPLETED', { email: row.email }, row.user_id);
+
+  req.session.flash = { type: 'ok', msg: 'Password updated. Sign in with your new password.' };
+  res.redirect('/login');
 });
 
 router.post('/logout', (req, res) => {
@@ -367,7 +461,7 @@ router.post('/profile/password', requireLogin, (req, res) => {
   else {
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
       .run(bcrypt.hashSync(String(next1), 10), user.id);
-    invalidateOtherSessions(user.id, req.sessionID);
+    invalidateUserSessions(user.id, req.sessionID);
     logAudit(req, 'AUTH_PASSWORD_CHANGE', null, user.id);
     ok = 'Password updated.';
   }

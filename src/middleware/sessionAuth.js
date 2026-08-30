@@ -1,5 +1,7 @@
 'use strict';
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 
 const COOKIE_NAME = 'konfident_auth';
@@ -120,8 +122,52 @@ function sessionRehydrateMiddleware(req, res, next) {
   next();
 }
 
+/**
+ * Drops a user's persisted sessions so a password change or a deactivation
+ * takes effect on devices that are already signed in.
+ *
+ * Only meaningful with the SQLite session store: serverless deployments use an
+ * in-memory store per Lambda, where there is nothing shared to delete. The
+ * signed `konfident_auth` cookie is the backstop there — it is re-validated
+ * against the users table on every request.
+ *
+ * @param {number} userId          - whose sessions to drop.
+ * @param {string|null} keepSessionId - session id to preserve (the caller's own).
+ */
+function invalidateUserSessions(userId, keepSessionId = null) {
+  if (process.env.VERCEL || process.env.NOW_REGION) return;
+  // Deferred: express-session may still be writing the current request's row.
+  setTimeout(() => {
+    try {
+      let DatabaseSync;
+      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) { return; }
+      if (!DatabaseSync) return;
+
+      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
+      if (!fs.existsSync(sessionsDbPath)) return;
+
+      const sdb = new DatabaseSync(sessionsDbPath);
+      try {
+        sdb.exec('PRAGMA busy_timeout = 5000');
+        if (keepSessionId) {
+          sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ? AND sid <> ?")
+            .run(Number(userId), String(keepSessionId));
+        } else {
+          sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ?")
+            .run(Number(userId));
+        }
+      } finally {
+        sdb.close();
+      }
+    } catch (err) {
+      console.error('Failed to invalidate sessions for user', userId, err.message);
+    }
+  }, 100);
+}
+
 module.exports = {
   COOKIE_NAME,
+  invalidateUserSessions,
   signToken,
   verifyToken,
   setAuthSession,

@@ -3,7 +3,6 @@ if (typeof process.loadEnvFile === 'function') {
   try { process.loadEnvFile(); } catch (_) {}
 }
 const path = require('path');
-const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 
@@ -58,9 +57,15 @@ app.use(session({
 }));
 
 app.use(sessionRehydrateMiddleware);
-app.use(csrfProtection);
 
-// flash messages
+/*
+ * View locals and flash messages.
+ *
+ * This must run BEFORE csrfProtection: a rejected request still renders the
+ * error page, and that page (via the nav partial) needs `user`, `path` and the
+ * view helpers. Registering them afterwards turned every CSRF rejection into a
+ * 500.
+ */
 app.use((req, res, next) => {
   res.locals.flash = req.session.flash || null;
   delete req.session.flash;
@@ -71,8 +76,18 @@ app.use((req, res, next) => {
   res.locals.grade = grade;
   res.locals.path = req.path;
   res.locals.title = 'Konfident Interview 2025';
+
+  // Signed-in pages contain personal data. Without this the browser's
+  // back/forward cache happily re-displays a dashboard after sign-out.
+  if ((req.method === 'GET' || req.method === 'HEAD') && !req.path.startsWith('/health')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   next();
 });
+
+app.use(csrfProtection);
 
 // Safe health check endpoint for uptime and orchestrator probes
 app.get('/health', (req, res) => {
