@@ -80,7 +80,8 @@ function setAuthSession(req, res, user) {
  * Clears both session state and the stateless backup cookie.
  */
 function clearAuthSession(req, res, callback) {
-  res.appendHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`);
+  const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  res.appendHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isSecure ? '; Secure' : ''}`);
   if (req.session) {
     delete req.session.user;
     req.session.destroy(() => {
