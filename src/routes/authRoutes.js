@@ -332,6 +332,7 @@ router.post('/profile/update', requireLogin, (req, res) => {
 
   db.prepare('UPDATE users SET name=?, phone=?, branch=?, squad=?, resume_url=? WHERE id=?')
     .run(name, phone, branch, squad, resume_url, me.id);
+  logAudit(req, 'AUTH_PROFILE_UPDATE', { name, phone }, me.id);
   req.session.user.name = name;
   req.session.flash = { type: 'ok', msg: 'Profile details updated successfully.' };
   res.redirect('/profile');

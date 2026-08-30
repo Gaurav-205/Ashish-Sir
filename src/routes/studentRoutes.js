@@ -13,6 +13,22 @@ router.use(requireRole('student'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
+function safeRedirectTarget(req, fallback = '/student') {
+  const ref = req.headers.referer || req.headers.referrer;
+  if (!ref) return fallback;
+  try {
+    if (ref.startsWith('/') && !ref.startsWith('//')) {
+      return ref;
+    }
+    const parsed = new URL(ref);
+    const host = req.get('host');
+    if (parsed.host === host) {
+      return parsed.pathname + parsed.search;
+    }
+  } catch (_) {}
+  return fallback;
+}
+
 router.get('/', (req, res) => {
   const s = q.studentSummary(req.session.user.id);
   if (!s || !s.student) {
@@ -182,7 +198,8 @@ router.post('/book', async (req, res) => {
   } catch (e) {
     try { db.exec('ROLLBACK'); } catch (_) {}
     flash(req, 'err', e.message);
-    return res.redirect('/student/slots?type=' + (req.body.type || 'technical'));
+    const redirectType = req.body.type === 'hr' ? 'hr' : 'technical';
+    return res.redirect('/student/slots?type=' + redirectType);
   }
 });
 
@@ -203,7 +220,7 @@ router.post('/cancel/:id', validateId('id'), async (req, res) => {
       try {
         db.exec('BEGIN IMMEDIATE');
         db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
-        db.prepare(`UPDATE slots SET status='open' WHERE id=?`).run(iv.slot_id);
+        db.prepare(`UPDATE slots SET status='open' WHERE id=? AND status='booked'`).run(iv.slot_id);
         db.exec('COMMIT');
 
         // Remove Google Calendar event if synced
@@ -243,19 +260,19 @@ router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
   }
   if (iv.attendance === 'absent' || (iv.status !== 'completed' && iv.attendance !== 'attended')) {
     flash(req, 'err', 'Feedback can only be submitted for attended interviews.');
-    return res.redirect(req.headers.referer || '/student');
+    return res.redirect(safeRedirectTarget(req, '/student'));
   }
 
   const satisfaction = Number(req.body.satisfaction);
   if (!Number.isInteger(satisfaction) || satisfaction < 1 || satisfaction > 5) {
     flash(req, 'err', 'Please select an overall satisfaction rating from 1 to 5.');
-    return res.redirect(req.headers.referer || '/student/results');
+    return res.redirect(safeRedirectTarget(req, '/student/results'));
   }
 
   const structured = Number(req.body.structured);
   if (structured !== 0 && structured !== 1) {
     flash(req, 'err', 'Please answer whether the interview felt structured and well organized.');
-    return res.redirect(req.headers.referer || '/student/results');
+    return res.redirect(safeRedirectTarget(req, '/student/results'));
   }
 
   let hr_relevant = null;
@@ -263,7 +280,7 @@ router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
     hr_relevant = Number(req.body.hr_relevant);
     if (hr_relevant !== 0 && hr_relevant !== 1) {
       flash(req, 'err', 'Please answer whether the HR questions were relevant to placement/job preparation.');
-      return res.redirect(req.headers.referer || '/student/results');
+      return res.redirect(safeRedirectTarget(req, '/student/results'));
     }
   }
 
@@ -285,7 +302,7 @@ router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
     flash(req, 'err', 'Could not save feedback: ' + err.message);
   }
 
-  return res.redirect(req.headers.referer || '/student/results');
+  return res.redirect(safeRedirectTarget(req, '/student/results'));
 });
 
 module.exports = router;

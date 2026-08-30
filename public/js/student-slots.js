@@ -80,6 +80,9 @@
     }
   }
 
+  // Expose to window for inline onclick / onchange handlers
+  window.fetchLatestSlots = fetchLatestSlots;
+
   // Initial smart match run
   fetchLatestSlots();
 
