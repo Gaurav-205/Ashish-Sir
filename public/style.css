@@ -159,7 +159,7 @@ th.num, td.num { text-align: right; }
   padding: 0 32px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 24px;
   height: 64px;
 }
 .brand {
@@ -203,16 +203,50 @@ th.num, td.num { text-align: right; }
   font-weight: 600;
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  min-width: 0;
+}
+.brand-tag { font-size: 12px; letter-spacing: 0.04em; }
+
 .who {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-left: auto;
+  min-width: 0;
+}
+.who-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  min-width: 0;
 }
 .who .name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
 }
+.who .name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+.pill.role-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.who-action { padding: 5px 12px; font-size: 12px; gap: 4px; }
 .avatar {
   width: 32px;
   height: 32px;
@@ -281,6 +315,64 @@ th.num, td.num { text-align: right; }
 .card-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .card-body { padding: 24px; }
 .card-body.tight { padding: 0; }
+
+/* ---- Mentor Cards ------------------------------------------------------- */
+.mentor-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.mentor-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.mentor-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.mentor-info .avatar {
+  flex-shrink: 0;
+}
+.mentor-meta {
+  min-width: 0;
+  flex: 1;
+}
+.mentor-meta h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mentor-meta .faint {
+  font-size: 12px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mentor-badges {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mentor-card .card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+}
+.mentor-card .card-body .btn-row {
+  margin-top: auto;
+}
 
 /* ---- Stats Widgets ------------------------------------------------------ */
 .stats {
@@ -395,6 +487,18 @@ th.num, td.num { text-align: right; }
   align-items: center;
   flex-wrap: wrap;
 }
+/*
+ * Inputs default to width:100%, which is right inside a .field but turns any
+ * inline toolbar (filter bars in card headers) into a stack of full-width
+ * controls. Inside a .btn-row they size to their content instead.
+ */
+.btn-row > input,
+.btn-row > select {
+  width: auto;
+  min-width: 132px;
+  max-width: 220px;
+}
+.card-head > form.btn-row { justify-content: flex-end; }
 
 /* ---- Pill Badges -------------------------------------------------------- */
 .pill {
@@ -1088,20 +1192,53 @@ tbody tr:hover {
   border-radius: var(--radius-pill);
 }
 
+/* ---- Pagination --------------------------------------------------------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+.btn.is-disabled,
+a.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 /* ---- Responsive --------------------------------------------------------- */
 @media (max-width: 768px) {
-  .topbar-in { height: auto; padding: 12px 18px; flex-wrap: wrap; gap: 10px; }
+  .topbar-in { height: auto; padding: 12px 16px; flex-wrap: wrap; gap: 10px; }
   .wrap { padding: 24px 18px 64px; }
+  .who { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
   .who .name { display: none; }
+  .brand-tag { display: none; }
+  /* Comfortable touch targets: 27px controls are hard to hit on a phone. */
+  .btn, .btn.sm, .who-action, .filter-chip { min-height: 38px; }
+  .btn.sm, .who-action { padding: 8px 14px; }
+  .filter-chip { padding: 8px 14px; }
   .nav { order: 3; width: 100%; justify-content: flex-start; gap: 6px; }
   .page-head { flex-direction: column; align-items: stretch; }
   .stats { grid-template-columns: repeat(2, 1fr); }
+  .btn-row { flex-wrap: wrap; }
+  .row { grid-template-columns: 1fr; }
+  .search-toolbar { flex-direction: column; align-items: stretch; }
+  .pager { flex-direction: column; align-items: stretch; text-align: center; }
+  .table-scroll { -webkit-overflow-scrolling: touch; }
+  .dossier-hero { flex-direction: column; align-items: flex-start; gap: 16px; }
+}
+@media (max-width: 520px) {
+  .stats { grid-template-columns: 1fr; }
+  .login-card { padding: 26px 20px; }
 }
 
 /* ---- Print Scorecard Styles --------------------------------------------- */
 @media print {
   body { background: #ffffff !important; color: #000000 !important; }
-  .topbar, .btn, form, .note, details.inline { display: none !important; }
+  .topbar, .btn, form, .note, details.inline, .pager { display: none !important; }
+  a[href]::after { content: none !important; }
   .wrap { padding: 0 !important; max-width: 100% !important; }
   .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
   .page-head h1 { font-size: 24px !important; color: #000 !important; }

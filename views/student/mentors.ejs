@@ -24,17 +24,17 @@
 <div class="grid two" id="mentorsGrid">
 <% mentors.forEach(function(m){ %>
   <div class="card mentor-card" data-tech="<%= m.can_technical ? '1' : '0' %>" data-hr="<%= m.can_hr ? '1' : '0' %>">
-    <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:12px">
+    <div class="card-head">
+      <div class="mentor-info">
         <% const mName = (m && m.name) ? String(m.name).trim() : ''; %>
         <% const mInitials = mName ? mName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?'; %>
         <span class="avatar" style="width:40px;height:40px;font-size:13px"><%= mInitials %></span>
-        <div>
-          <h2 style="margin:0;font-size:16px"><%= m.name %></h2>
-          <span class="faint" style="font-size:12px"><%= m.email %></span>
+        <div class="mentor-meta">
+          <h2 title="<%= m.name %>"><%= m.name %></h2>
+          <span class="faint" title="<%= m.email %>"><%= m.email %></span>
         </div>
       </div>
-      <div>
+      <div class="mentor-badges">
         <% if (m.can_technical) { %><span class="pill p-technical">Technical</span><% } %>
         <% if (m.can_hr) { %><span class="pill p-hr">HR</span><% } %>
       </div>
@@ -62,7 +62,7 @@
           </a>
         <% } %>
         <% if (m.can_hr && m.hr_open_slots > 0) { %>
-          <a class="btn sm" href="/student/slots?type=hr&mentor=<%= m.id %>">
+          <a class="btn sm <%= (!m.can_technical || m.tech_open_slots === 0) ? 'primary' : '' %>" href="/student/slots?type=hr&mentor=<%= m.id %>">
             Book HR slot (<%= m.hr_open_slots %> open) →
           </a>
         <% } %>
