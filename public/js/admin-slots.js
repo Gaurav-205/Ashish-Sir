@@ -28,11 +28,16 @@
   };
 
   window.autoGenLink = function () {
-    var type = (t ? t.value : 'technical') || 'interview';
     var loc = document.querySelector('input[name="location"]');
-    var id = Math.random().toString(36).substring(2, 8);
-    var time = Date.now().toString(36);
-    var prefix = type.charAt(0).toUpperCase() + type.slice(1);
-    if (loc) loc.value = 'https://meet.jit.si/Konfident-' + prefix + '-' + time + '-' + id;
+    var letters = 'abcdefghijklmnopqrstuvwxyz';
+    var randLetters = function (n) {
+      var s = '';
+      for (var i = 0; i < n; i++) {
+        s += letters.charAt(Math.floor(Math.random() * letters.length));
+      }
+      return s;
+    };
+    var code = randLetters(3) + '-' + randLetters(4) + '-' + randLetters(3);
+    if (loc) loc.value = 'https://meet.google.com/' + code;
   };
 })();

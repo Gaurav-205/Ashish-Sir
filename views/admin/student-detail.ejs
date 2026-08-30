@@ -103,7 +103,7 @@ const sInitials = s.student.name ? s.student.name.split(/\s+/).map(w => w[0] || 
       <form method="post" action="/admin/students/<%= s.student.id %>/reset-password" class="btn-row">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input name="admin_password" type="password" placeholder="Your admin password" required style="max-width:200px">
-        <input name="password" placeholder="New password for student" minlength="6" required style="max-width:200px">
+        <input name="password" type="password" autocomplete="new-password" placeholder="New password for student" minlength="6" required style="max-width:200px">
         <button class="btn">Reset password</button>
       </form>
     </div>

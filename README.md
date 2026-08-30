@@ -17,53 +17,81 @@ Built with **Node.js 22+ (Native SQLite engine), Express 5, EJS, and the Cohere 
 ### 2. Quick Setup (Clean Production Setup)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/Gaurav-205/Ashish-Sir.git
+# 1. Clone the repository and enter it
 cd konfident
 
 # 2. Install dependencies
 npm install
 
-# 3. Initialize fresh production database (cleans out all mock records, sets up Root Admin)
+# 3. Copy the environment template and edit it
+cp .env.example .env
+
+# 4. Initialize a fresh database with only the root administrator
 npm run init
 
-# 4. Start the server
+# 5. Start the server
 npm start
 ```
 
 Open **`http://localhost:3000`** in your browser.
 
-#### Initial Administrator Credentials:
-- **Email**: `admin@konfident.in`
-- **Password**: `pass123`
-*(You can change your password immediately after logging in at `/profile`)*
+#### Initial Administrator Credentials
+
+`npm run init` creates exactly one account: the administrator named by
+`ADMIN_EMAIL` in your `.env` (default `admin@yourinstitution.edu`).
+
+- If you set `ADMIN_PASSWORD`, that is the password.
+- If you leave it blank, a strong password is **generated and printed once** by
+  `npm run init`. Copy it before clearing your terminal — it is not recoverable.
+
+Change it at `/profile#password` after your first sign-in.
+
+### 2b. Demo / Development Dataset
+
+```bash
+npm run seed     # 5 staff admins, 7 mentors, 40 candidates, a full week of slots
+```
+
+Every seeded demo account uses the password `pass123`. **Never run this against
+a production database.**
 
 ---
 
-### 3. Optional Environment Configuration (`.env`)
+### 3. Environment Configuration (`.env`)
 
-Create a `.env` file in the root directory to customize your deployment:
+`.env.example` documents every supported variable. The ones that matter most:
 
-```env
-# Server Port
-PORT=3000
+| Variable | Purpose |
+|---|---|
+| `PORT` | HTTP port (default `3000`). |
+| `NODE_ENV` | `development`, `production` or `test`. |
+| `SESSION_SECRET` | **Required in production** — the process exits without it. Generate with `openssl rand -base64 48`. |
+| `DB_DRIVER` | `sqlite` or `postgres`. Unset means: Postgres if `DATABASE_URL` is set and `DB_PATH` is not, otherwise SQLite. The chosen driver is printed at startup. |
+| `DB_PATH` | Override the SQLite file location (default `./data/konfident.db`). |
+| `DATABASE_URL` | Neon/Postgres connection string. Required when `DB_DRIVER=postgres`. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | Root administrator created by `npm run init`. |
+| `RESET_LINK_VISIBLE` | `true`/`false`. Controls whether password-reset links are shown in the browser (see below). |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Enable Google sign-in and Calendar sync. Leave blank to disable the integration cleanly. |
+| `GOOGLE_REDIRECT_URI` | Optional. When unset the callback URL is derived from the request, which is what you want behind Vercel or a custom domain. |
 
-# Environment Mode (development or production)
-NODE_ENV=production
+Never commit `.env` — it is git-ignored.
 
-# Custom Session Encryption Secret (Required for production!)
-SESSION_SECRET=your-secure-random-secret-key-here
+---
 
-# Root Administrator Setup
-ADMIN_EMAIL=admin@yourcollege.edu
-ADMIN_PASSWORD=yourStrongPasswordHere
-ADMIN_NAME=Platform Administrator
+### 4. Password Recovery
 
-# Optional: Google OAuth & Live Google Calendar Sync
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
-```
+`/forgot-password` issues a single-use reset link that expires after one hour
+and invalidates every other outstanding link for that account.
+
+**There is no mail provider wired into this project.** The link is therefore:
+
+- always written to the server log (`[password-reset] link for <email>: <url>`), and
+- additionally shown in the browser when `NODE_ENV` is not `production`, so the
+  placement cell can pass it to the candidate directly.
+
+Set `RESET_LINK_VISIBLE=false` to force log-only behaviour, or replace the
+`console.log` in `src/routes/authRoutes.js` with a real mail call. Administrators
+can also reset any password directly from `/admin/students/:id` and `/admin/mentors`.
 
 ---
 
@@ -108,35 +136,53 @@ GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
 
 ## 🧪 Automated Test Suite
 
-Run the full end-to-end test suite:
-
 ```bash
 npm test
 ```
 
+The suite boots the real server against a throwaway SQLite database and drives
+it over HTTP exactly as a browser would — cookies, form posts, redirects — then
+asserts against the database. It covers security headers and CSRF, all three
+role guards, booking concurrency, the evaluation rubric boundaries, password
+change and password recovery, the audit log, and every page render.
+
 ```text
-Security & HTTP headers (nosniff, SAMEORIGIN, CSP) ............ 3 passed
-Authentication & RBAC access control ........................... 11 passed
-Admin — creating mentors, students and slots ................... 8 passed
-Student — booking rules, mentors directory, auto-fetch ......... 13 passed
-Mentor — attendance, scoring, duplicate checks ................. 9 passed
-Student results & maths breakdown .............................. 4 passed
-Admin — monitoring, rescheduling, release, CSV export .......... 11 passed
-Student cancel & rebook ........................................ 6 passed
-Google OAuth & Calendar Integration ............................ 5 passed
-Full page renders (Admin, Student, Mentor, 404) ................ 15 passed
-System Health Probe (GET /health) .............................. 1 passed
--------------------------------------------------------------------------
-Total: 86 passed, 0 failed (100% Pass Rate)
+Total: 148 assertions, 0 failed
 ```
 
 ---
 
-## 🛠️ Production Commands Reference
+## 🛠️ Commands Reference
 
 | Command | Action |
 |---|---|
-| `npm run init` | Initializes fresh production database with 0 mock data and creates Root Admin |
-| `npm start` | Starts the production server |
-| `npm test` | Executes 86 automated end-to-end test assertions |
-| `npm run seed:demo` | Optional: populates demo mock dataset for local test environments |
+| `npm start` | Start the server. |
+| `npm run dev` | Start with `--watch` for local development. |
+| `npm run init` | Fresh database containing only the root administrator. |
+| `npm run seed` | Development/demo dataset (admins, mentors, 40 candidates, a week of slots). |
+| `npm run empty-db` | Wipe every record, including the administrator. |
+| `npm test` | Run the end-to-end suite. |
+
+---
+
+## 🗄️ Data Layer Notes
+
+- **SQLite (default)** uses Node's built-in `node:sqlite` — no native build step.
+- **Postgres/Neon** is supported for serverless deployment. The application layer
+  is synchronous, so Postgres access goes through a blocking shim
+  (`src/db.js`) that uses Neon's HTTP SQL endpoint, falling back to `pg`.
+  Query failures throw rather than returning empty result sets, so the UI can
+  never silently disagree with the database.
+
+  Postgres does **not** self-migrate. Apply `sql/schema.postgres.sql` before the
+  first deploy and after pulling schema changes — every statement is
+  `IF NOT EXISTS` and safe to re-run:
+
+  ```bash
+  psql "$DATABASE_URL_UNPOOLED" -f sql/schema.postgres.sql
+  ```
+- **All interview times are stored as wall-clock IST** (`YYYY-MM-DD` +
+  `HH:MM`). Every "is this slot in the past" comparison — in SQL and in
+  JavaScript — goes through `src/helpers.js` (`nowMinute()`, `today()`,
+  `isPast()`), so the application behaves identically on a UTC server and an
+  IST one.

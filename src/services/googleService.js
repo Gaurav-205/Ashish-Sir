@@ -53,6 +53,10 @@ const getRedirectUri = (req = null, explicitPath = null) => {
   return 'http://localhost:3000/api/auth/callback/google';
 };
 
+// All interview times are stored as wall-clock IST; pin the offset so Google
+// receives the same instant regardless of where the server runs.
+const IST_OFFSET = '+05:30';
+
 const SCOPES = [
   'openid',
   'https://www.googleapis.com/auth/userinfo.email',
@@ -149,7 +153,7 @@ async function exchangeCode(code, redirectUri = null) {
 }
 
 async function getValidAccessToken(userId) {
-  const user = db.prepare('SELECT google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(userId);
+  const user = db.prepare('SELECT id, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(userId);
   if (!user || !user.google_access_token) return null;
 
   // Check if token is still valid (buffer of 60 seconds)
@@ -194,22 +198,22 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   const summary = `Konfident 2025: ${h.titleCase(slot.type)} Mock Interview`;
   const description = `Mock Interview Session\nStudent: ${student.name} (${student.email})\nMentor: ${mentor.name} (${mentor.email})\nType: ${h.titleCase(slot.type)}\nMode: ${slot.mode}${slot.location ? `\nLocation/Meeting Link: ${slot.location}` : ''}`;
 
-  const startIso = `${slot.slot_date}T${slot.start_time}:00`;
-  const endIso = `${slot.slot_date}T${slot.end_time}:00`;
+  const startIso = `${slot.slot_date}T${slot.start_time}:00${IST_OFFSET}`;
+  const endIso = `${slot.slot_date}T${slot.end_time}:00${IST_OFFSET}`;
 
   const eventPayload = {
     summary,
     description,
     location: slot.location || slot.mode,
-    start: { dateTime: new Date(startIso).toISOString() },
-    end: { dateTime: new Date(endIso).toISOString() },
+    start: { dateTime: new Date(startIso).toISOString(), timeZone: 'Asia/Kolkata' },
+    end: { dateTime: new Date(endIso).toISOString(), timeZone: 'Asia/Kolkata' },
     attendees: [
       { email: student.email, displayName: student.name },
       { email: mentor.email, displayName: mentor.name },
     ],
     conferenceData: {
       createRequest: {
-        requestId: `konfident-${slot.id}-${Date.now()}`,
+        requestId: `konfident-${slot.id || interviewId || 'iv'}-${Date.now()}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     },
@@ -225,7 +229,7 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
     if (!token) continue;
 
     try {
-      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
+      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -246,8 +250,8 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   if (createdEventId && interviewId) {
     try {
       db.prepare('UPDATE interviews SET google_event_id=? WHERE id=?').run(createdEventId, interviewId);
-      if (meetUrl) {
-        db.prepare("UPDATE slots SET location=? WHERE id=? AND (location IS NULL OR location = '' OR location LIKE 'Online%')").run(meetUrl, slot.id);
+      if (meetUrl && slot.id) {
+        db.prepare("UPDATE slots SET location=? WHERE id=?").run(meetUrl, slot.id);
       }
     } catch (_) {}
   }
@@ -255,17 +259,68 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   return createdEventId;
 }
 
+async function createSlotCalendarEvent({ mentor, slot }) {
+  if (!mentor || !slot) return null;
+  if (!mentor.google_calendar_enabled) return null;
+
+  const token = await getValidAccessToken(mentor.id);
+  if (!token) return null;
+
+  const summary = `Konfident: Available ${h.titleCase(slot.type)} Slot`;
+  const description = `Open mock interview slot scheduled on Konfident platform.\nType: ${h.titleCase(slot.type)}\nMode: ${slot.mode}`;
+  const startIso = `${slot.slot_date}T${slot.start_time}:00${IST_OFFSET}`;
+  const endIso = `${slot.slot_date}T${slot.end_time}:00${IST_OFFSET}`;
+
+  const eventPayload = {
+    summary,
+    description,
+    location: slot.location || 'Google Meet',
+    start: { dateTime: new Date(startIso).toISOString(), timeZone: 'Asia/Kolkata' },
+    end: { dateTime: new Date(endIso).toISOString(), timeZone: 'Asia/Kolkata' },
+    conferenceData: {
+      createRequest: {
+        requestId: `konfident-slot-${slot.id}-${Date.now()}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    },
+  };
+
+  try {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventPayload),
+    });
+    const data = await res.json();
+    if (res.ok && data.id) {
+      const meetUrl = data.hangoutLink || (data.conferenceData && data.conferenceData.entryPoints && data.conferenceData.entryPoints[0] ? data.conferenceData.entryPoints[0].uri : null);
+      if (meetUrl) {
+        db.prepare('UPDATE slots SET google_event_id=?, location=? WHERE id=?').run(data.id, meetUrl, slot.id);
+      } else {
+        db.prepare('UPDATE slots SET google_event_id=? WHERE id=?').run(data.id, slot.id);
+      }
+      return { eventId: data.id, meetUrl };
+    }
+  } catch (err) {
+    console.error(`Error creating calendar event for slot ${slot.id}:`, err);
+  }
+  return null;
+}
+
 async function updateCalendarEvent({ eventId, student, mentor, slot }) {
   if (!eventId || !slot) return;
 
-  const startIso = `${slot.slot_date}T${slot.start_time}:00`;
-  const endIso = `${slot.slot_date}T${slot.end_time}:00`;
+  const startIso = `${slot.slot_date}T${slot.start_time}:00${IST_OFFSET}`;
+  const endIso = `${slot.slot_date}T${slot.end_time}:00${IST_OFFSET}`;
 
   const patchPayload = {
     summary: `Konfident 2025: ${h.titleCase(slot.type)} Mock Interview`,
     location: slot.location || slot.mode,
-    start: { dateTime: new Date(startIso).toISOString() },
-    end: { dateTime: new Date(endIso).toISOString() },
+    start: { dateTime: new Date(startIso).toISOString(), timeZone: 'Asia/Kolkata' },
+    end: { dateTime: new Date(endIso).toISOString(), timeZone: 'Asia/Kolkata' },
   };
 
   for (const person of [student, mentor].filter(Boolean)) {
@@ -311,6 +366,7 @@ module.exports = {
   exchangeCode,
   getValidAccessToken,
   syncCalendarEvent,
+  createSlotCalendarEvent,
   updateCalendarEvent,
   removeCalendarEvent,
   getRedirectUri,

@@ -37,8 +37,12 @@ function createRateLimiter(options = {}) {
   }, 60 * 1000).unref();
 
   return function rateLimitMiddleware(req, res, next) {
+    // Key on both the source address and the submitted identity: keying on the
+    // email alone lets one attacker lock a victim out, keying on the IP alone
+    // lets a shared campus NAT lock out a whole cohort.
     const emailKey = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
-    const key = emailKey || (req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip');
+    const ipKey = req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip';
+    const key = `${ipKey}|${emailKey}`;
     const now = Date.now();
     let record = hits.get(key);
 

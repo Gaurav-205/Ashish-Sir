@@ -15,6 +15,7 @@
     <p class="sub">Structured Technical &amp; HR mock interviews with live calendar sync and mentor evaluation.</p>
 
     <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+    <% if (!error && flash) { %><div class="flash <%= flash.type %>"><%= flash.msg %></div><% } %>
 
     <form method="post" action="/login">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -23,7 +24,10 @@
         <input id="email" name="email" type="email" value="<%= email %>" autocomplete="username email" placeholder="name@kalvium.com or student email" required autofocus>
       </div>
       <div class="field">
-        <label for="password">Password</label>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+          <label for="password">Password</label>
+          <a href="/forgot-password" style="font-size:12px">Forgot password?</a>
+        </div>
         <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
       </div>
       <button class="btn primary" style="width:100%;justify-content:center;margin-top:6px;padding:12px 24px">
@@ -59,4 +63,4 @@
     </div>
   </div>
 </div>
-</body></html>
+<%- include('partials/foot-plain') %>

@@ -31,9 +31,9 @@
           <% } %>
         </div>
         <% if (me.role === 'student') { %>
-          <div class="field">
-            <label>Resume link (Google Drive / Notion / Portfolio)</label>
-            <input type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…">
+          <div class="field" id="resume">
+            <label for="resume_url">Resume link (Google Drive / Notion / Portfolio)</label>
+            <input id="resume_url" type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…">
           </div>
         <% } %>
         <p class="faint" style="margin-bottom:12px">
@@ -51,20 +51,20 @@
     </div>
   </div>
   <div class="card" id="password">
-    <div class="card-head"><h2>Reset Password</h2></div>
+    <div class="card-head"><h2>Change password</h2></div>
     <div class="card-body">
-      <div class="hint" style="margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:6px;background:var(--bg-muted, #f8fafc);padding:10px 12px;border-radius:6px;border:1px solid var(--border-color, #e2e8f0)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        <span>Initial accounts default to <code>pass123</code>. You can set a custom private password below.</span>
-      </div>
+      <p class="hint" style="margin-bottom:14px">
+        Choose a password only you know. Signing in elsewhere will be required again after you change it.
+        Forgot the current one? <a href="/forgot-password">Reset it by email link</a>.
+      </p>
       <% if (error) { %><div class="flash err"><%= error %></div><% } %>
       <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>
       <form method="post" action="/profile/password">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div class="field"><label>Current password</label><input type="password" name="current" placeholder="Current password (default: pass123)" required></div>
-        <div class="field"><label>New password</label><input type="password" name="next1" placeholder="Minimum 6 characters" required minlength="6"></div>
-        <div class="field"><label>Confirm new password</label><input type="password" name="next2" placeholder="Re-enter new password" required minlength="6"></div>
-        <button class="btn primary sm">Reset Password</button>
+        <div class="field"><label for="pw-current">Current password</label><input id="pw-current" type="password" name="current" autocomplete="current-password" required></div>
+        <div class="field"><label for="pw-next1">New password</label><input id="pw-next1" type="password" name="next1" autocomplete="new-password" placeholder="Minimum 6 characters" required minlength="6"></div>
+        <div class="field"><label for="pw-next2">Confirm new password</label><input id="pw-next2" type="password" name="next2" autocomplete="new-password" placeholder="Re-enter new password" required minlength="6"></div>
+        <button class="btn primary sm">Update password</button>
       </form>
     </div>
   </div>

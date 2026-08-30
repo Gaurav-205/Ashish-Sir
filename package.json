@@ -5,11 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "node --watch server.js",
     "init": "node src/seed.js --clean",
-    "seed": "node src/seed.js --clean",
+    "seed": "node src/seed.js --dev",
+    "seed:demo": "node src/seed.js --dev",
     "clean-db": "node src/seed.js --clean",
     "empty-db": "node src/seed.js --empty",
-    "seed:demo": "node src/seed.js --dev",
     "test": "node test/e2e.js"
   },
   "keywords": [],

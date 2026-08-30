@@ -7,35 +7,15 @@ const h = require('../helpers');
 const { requireRole } = require('../auth');
 const { RUBRIC, GRAND_TOTAL } = require('../rubric');
 const google = require('../services/googleService');
+const emailService = require('../services/emailService');
 const { validateId } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
-const fs = require('fs');
-const path = require('path');
+const { invalidateUserSessions } = require('../middleware/sessionAuth');
 
 const router = express.Router();
 router.use(requireRole('admin'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
-
-function invalidateUserSessions(userId) {
-  if (process.env.VERCEL || process.env.NOW_REGION) return;
-  setTimeout(() => {
-    try {
-      let DatabaseSync;
-      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) {}
-      if (!DatabaseSync) return;
-      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
-      if (fs.existsSync(sessionsDbPath)) {
-        const sdb = new DatabaseSync(sessionsDbPath);
-        sdb.exec('PRAGMA busy_timeout = 5000');
-        sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ?").run(Number(userId));
-        sdb.close();
-      }
-    } catch (err) {
-      console.error('Failed to invalidate sessions:', err);
-    }
-  }, 100);
-}
 
 /* ------------------------------ dashboard ------------------------------ */
 router.get('/', (req, res) => {
@@ -60,10 +40,13 @@ router.get('/', (req, res) => {
      ORDER BY s.slot_date LIMIT 8`).all();
   const notBooked = db.prepare(`
     SELECT * FROM (
-      SELECT u.id, u.name, u.roll_no,
+      SELECT u.id, u.name, u.email, u.roll_no,
         (SELECT COUNT(*) FROM interviews i WHERE i.student_id=u.id AND i.status<>'cancelled') AS booked
-        FROM users u WHERE u.role='student'
-    ) WHERE booked < 2 ORDER BY booked, name LIMIT 10`).all();
+        FROM users u WHERE u.role='student' AND u.active=1
+    ) AS booking_progress
+     WHERE booked < 2 ORDER BY booked, name LIMIT 10`)
+    .all()
+    .map((row) => ({ ...row, booked: Number(row.booked) || 0 }));
   const studentSummaries = q.allStudentSummaries();
   res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked, studentSummaries, GRAND_TOTAL });
 });
@@ -150,7 +133,14 @@ router.get('/mentors', (req, res) => {
       (SELECT COUNT(*) FROM slots s WHERE s.mentor_id=u.id AND s.status<>'cancelled') AS slot_count,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='booked') AS upcoming,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='completed') AS done
-      FROM users u WHERE u.role='mentor' ORDER BY u.name`).all();
+      FROM users u WHERE u.role='mentor' ORDER BY u.name`)
+    .all()
+    .map((m) => ({
+      ...m,
+      slot_count: Number(m.slot_count) || 0,
+      upcoming: Number(m.upcoming) || 0,
+      done: Number(m.done) || 0,
+    }));
   res.render('admin/mentors', { title: 'Mentors', mentors });
 });
 
@@ -222,8 +212,18 @@ router.get('/slots', (req, res) => {
   if (filter.type)   { where.push('s.type = ?');   args.push(filter.type); }
   if (filter.status) { where.push('s.status = ?'); args.push(filter.status); }
   if (filter.date)   { where.push('s.slot_date = ?'); args.push(filter.date); }
-  else if (filter.when === 'upcoming') { where.push("s.slot_date >= date('now','localtime')"); }
-  else if (filter.when === 'past')     { where.push("s.slot_date <  date('now','localtime')"); }
+  else if (filter.when === 'upcoming') { where.push('s.slot_date >= ?'); args.push(h.today()); }
+  else if (filter.when === 'past')     { where.push('s.slot_date <  ?'); args.push(h.today()); }
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+  // A seeded cohort easily produces several hundred slots; render them a page
+  // at a time so the table stays usable and the query stays cheap.
+  const PER_PAGE = 50;
+  const total = Number(db.prepare(`SELECT COUNT(*) AS c FROM slots s JOIN users m ON m.id = s.mentor_id ${whereSql}`)
+    .get(...args).c) || 0;
+  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
+  const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), pageCount);
+
   const slots = db.prepare(`
     SELECT s.*, m.name AS mentor_name,
            st.name AS student_name, st.roll_no, i.id AS interview_id, i.status AS interview_status
@@ -231,14 +231,21 @@ router.get('/slots', (req, res) => {
       JOIN users m ON m.id = s.mentor_id
       LEFT JOIN interviews i ON i.slot_id = s.id AND i.status <> 'cancelled'
       LEFT JOIN users st ON st.id = i.student_id
-      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY s.slot_date, s.start_time`).all(...args);
+      ${whereSql}
+     ORDER BY s.slot_date, s.start_time, s.id
+     LIMIT ? OFFSET ?`).all(...args, PER_PAGE, (page - 1) * PER_PAGE);
   const students = db.prepare("SELECT id, name, roll_no, email FROM users WHERE role='student' AND active=1 ORDER BY name").all();
+
+  const baseQuery = new URLSearchParams();
+  Object.entries(filter).forEach(([k, v]) => { if (v) baseQuery.set(k, v); });
+
   res.render('admin/slots', {
     title: 'Interview slots', slots, filter,
     techMentors: q.mentorsList('technical'), hrMentors: q.mentorsList('hr'),
     students,
     defaultDate: h.addDays(h.today(), 1),
+    page, pageCount, total, perPage: PER_PAGE,
+    baseQuery: baseQuery.toString(),
   });
 });
 
@@ -286,8 +293,19 @@ router.post('/slots', (req, res) => {
       }
 
       try {
-        ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', loc);
+        const resIns = ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', loc);
         made++;
+        const newSlot = {
+          id: resIns.lastInsertRowid,
+          mentor_id: mentor.id,
+          type,
+          slot_date,
+          start_time: s_time,
+          end_time: e_time,
+          mode: mode || 'Online',
+          location: loc,
+        };
+        google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
       } catch (e) {
         if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
       }
@@ -398,6 +416,10 @@ router.post('/slots/:id/release', validateId('id'), async (req, res) => {
       const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
       google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
     }
+    const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
+    const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.mentor_id);
+    const slotObj = db.prepare('SELECT * FROM slots WHERE id=?').get(id);
+    emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot: slotObj }).catch(() => {});
 
     logAudit(req, 'ADMIN_RELEASE_SLOT', { slot_id: id, interview_id: iv.id });
 
@@ -464,6 +486,7 @@ router.post('/slots/:id/allot', validateId('id'), async (req, res) => {
       google_token_expiry: slot.mentor_exp,
     };
     google.syncCalendarEvent({ student, mentor, slot, interviewId: insert.lastInsertRowid }).catch(() => {});
+    emailService.sendBookingConfirmation({ student, mentor, slot, meetingLink: slot.location }).catch(() => {});
 
     logAudit(req, 'ADMIN_ALLOT_SLOT', { slot_id: slot.id, student_id: student.id, type: slot.type });
     flash(req, 'ok', `Slot successfully allotted to ${student.name} for ${h.fmtSlot(slot)}.`);
@@ -508,7 +531,11 @@ router.get('/reports.csv', (req, res) => {
     ...RUBRIC.technical.criteria.map((c) => c.label), 'Technical Total',
     ...RUBRIC.hr.criteria.map((c) => c.label), 'HR Total',
     `Grand Total (/${GRAND_TOTAL})`, 'Percent', 'Technical Status', 'Technical Attendance', 'HR Status', 'HR Attendance'];
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const esc = (v) => {
+    let str = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
+    return `"${str.replace(/"/g, '""')}"`;
+  };
   const lines = [head.map(esc).join(',')];
   for (const s of rows) {
     const t = s.technical, hr = s.hr;
@@ -523,9 +550,9 @@ router.get('/reports.csv', (req, res) => {
       hr ? hr.status : 'not booked', hr ? hr.attendance : '—',
     ].map(esc).join(','));
   }
-  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="konfident-2025-results.csv"');
-  res.send(lines.join('\n'));
+  res.send('\ufeff' + lines.join('\r\n'));
 });
 
 module.exports = router;

@@ -65,7 +65,7 @@
                 <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <input name="admin_password" type="password" placeholder="Your admin password" required style="max-width:160px">
-                  <input name="password" placeholder="New password" minlength="6" required style="max-width:160px">
+                  <input name="password" type="password" autocomplete="new-password" placeholder="New password" minlength="6" required style="max-width:160px">
                   <button class="btn sm">Reset password</button>
                 </form>
               </div>

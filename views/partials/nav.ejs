@@ -1,4 +1,5 @@
 <%
+const currentPath = (typeof path === 'string') ? path : '';
 const links = {
   admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
           ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
@@ -10,34 +11,30 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
 %>
 <header class="topbar">
   <div class="topbar-in">
-    <a href="/" class="brand" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+    <a href="/" class="brand">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
         <rect width="24" height="24" rx="6" fill="#17171c"/>
         <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <span>Konfident</span>
-      <span class="faint" style="font-size:12px;letter-spacing:0.04em">SYSTEM</span>
+      <span class="brand-tag faint">SYSTEM</span>
     </a>
     <nav class="nav">
       <% links.forEach(function(l){ %>
-        <a href="<%= l[0] %>" class="<%= path === l[0].split('?')[0] ? 'on' : '' %>"><%= l[1] %></a>
+        <a href="<%= l[0] %>" class="<%= currentPath === l[0].split('?')[0] ? 'on' : '' %>"><%= l[1] %></a>
       <% }); %>
     </nav>
     <div class="who">
-      <a href="/profile" title="My profile & password settings" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+      <a href="/profile" class="who-link" title="My profile and password settings">
         <span class="avatar"><%= initials %></span>
-        <span class="name" style="display:inline-flex;align-items:center;gap:6px">
+        <span class="name">
           <strong><%= user.name %></strong>
-          <span class="pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>" style="font-size:10px;padding:2px 7px;text-transform:uppercase;font-weight:700"><%= user.role %></span>
+          <span class="pill role-pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>"><%= user.role %></span>
         </span>
-      </a>
-      <a href="/profile#password" class="btn sm outline" style="padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;text-decoration:none">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-        <span>Reset password</span>
       </a>
       <form method="post" action="/logout" style="margin:0">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="btn sm" style="padding:4px 12px;font-size:12px">Sign out</button>
+        <button class="btn sm who-action">Sign out</button>
       </form>
     </div>
   </div>

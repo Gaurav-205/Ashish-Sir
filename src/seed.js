@@ -50,9 +50,16 @@ if (mode === 'test') {
 const adminName = process.env.ADMIN_NAME || 'Utkarsha Kasar';
 const PW = bcrypt.hashSync(adminPassword, 10);
 
-// Clear existing tables
-db.exec(`DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots; DELETE FROM users; DELETE FROM audit_logs; DELETE FROM settings;
-         DELETE FROM sqlite_sequence WHERE name IN ('users','slots','interviews','evaluations','audit_logs');`);
+// Clear existing tables. student_feedbacks and password_resets cascade from
+// interviews/users, but are named explicitly so the intent is not implicit.
+db.exec(`DELETE FROM student_feedbacks; DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots;
+         DELETE FROM password_resets; DELETE FROM users; DELETE FROM audit_logs; DELETE FROM settings;`);
+if (!db.isPostgres) {
+  try {
+    db.exec(`DELETE FROM sqlite_sequence WHERE name IN
+             ('users','slots','interviews','evaluations','student_feedbacks','password_resets','audit_logs');`);
+  } catch (_) { /* sqlite_sequence only exists once an AUTOINCREMENT table has rows */ }
+}
 
 // Clear session store if exists
 try {
@@ -69,8 +76,11 @@ const addUser = db.prepare(`INSERT INTO users
   (name,email,password_hash,role,phone,roll_no,branch,squad,resume_url,can_technical,can_hr)
   VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
 
-// 1. Kalvium Admin Accounts
-if (mode !== 'empty') {
+// 1. Administrator accounts.
+//    'clean' provisions exactly one root administrator (the account named by
+//    ADMIN_EMAIL) so a production install starts with no unexpected logins.
+//    'dev' and 'test' additionally provision the Kalvium staff cohort.
+if (mode === 'dev' || mode === 'test') {
   const kalviumAdmins = [
     { name: 'Utkarsha Kasar', email: 'utkarsha.kasar@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
@@ -84,6 +94,14 @@ if (mode !== 'empty') {
       addUser.run(a.name, a.email.toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, null, a.can_t, a.can_hr);
     } catch (_) {}
   });
+}
+
+if (mode !== 'empty') {
+  // Guarantee the configured root administrator exists in every non-empty mode.
+  const rootExists = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(adminEmail.toLowerCase());
+  if (!rootExists) {
+    addUser.run(adminName, adminEmail.toLowerCase(), PW, 'admin', null, null, null, null, null, 0, 0);
+  }
 }
 
 // 2. Kalvium Mentor Accounts (Strict Tech vs Non-Tech segregation)
@@ -202,10 +220,10 @@ if (mode === 'test') {
 
   function book(student, type, past) {
     const when = past
-      ? `datetime(slot_date || ' ' || end_time) < datetime('now','localtime')`
-      : `datetime(slot_date || ' ' || start_time) > datetime('now','localtime')`;
+      ? `(slot_date || ' ' || end_time) < ?`
+      : `(slot_date || ' ' || start_time) > ?`;
     const slots = db.prepare(`SELECT * FROM slots WHERE type=? AND status='open' AND ${when}
-        ORDER BY slot_date ${past ? 'DESC' : 'ASC'}, start_time ASC`).all(type);
+        ORDER BY slot_date ${past ? 'DESC' : 'ASC'}, start_time ASC`).all(type, h.nowMinute());
     for (const slot of slots) {
       const clash = db.prepare(`
         SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
@@ -216,7 +234,7 @@ if (mode === 'test') {
         db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
         const status = past ? 'completed' : 'booked';
         const attendance = past ? 'attended' : 'pending';
-        const completedAt = past ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+        const completedAt = past ? h.nowStamp() : null;
         addInterview.run(student.id, slot.mentor_id, slot.id, type, status, attendance, completedAt, completedAt);
         return db.prepare('SELECT * FROM interviews WHERE slot_id=?').get(slot.id);
       }
@@ -271,25 +289,37 @@ if (mode === 'test') {
   const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                               VALUES (?,?,?,?,?,?,?)`);
 
-  const tomorrow = h.addDays(h.today(), 1);
-  const dayAfter = h.addDays(h.today(), 2);
-  const day3 = h.addDays(h.today(), 3);
+  // Publish a realistic interview week: every evaluator runs a block of
+  // half-hour sessions over the next three days, so the whole cohort can
+  // actually book both of their mandatory interviews.
+  const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  const SLOT_MINUTES = 30;
+  const TECH_START = 10 * 60;  // 10:00
+  const HR_START = 14 * 60;    // 14:00
+  const BLOCKS_PER_DAY = 8;    // 4 hours of sessions per evaluator per day
+  const DAYS = [1, 2, 3];
 
   const activeMentors = db.prepare(`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1`).all();
-  activeMentors.forEach((m, idx) => {
-    const timeOffset = (idx % 4) * 30;
-    const sh = 10 + Math.floor(timeOffset / 60);
-    const sm = timeOffset % 60;
-    const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-    const sTime = fmt(sh * 60 + sm);
-    const eTime = fmt(sh * 60 + sm + 30);
-
-    if (m.can_technical) {
-      try { addSlot.run(m.id, 'technical', tomorrow, sTime, eTime, 'Online', h.generateMeetingLink('technical')); } catch (_) {}
-    }
-    if (m.can_hr) {
-      try { addSlot.run(m.id, 'hr', dayAfter, sTime, eTime, 'Online', h.generateMeetingLink('hr')); } catch (_) {}
-    }
+  DAYS.forEach((offset) => {
+    const date = h.addDays(h.today(), offset);
+    activeMentors.forEach((m) => {
+      for (let k = 0; k < BLOCKS_PER_DAY; k++) {
+        if (m.can_technical) {
+          const start = TECH_START + k * SLOT_MINUTES;
+          try {
+            addSlot.run(m.id, 'technical', date, fmt(start), fmt(start + SLOT_MINUTES),
+              'Online', h.generateMeetingLink('technical'));
+          } catch (_) { /* unique (mentor, date, start_time) — already published */ }
+        }
+        if (m.can_hr) {
+          const start = HR_START + k * SLOT_MINUTES;
+          try {
+            addSlot.run(m.id, 'hr', date, fmt(start), fmt(start + SLOT_MINUTES),
+              'Online', h.generateMeetingLink('hr'));
+          } catch (_) { /* unique (mentor, date, start_time) — already published */ }
+        }
+      }
+    });
   });
 }
 
@@ -330,16 +360,24 @@ if (mode === 'dev') {
   =============================================================
   `);
 } else if (mode === 'clean') {
+  const credentials = isGenerated
+    ? `Password:    ${adminPassword}\n  ⚠️  Auto-generated — save it now, it is not stored anywhere and will not be shown again.\n  💡 Set ADMIN_PASSWORD before running this command to choose your own.`
+    : `Password:    ${adminPassword}`;
   console.log(`
   =============================================================
   [Clean Production Database Initialized]
   =============================================================
-  Users:       1 (Root Admin: ${adminEmail})
+  Root Admin:  ${adminEmail}
+  ${credentials}
+
+  Users:       ${c('SELECT COUNT(*) c FROM users')}
   Students:    0
   Mentors:     0
   Slots:       0
   Interviews:  0
   Evaluations: 0
+  =============================================================
+  Sign in, then change this password at /profile#password.
   =============================================================
   `);
 } else if (mode === 'empty') {
