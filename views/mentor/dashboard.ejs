@@ -47,14 +47,19 @@
     <span class="faint">Publish available time slots for students to book</span>
   </div>
   <div class="card-body">
+    <% if (!mentor || (!mentor.can_technical && !mentor.can_hr)) { %>
+      <div class="note" style="margin:0">
+        Your evaluator profile is not enabled for Technical or HR interviews yet, so you cannot publish slots.
+        Ask an administrator to enable a domain on your profile.
+      </div>
+    <% } else { %>
     <form method="post" action="/mentor/slots">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="row">
         <div class="field"><label>Interview domain *</label>
           <select name="type" required>
-            <% if (mentor && mentor.can_technical) { %><option value="technical">Technical</option><% } %>
-            <% if (mentor && mentor.can_hr) { %><option value="hr">HR</option><% } %>
-            <% if (mentor && !mentor.can_technical && !mentor.can_hr) { %><option value="technical">Technical</option><% } %>
+            <% if (mentor.can_technical) { %><option value="technical">Technical</option><% } %>
+            <% if (mentor.can_hr) { %><option value="hr">HR</option><% } %>
           </select></div>
         <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" required></div>
         <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" required></div>
@@ -67,8 +72,10 @@
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Publish slots →</button>
+        <span class="faint" style="font-size:12px">Overlapping slots are skipped automatically.</span>
       </div>
     </form>
+    <% } %>
   </div>
 </div>
 
@@ -153,7 +160,7 @@
   </div>
   <div class="card-body tight">
     <% if (!slots.length) { %>
-      <div class="empty">No open slots currently published by admin for your profile.</div>
+      <div class="empty">You have no open upcoming slots. Publish some above so students can book you.</div>
     <% } else { %>
     <div class="table-scroll"><table>
       <thead><tr><th>Date</th><th>Timing</th><th>Domain</th><th>Meeting Mode</th></tr></thead>

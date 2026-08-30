@@ -332,7 +332,7 @@ const login = async (who, email) => {
                                      LIMIT 1`).get();
   if (studentToAllot) {
     const allotSlot = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
-                                  AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime') LIMIT 1`).get();
+                                  AND (slot_date || ' ' || start_time) > ? LIMIT 1`).get(h.nowMinute());
     if (allotSlot) {
       await post('admin', '/admin/slots/' + allotSlot.id + '/allot', { student_id: String(studentToAllot.id) });
       ok(db.prepare('SELECT status FROM slots WHERE id=?').get(allotSlot.id).status === 'booked'
@@ -341,7 +341,7 @@ const login = async (who, email) => {
 
       // Duplicate allotment of same type to same student is rejected
       const anotherOpen = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
-                                      AND datetime(slot_date || ' ' || start_time) > datetime('now','localtime') LIMIT 1`).get();
+                                      AND (slot_date || ' ' || start_time) > ? LIMIT 1`).get(h.nowMinute());
       if (anotherOpen) {
         await post('admin', '/admin/slots/' + anotherOpen.id + '/allot', { student_id: String(studentToAllot.id) });
         ok(db.prepare('SELECT status FROM slots WHERE id=?').get(anotherOpen.id).status === 'open',
@@ -370,8 +370,9 @@ const login = async (who, email) => {
                           JOIN users u ON u.id = i.student_id
                           JOIN slots s ON s.id = i.slot_id
                           WHERE i.status='booked'
-                            AND datetime(s.slot_date || ' ' || s.start_time) > datetime('now','localtime','+1 hour')
-                          ORDER BY i.id LIMIT 1`).get();
+                            AND (s.slot_date || ' ' || s.start_time) > ?
+                          ORDER BY i.id LIMIT 1`)
+                          .get(new Date(Date.now() + 5.5 * 3600000 + 3600000).toISOString().slice(0, 16).replace('T', ' '));
   ok(!!cIv, 'there is an upcoming booking to cancel');
   await login('canceller', cIv.email);
   await post('canceller', '/student/cancel/' + cIv.id);
@@ -737,6 +738,170 @@ const login = async (who, email) => {
   ok(!!mentorAuditEval, 'mentor evaluation submission is recorded in audit_logs');
   const adminAuditStudent = db.prepare("SELECT * FROM audit_logs WHERE action='ADMIN_CREATE_STUDENT'").get();
   ok(!!adminAuditStudent, 'admin student registration is recorded in audit_logs');
+
+
+  /* ======================================================================
+   * Timezone consistency
+   * The SQL filters and the JavaScript helpers must agree on "past",
+   * whatever timezone the server process runs in.
+   * ==================================================================== */
+  section('Timezone consistency (IST everywhere)');
+  {
+    const future = db.prepare(`SELECT * FROM slots WHERE (slot_date || ' ' || start_time) > ? LIMIT 1`)
+      .get(h.nowMinute());
+    const past = db.prepare(`SELECT * FROM slots WHERE (slot_date || ' ' || start_time) < ? LIMIT 1`)
+      .get(h.nowMinute());
+    ok(!future || h.isPast(future) === false, 'a slot the SQL filter calls upcoming is not "past" to the helpers');
+    ok(!past || h.isPast(past) === true, 'a slot the SQL filter calls past is "past" to the helpers too');
+    ok(h.nowMinute().length === 16 && h.today() === h.nowMinute().slice(0, 10), 'IST now/today helpers agree');
+    ok(h.isPast({ slot_date: '2099-01-01', start_time: '10:00' }) === false, 'a far-future slot is never past');
+    ok(h.isPast({ slot_date: '2000-01-01', start_time: '10:00' }) === true, 'a far-past slot is always past');
+  }
+
+  /* ======================================================================
+   * Password recovery
+   * ==================================================================== */
+  section('Password recovery (forgot / reset)');
+  {
+    const RESET_EMAIL = 'reset.candidate@student.in';
+    await post('admin', '/admin/students', {
+      name: 'Reset Candidate', email: RESET_EMAIL, password: 'pass123', roll_no: 'KON2025300', branch: 'CSE',
+    });
+    ok(!!db.prepare('SELECT id FROM users WHERE email=?').get(RESET_EMAIL), 'a candidate exists to recover');
+
+    const formPage = await get('anon', '/forgot-password');
+    ok(formPage.status === 200 && formPage.body.includes('Forgot your password?'), 'GET /forgot-password renders');
+    ok((await get('anon', '/login')).body.includes('/forgot-password'), 'the login page links to password recovery');
+
+    const unknown = await post('anon', '/forgot-password', { email: 'no.such.person@nowhere.test' });
+    ok(unknown.status === 200 && !/\/reset-password\//.test(unknown.body),
+       'an unknown address does not reveal that the account is missing');
+
+    const requested = await post('anon', '/forgot-password', { email: RESET_EMAIL });
+    const token = (requested.body.match(/\/reset-password\/([A-Za-z0-9_-]+)/) || [])[1];
+    ok(!!token, 'a reset token is issued for a real account');
+    ok(db.prepare('SELECT COUNT(*) c FROM password_resets WHERE user_id=(SELECT id FROM users WHERE email=?)')
+         .get(RESET_EMAIL).c === 1, 'exactly one outstanding reset row is stored');
+    ok(!db.prepare('SELECT token_hash FROM password_resets ORDER BY id DESC LIMIT 1').get().token_hash.includes(token),
+       'the raw token is never stored, only its hash');
+
+    ok((await get('anon', '/reset-password/' + token)).body.includes('Choose a new password'), 'the reset form renders');
+    ok((await get('anon', '/reset-password/not-a-real-token')).status === 400, 'a bogus token is refused');
+
+    ok((await post('anon', '/reset-password/' + token, { next1: 'abc', next2: 'abc' })).status === 400,
+       'a too-short new password is refused');
+    ok((await post('anon', '/reset-password/' + token, { next1: 'longenough1', next2: 'different1' })).status === 400,
+       'mismatched confirmation is refused');
+
+    const done = await post('anon', '/reset-password/' + token, { next1: 'recovered123', next2: 'recovered123' });
+    ok(done.location === '/login', 'a valid reset redirects to the login page');
+    ok((await post('old_pw', '/login', { email: RESET_EMAIL, password: 'pass123' })).status === 401,
+       'the previous password stops working');
+    ok((await post('new_pw', '/login', { email: RESET_EMAIL, password: 'recovered123' })).location === '/student',
+       'the new password signs the candidate in');
+    ok((await get('anon', '/reset-password/' + token)).status === 400, 'a used reset token cannot be replayed');
+
+    // A second request must invalidate the first outstanding link.
+    const first = await post('anon', '/forgot-password', { email: RESET_EMAIL });
+    const firstToken = (first.body.match(/\/reset-password\/([A-Za-z0-9_-]+)/) || [])[1];
+    await post('anon', '/forgot-password', { email: RESET_EMAIL });
+    ok((await get('anon', '/reset-password/' + firstToken)).status === 400,
+       'requesting a new link invalidates the previous one');
+
+    ok(!!db.prepare("SELECT id FROM audit_logs WHERE action='AUTH_PASSWORD_RESET_COMPLETED'").get(),
+       'a completed reset is written to the audit log');
+  }
+
+  /* ======================================================================
+   * Regressions
+   * ==================================================================== */
+  section('Regression guards');
+  {
+    // View locals used to be registered *after* csrfProtection, so every CSRF
+    // rejection crashed while rendering the error page.
+    process.env.NODE_ENV = 'development';
+    const csrfReject = await post('csrf_probe', '/login', { email: 'x@y.z', password: 'nope' });
+    process.env.NODE_ENV = 'test';
+    ok(csrfReject.status === 403, 'a missing CSRF token yields 403, not 500', 'status=' + csrfReject.status);
+    ok(/CSRF/i.test(csrfReject.body), 'the CSRF error page actually renders its message');
+
+    // Signed-in pages must not be stored by the browser cache.
+    const dash = await get('student', '/student');
+    ok(/no-store/.test(dash.headers.get('cache-control') || ''),
+       'authenticated pages are sent with Cache-Control: no-store');
+
+    // Non-HTML clients get JSON, not a redirect to an HTML login page.
+    const apiUnauth = await get('nobody', '/student/api/slots/available?type=technical', { accept: 'application/json' });
+    ok(apiUnauth.status === 401, 'an unauthenticated JSON API call returns 401', 'status=' + apiUnauth.status);
+
+    // Deactivated accounts lose the signed backup cookie too, not just the session.
+    const victim = db.prepare("SELECT id, email FROM users WHERE role='student' AND active=1 ORDER BY id LIMIT 1").get();
+    await post('deact', '/login', { email: victim.email, password: 'pass123' });
+    db.prepare('UPDATE users SET active=0 WHERE id=?').run(victim.id);
+    const afterDeactivate = await get('deact', '/student');
+    ok(afterDeactivate.location === '/login', 'a deactivated user is bounced to login');
+    const clearing = (afterDeactivate.headers.getSetCookie ? afterDeactivate.headers.getSetCookie() : []).join(';');
+    ok(/konfident_auth=;/.test(clearing), 'the signed backup cookie is cleared on deactivation, not just the session');
+    db.prepare('UPDATE users SET active=1 WHERE id=?').run(victim.id);
+
+    // The mentor list query binds an IST "now" three times; a mismatch would throw.
+    const mentorsOpen = q.mentorsWithOpenSlots();
+    ok(Array.isArray(mentorsOpen) && mentorsOpen.every((m) => typeof m.total_open_slots === 'number'),
+       'mentorsWithOpenSlots returns open-slot counts for every evaluator');
+    ok(mentorsOpen.every((m) => m.total_open_slots >= m.tech_open_slots && m.total_open_slots >= m.hr_open_slots),
+       'per-domain open-slot counts never exceed the total');
+
+    // Admin slot listing is paginated.
+    const slotsPage = await get('admin', '/admin/slots');
+    const rowCount = (slotsPage.body.match(/\/admin\/slots\/\d+\/(reschedule|cancel|allot|reopen|release)/g) || []).length;
+    ok(slotsPage.status === 200 && rowCount > 0, 'the admin slot list renders manage controls');
+    ok(/Page 1 of/.test(slotsPage.body) || db.prepare('SELECT COUNT(*) c FROM slots').get().c <= 50,
+       'the admin slot list paginates once there are more than 50 slots');
+  }
+
+
+  section('CSV export safety');
+  {
+    await post('admin', '/admin/students', {
+      name: '=cmd|\' /C calc\'!A1', email: 'csv.injection@student.in', password: 'pass123',
+      roll_no: '@SUM(1+1)', branch: '+1234', squad: '-500',
+    });
+    const exported = await get('admin', '/admin/reports.csv');
+    ok(exported.status === 200, 'CSV export still returns 200 with hostile values');
+    ok(!/^"=cmd/m.test(exported.body) && exported.body.includes(`"'=cmd`),
+       'a formula-looking name is neutralised with a leading apostrophe');
+    ok(exported.body.includes(`"'@SUM(1+1)"`), 'a formula-looking roll number is neutralised');
+    ok(exported.body.includes(`"'+1234"`) && exported.body.includes(`"'-500"`),
+       'leading + and - are neutralised too');
+    // fetch() strips the BOM while decoding, so check the raw bytes.
+    const rawCsv = Buffer.from(await (await fetch(base + '/admin/reports.csv', { headers: { cookie: jars.admin } })).arrayBuffer());
+    ok(rawCsv[0] === 0xef && rawCsv[1] === 0xbb && rawCsv[2] === 0xbf,
+       'the export carries a UTF-8 BOM so Excel reads accented names correctly');
+    ok(/charset=utf-8/i.test(exported.headers.get('content-type') || ''), 'the export declares its charset');
+  }
+
+  section('Google Meet, Meeting Link Privacy & Email Confirmation');
+  {
+    // 1. Google Meet link format
+    const sampleLink = h.generateMeetingLink('technical');
+    ok(/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(sampleLink),
+       'generateMeetingLink produces a valid Google Meet URL');
+
+    // 2. Meeting link privacy: unbooked slots API does not leak location
+    const availRes = await get('newstudent', '/student/api/slots/available?type=technical');
+    const availData = JSON.parse(availRes.body);
+    ok(availData.ok === true && Array.isArray(availData.slots), 'slots API returns open slots list');
+    const hasExposedLink = availData.slots.some(s => s.location || s.locationFormatted);
+    ok(!hasExposedLink, 'meeting link is not exposed in unbooked slots API');
+
+    // 3. Email notifications dispatched and recorded in audit log
+    const emailAudit = db.prepare("SELECT * FROM audit_logs WHERE action='EMAIL_NOTIFICATION_SENT'").all();
+    ok(emailAudit.length > 0, 'booking confirmation emails are recorded in audit log');
+
+    // 4. googleService exports createSlotCalendarEvent
+    const google = require('../src/services/googleService');
+    ok(typeof google.createSlotCalendarEvent === 'function', 'googleService exports createSlotCalendarEvent');
+  }
 
   server.close();
   console.log(`\n\x1b[1m${pass} passed, ${fail} failed\x1b[0m\n`);

@@ -60,7 +60,7 @@
         </div>
       <% } else { %>
         <p class="faint" style="font-size:13px">
-          Candidate attended and completed evaluation on <%= iv.submitted_at %>.
+          Attendance is locked because this interview has already been evaluated (<%= h.fmtStamp(iv.submitted_at) %>).
         </p>
       <% } %>
     </div>
@@ -82,7 +82,7 @@
           </tbody>
         </table></div>
         <% if (iv.feedback) { %><div style="margin-top:14px"><div class="l faint">Feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div><% } %>
-        <p class="faint" style="margin-top:12px">Submitted <%= iv.submitted_at %>. Evaluations are final — contact the admin for corrections.</p>
+        <p class="faint" style="margin-top:12px">Submitted <%= h.fmtStamp(iv.submitted_at) %>. Evaluations are final — contact the admin for corrections.</p>
 
       <% } else if (iv.attendance === 'absent') { %>
         <div class="note" style="margin:0">
