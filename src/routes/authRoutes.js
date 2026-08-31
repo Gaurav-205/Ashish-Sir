@@ -415,21 +415,30 @@ router.get('/profile', requireLogin, (req, res) => {
 router.post('/profile/update', requireLogin, (req, res) => {
   const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active FROM users WHERE id = ?').get(req.session.user.id);
   const name = String(req.body.name || '').trim();
-  if (!name) {
+  if (!name || name.length < 2) {
     return res.status(400).render('profile', {
       title: 'My profile',
       me,
-      error: 'Name cannot be blank.',
+      error: 'Full name must be at least 2 characters.',
       ok: null,
       googleConfigured: google.isConfigured(),
     });
   }
   const phone = String(req.body.phone || '').trim() || null;
+  if (phone && !h.isValidPhone(phone)) {
+    return res.status(400).render('profile', {
+      title: 'My profile',
+      me,
+      error: 'Please enter a valid contact phone number.',
+      ok: null,
+      googleConfigured: google.isConfigured(),
+    });
+  }
   const branch = me.role === 'student' ? (String(req.body.branch || '').trim() || null) : me.branch;
   const squad = me.role === 'student' ? (String(req.body.squad || '').trim() || null) : me.squad;
   const resume_url = me.role === 'student' ? (String(req.body.resume_url || '').trim() || null) : me.resume_url;
 
-  if (resume_url && !/^https?:\/\//i.test(resume_url)) {
+  if (resume_url && !h.isValidUrl(resume_url)) {
     return res.status(400).render('profile', {
       title: 'My profile',
       me,
