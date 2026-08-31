@@ -73,8 +73,9 @@ router.get('/slots', (req, res) => {
     "s.status = 'open'",
     'm.active = 1',
     "(s.slot_date || ' ' || s.start_time) > ?",
+    's.mentor_id != ?'
   ];
-  const args = [type, h.nowMinute()];
+  const args = [type, h.nowMinute(), req.session.user.id];
   if (mentorId) {
     where.push('s.mentor_id = ?');
     args.push(mentorId);
@@ -120,8 +121,9 @@ router.get('/api/slots/available', (req, res) => {
     "s.status = 'open'",
     'm.active = 1',
     "(s.slot_date || ' ' || s.start_time) > ?",
+    's.mentor_id != ?'
   ];
-  const args = [type, h.nowMinute()];
+  const args = [type, h.nowMinute(), req.session.user.id];
   if (mentorId) {
     where.push('s.mentor_id = ?');
     args.push(mentorId);
@@ -186,6 +188,7 @@ router.post('/book', actionLimiter, async (req, res) => {
     if (slot.status !== 'open') throw new Error('Sorry — someone just booked that slot. Please pick another.');
     if (!slot.mentor_active) throw new Error('That mentor is no longer available. Please pick another slot.');
     if (h.isPast(slot)) throw new Error('That slot is in the past.');
+    if (slot.mentor_id === studentId) throw new Error('You cannot book your own slot.');
 
     const slotWeek = h.getWeekRange(slot.slot_date);
     const existing = db.prepare(`
