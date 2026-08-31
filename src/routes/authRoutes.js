@@ -4,7 +4,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const h = require('../helpers');
-const { requireLogin, homeFor } = require('../auth');
+const { requireLogin, homeFor, isUserDeveloper } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
@@ -58,10 +58,7 @@ router.post('/login', authLimiter, (req, res) => {
   
   let to = req.session.redirectTo;
   if (to) {
-    const isDev = Boolean(
-      row.is_developer ||
-      row.role === 'developer'
-    );
+    const isDev = isUserDeveloper(row);
     if (!isDev) {
       if (to.startsWith('/admin') && row.role !== 'admin') to = null;
       else if (to.startsWith('/student') && row.role !== 'student') to = null;
@@ -215,10 +212,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     let to = req.session.redirectTo;
     delete req.session.redirectTo;
     if (to) {
-      const isDev = Boolean(
-        user.is_developer ||
-        user.role === 'developer'
-      );
+      const isDev = isUserDeveloper(user);
       if (!isDev) {
         if (to.startsWith('/admin') && user.role !== 'admin') to = null;
         else if (to.startsWith('/student') && user.role !== 'student') to = null;
