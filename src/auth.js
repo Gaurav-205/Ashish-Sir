@@ -13,8 +13,7 @@ function isUserDeveloper(user) {
   if (!user) return false;
   return Boolean(
     user.is_developer ||
-    user.role === 'developer' ||
-    (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com')
+    user.role === 'developer'
   );
 }
 
@@ -61,7 +60,7 @@ function resolveCurrentUser(req, res) {
   if (isDev && req.session.activeRole) {
     req.session.user.role = req.session.activeRole;
   } else {
-    req.session.user.role = isDev ? (req.session.activeRole || user.role || 'developer') : user.role;
+    req.session.user.role = isDev ? 'developer' : user.role;
   }
 
   res.locals.user = req.session.user;

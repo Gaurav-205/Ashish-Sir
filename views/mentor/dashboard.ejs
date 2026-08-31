@@ -7,14 +7,14 @@
     <h1>Evaluator dashboard</h1>
     <p class="sub">Conduct your assigned candidate interviews, track meeting attendance, and submit rubric evaluations.</p>
   </div>
-  <% if (mentor && (mentor.can_technical || mentor.can_hr)) { %>
+  <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
     <div class="btn-row">
       <button type="button" class="btn primary" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
     </div>
   <% } %>
 </div>
 
-<% if (mentor && (mentor.can_technical || mentor.can_hr)) { %>
+<% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
 <dialog id="createSlotModal" class="modal-dialog" style="max-width:540px">
   <div class="modal-head">
     <h2>Publish New Interview Slots</h2>
@@ -26,8 +26,8 @@
       <div class="field">
         <label>Interview Domain *</label>
         <select name="type" required>
-          <% if (mentor.can_technical) { %><option value="technical">Technical Mock Interview</option><% } %>
-          <% if (mentor.can_hr) { %><option value="hr">HR Mock Interview</option><% } %>
+          <% if (mentor.can_technical || isDeveloper) { %><option value="technical">Technical Mock Interview</option><% } %>
+          <% if (mentor.can_hr || isDeveloper) { %><option value="hr">HR Mock Interview</option><% } %>
         </select>
       </div>
 
@@ -190,7 +190,7 @@
       <h2 style="margin:0">My Open Published Slots (<%= slots.length %>)</h2>
       <span class="faint">Students can book into any of these slots</span>
     </div>
-    <% if (mentor && (mentor.can_technical || mentor.can_hr)) { %>
+    <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
       <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
     <% } %>
   </div>
@@ -198,7 +198,7 @@
     <% if (!slots.length) { %>
       <div class="empty">
         You have no open upcoming slots.
-        <% if (mentor && (mentor.can_technical || mentor.can_hr)) { %>
+        <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
           <div style="margin-top:12px">
             <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots Now</button>
           </div>
