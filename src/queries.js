@@ -4,6 +4,20 @@ const { User, Slot, Interview, Evaluation, StudentFeedback } = require('./models
 const h = require('./helpers');
 const { RUBRIC, GRAND_TOTAL } = require('./rubric');
 
+async function batchAttachDetails(ivs) {
+  if (!ivs || !ivs.length) return [];
+  const ivIds = ivs.map(i => i._id);
+  const [evals, feedbacks] = await Promise.all([
+    Evaluation.find({ interview_id: { $in: ivIds } }).lean(),
+    StudentFeedback.find({ interview_id: { $in: ivIds } }).lean(),
+  ]);
+
+  const evalMap = new Map(evals.map(e => [String(e.interview_id), e]));
+  const sfMap = new Map(feedbacks.map(f => [String(f.interview_id), f]));
+
+  return ivs.map(iv => flattenInterview(iv, evalMap.get(String(iv._id)), sfMap.get(String(iv._id))));
+}
+
 async function interviewsForStudent(studentId) {
   const ivs = await Interview.find({ student_id: studentId, status: { $ne: 'cancelled' } })
     .populate('slot_id')
@@ -11,13 +25,7 @@ async function interviewsForStudent(studentId) {
     .populate('student_id', 'name email roll_no branch squad resume_url')
     .lean();
 
-  const results = [];
-  for (const iv of ivs) {
-    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
-    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
-    results.push(flattenInterview(iv, evalDoc, sfDoc));
-  }
-
+  const results = await batchAttachDetails(ivs);
   return results.sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
 }
 
@@ -31,13 +39,7 @@ async function interviewsForMentor(mentorId, status = null) {
     .populate('student_id', 'name email roll_no branch squad resume_url')
     .lean();
 
-  const results = [];
-  for (const iv of ivs) {
-    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
-    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
-    results.push(flattenInterview(iv, evalDoc, sfDoc));
-  }
-
+  const results = await batchAttachDetails(ivs);
   return results.sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
 }
 
@@ -50,8 +52,10 @@ async function interviewById(id) {
     .lean();
   if (!iv) return null;
 
-  const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
-  const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+  const [evalDoc, sfDoc] = await Promise.all([
+    Evaluation.findOne({ interview_id: iv._id }).lean(),
+    StudentFeedback.findOne({ interview_id: iv._id }).lean(),
+  ]);
   return flattenInterview(iv, evalDoc, sfDoc);
 }
 
@@ -70,13 +74,7 @@ async function allInterviews(filters = {}) {
     .populate('student_id', 'name email roll_no branch squad resume_url')
     .lean();
 
-  const results = [];
-  for (const iv of ivs) {
-    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
-    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
-    results.push(flattenInterview(iv, evalDoc, sfDoc));
-  }
-
+  const results = await batchAttachDetails(ivs);
   return results.sort((a, b) => (b.slot_date + ' ' + b.start_time).localeCompare(a.slot_date + ' ' + a.start_time));
 }
 

@@ -279,10 +279,15 @@ router.get('/slots', async (req, res) => {
     .limit(limit)
     .lean();
 
-  const slots = [];
-  for (const sl of rawSlots) {
-    const iv = sl.status === 'booked' ? await Interview.findOne({ slot_id: sl._id, status: 'booked' }).populate('student_id', 'name email').lean() : null;
-    slots.push({
+  const bookedSlotIds = rawSlots.filter(s => s.status === 'booked').map(s => s._id);
+  const interviews = bookedSlotIds.length ? await Interview.find({ slot_id: { $in: bookedSlotIds }, status: 'booked' })
+    .populate('student_id', 'name email')
+    .lean() : [];
+  const ivMap = new Map(interviews.map(i => [String(i.slot_id), i]));
+
+  const slots = rawSlots.map(sl => {
+    const iv = ivMap.get(String(sl._id));
+    return {
       ...sl,
       id: sl._id,
       mentor_name: sl.mentor_id ? sl.mentor_id.name : '',
@@ -292,8 +297,8 @@ router.get('/slots', async (req, res) => {
       student_id: iv && iv.student_id ? iv.student_id._id : null,
       interview_id: iv ? iv._id : null,
       attendance: iv ? iv.attendance : null,
-    });
-  }
+    };
+  });
 
   const allMentors = await q.mentorsList();
   const technicalMentors = allMentors.filter(m => m.can_technical);
