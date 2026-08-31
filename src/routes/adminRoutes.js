@@ -299,9 +299,13 @@ router.get('/slots', (req, res) => {
   const baseQuery = new URLSearchParams();
   Object.entries(filter).forEach(([k, v]) => { if (v) baseQuery.set(k, v); });
 
+  const allMentors = q.mentorsList();
+  const techMentors = allMentors.filter(m => Boolean(m.can_technical));
+  const hrMentors = allMentors.filter(m => Boolean(m.can_hr));
+
   res.render('admin/slots', {
     title: 'Interview slots', slots, filter,
-    techMentors: q.mentorsList('technical'), hrMentors: q.mentorsList('hr'),
+    techMentors, hrMentors,
     students,
     defaultDate: h.addDays(h.today(), 1),
     today: h.today(),
@@ -370,7 +374,16 @@ router.post('/slots', actionLimiter, (req, res) => {
     let made = 0, skipped = 0;
     const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                             VALUES (?,?,?,?,?,?,?)`);
+    const existingSlots = db.prepare(`
+      SELECT slot_date, start_time, end_time FROM slots
+       WHERE mentor_id = ? AND status <> 'cancelled' AND slot_date IN (${dates.map(() => '?').join(',')})
+    `).all(mentor.id, ...dates);
 
+    const hasOverlap = (tDate, sTime, eTime) => {
+      return existingSlots.some(s => s.slot_date === tDate && s.start_time < eTime && s.end_time > sTime);
+    };
+
+    const slotsToInsert = [];
     for (const targetDate of dates) {
       for (let k = 0; k < n; k++) {
         const startMin = sh * 60 + sm + k * mins;
@@ -386,35 +399,43 @@ router.post('/slots', actionLimiter, (req, res) => {
           continue;
         }
 
-        const overlap = db.prepare(`
-          SELECT 1 FROM slots
-           WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
-             AND start_time < ? AND end_time > ?
-        `).get(mentor.id, targetDate, e_time, s_time);
-
-        if (overlap) {
+        if (hasOverlap(targetDate, s_time, e_time)) {
           skipped++;
           continue;
         }
 
         const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
-        try {
-          const resIns = ins.run(mentor.id, type, targetDate, s_time, e_time, mode || 'Online', loc);
-          made++;
-          const newSlot = {
-            id: resIns.lastInsertRowid,
-            mentor_id: mentor.id,
-            type,
-            slot_date: targetDate,
-            start_time: s_time,
-            end_time: e_time,
-            mode: mode || 'Online',
-            location: loc,
-          };
-          google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
-        } catch (e) {
-          if (h.isUniqueViolation(e)) skipped++; else throw e;
+        existingSlots.push({ slot_date: targetDate, start_time: s_time, end_time: e_time });
+        slotsToInsert.push({ targetDate, s_time, e_time, loc });
+      }
+    }
+
+    if (slotsToInsert.length > 0) {
+      try {
+        db.exec('BEGIN IMMEDIATE');
+        for (const s of slotsToInsert) {
+          try {
+            const resIns = ins.run(mentor.id, type, s.targetDate, s.s_time, s.e_time, mode || 'Online', s.loc);
+            made++;
+            const newSlot = {
+              id: resIns.lastInsertRowid,
+              mentor_id: mentor.id,
+              type,
+              slot_date: s.targetDate,
+              start_time: s.s_time,
+              end_time: s.e_time,
+              mode: mode || 'Online',
+              location: s.loc,
+            };
+            google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
+          } catch (e) {
+            if (h.isUniqueViolation(e)) skipped++; else throw e;
+          }
         }
+        db.exec('COMMIT');
+      } catch (errTx) {
+        try { db.exec('ROLLBACK'); } catch (_) {}
+        throw errTx;
       }
     }
     logAudit(req, 'ADMIN_CREATE_SLOTS', { type, mentor_id: mentor.id, count: made, days: dates.length });
