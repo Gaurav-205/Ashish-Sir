@@ -9,7 +9,9 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 const TMP = path.join(__dirname, '..', 'data', 'test.db');
-for (const f of [TMP, TMP + '-wal', TMP + '-shm']) if (fs.existsSync(f)) fs.unlinkSync(f);
+for (const f of [TMP, TMP + '-wal', TMP + '-shm']) {
+  try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (_) {}
+}
 process.env.DB_PATH = TMP;
 process.env.NODE_ENV = 'test';
 
