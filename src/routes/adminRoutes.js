@@ -56,17 +56,33 @@ router.get('/students', (req, res) => {
 router.post('/students', (req, res) => {
   const { name, email, password, roll_no, branch, squad, phone, resume_url } = req.body;
   try {
-    if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
+    const cleanName = String(name || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPw = String(password || '');
+
+    if (!cleanName || cleanName.length < 2) throw new Error('Candidate name must be at least 2 characters.');
+    if (!h.isValidEmail(cleanEmail)) throw new Error('Please enter a valid email address.');
+    if (cleanPw.length < 6) throw new Error('Initial password must be at least 6 characters.');
+
+    const cleanPhone = (phone && phone.trim()) ? phone.trim() : null;
+    if (cleanPhone && !h.isValidPhone(cleanPhone)) {
+      throw new Error('Please enter a valid contact phone number.');
+    }
+
     const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
-    if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+    if (cleanResume && !h.isValidUrl(cleanResume)) {
       throw new Error('Resume link must be a valid URL starting with http:// or https://');
     }
+
     db.prepare(`INSERT INTO users (name,email,password_hash,role,roll_no,branch,squad,phone,resume_url)
                 VALUES (?,?,?,'student',?,?,?,?,?)`)
-      .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10),
-           roll_no || null, branch || null, squad || null, phone || null, cleanResume);
-    logAudit(req, 'ADMIN_CREATE_STUDENT', { email: email.trim().toLowerCase() });
-    flash(req, 'ok', `Student ${name} added.`);
+      .run(cleanName, cleanEmail, bcrypt.hashSync(cleanPw, 10),
+           roll_no ? String(roll_no).trim() : null,
+           branch ? String(branch).trim() : null,
+           squad ? String(squad).trim() : null,
+           cleanPhone, cleanResume);
+    logAudit(req, 'ADMIN_CREATE_STUDENT', { email: cleanEmail });
+    flash(req, 'ok', `Candidate ${cleanName} registered successfully.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
   }
@@ -75,25 +91,38 @@ router.post('/students', (req, res) => {
 
 router.post('/students/:id/update', validateId('id'), (req, res) => {
   const { name, roll_no, branch, squad, phone, resume_url, active } = req.body;
-  if (!name || !name.trim()) {
-    flash(req, 'err', 'Name is required.');
+  const cleanName = String(name || '').trim();
+  if (!cleanName || cleanName.length < 2) {
+    flash(req, 'err', 'Candidate name must be at least 2 characters.');
     return res.redirect('/admin/students/' + req.params.id);
   }
+
+  const cleanPhone = (phone && phone.trim()) ? phone.trim() : null;
+  if (cleanPhone && !h.isValidPhone(cleanPhone)) {
+    flash(req, 'err', 'Please enter a valid contact phone number.');
+    return res.redirect('/admin/students/' + req.params.id);
+  }
+
   const cleanResume = (resume_url && resume_url.trim()) ? resume_url.trim() : null;
-  if (cleanResume && !/^https?:\/\//i.test(cleanResume)) {
+  if (cleanResume && !h.isValidUrl(cleanResume)) {
     flash(req, 'err', 'Resume link must be a valid URL starting with http:// or https://');
     return res.redirect('/admin/students/' + req.params.id);
   }
+
   const isActive = active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, roll_no=?, branch=?, squad=?, phone=?, resume_url=?, active=?
               WHERE id=? AND role='student'`)
-    .run(name.trim(), roll_no || null, branch || null, squad || null, phone || null, cleanResume,
+    .run(cleanName,
+         roll_no ? String(roll_no).trim() : null,
+         branch ? String(branch).trim() : null,
+         squad ? String(squad).trim() : null,
+         cleanPhone, cleanResume,
          isActive, Number(req.params.id));
   if (!isActive) {
     invalidateUserSessions(req.params.id);
   }
   logAudit(req, 'ADMIN_UPDATE_STUDENT', { target_user_id: req.params.id });
-  flash(req, 'ok', 'Student updated.');
+  flash(req, 'ok', 'Candidate record updated successfully.');
   res.redirect('/admin/students/' + req.params.id);
 });
 
@@ -111,7 +140,7 @@ router.post('/students/:id/reset-password', validateId('id'), (req, res) => {
       .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
     invalidateUserSessions(req.params.id);
     logAudit(req, 'ADMIN_RESET_STUDENT_PASSWORD', { target_user_id: req.params.id });
-    flash(req, 'ok', 'Password reset.');
+    flash(req, 'ok', 'Password reset successfully.');
   }
   res.redirect('/admin/students/' + req.params.id);
 });
@@ -143,13 +172,25 @@ router.get('/mentors', (req, res) => {
 router.post('/mentors', (req, res) => {
   const { name, email, password, phone } = req.body;
   try {
-    if (!name || !name.trim() || !email || !email.trim() || !password) throw new Error('Name, email and password are required.');
+    const cleanName = String(name || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPw = String(password || '');
+
+    if (!cleanName || cleanName.length < 2) throw new Error('Mentor name must be at least 2 characters.');
+    if (!h.isValidEmail(cleanEmail)) throw new Error('Please enter a valid email address.');
+    if (cleanPw.length < 6) throw new Error('Initial password must be at least 6 characters.');
+
+    const cleanPhone = (phone && phone.trim()) ? phone.trim() : null;
+    if (cleanPhone && !h.isValidPhone(cleanPhone)) {
+      throw new Error('Please enter a valid contact phone number.');
+    }
+
     db.prepare(`INSERT INTO users (name,email,password_hash,role,phone,can_technical,can_hr)
                 VALUES (?,?,?,'mentor',?,?,?)`)
-      .run(name.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 10), phone || null,
+      .run(cleanName, cleanEmail, bcrypt.hashSync(cleanPw, 10), cleanPhone,
            req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0);
-    logAudit(req, 'ADMIN_CREATE_MENTOR', { email: email.trim().toLowerCase() });
-    flash(req, 'ok', `Mentor ${name} added.`);
+    logAudit(req, 'ADMIN_CREATE_MENTOR', { email: cleanEmail });
+    flash(req, 'ok', `Mentor ${cleanName} registered successfully.`);
   } catch (e) {
     flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
   }
@@ -158,21 +199,28 @@ router.post('/mentors', (req, res) => {
 
 router.post('/mentors/:id/update', validateId('id'), (req, res) => {
   const name = String(req.body.name || '').trim();
-  if (!name) {
-    flash(req, 'err', 'Name is required.');
+  if (!name || name.length < 2) {
+    flash(req, 'err', 'Mentor name must be at least 2 characters.');
     return res.redirect('/admin/mentors');
   }
+
+  const phone = (req.body.phone && req.body.phone.trim()) ? req.body.phone.trim() : null;
+  if (phone && !h.isValidPhone(phone)) {
+    flash(req, 'err', 'Please enter a valid contact phone number.');
+    return res.redirect('/admin/mentors');
+  }
+
   const isActive = req.body.active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, phone=?, can_technical=?, can_hr=?, active=?
               WHERE id=? AND role='mentor'`)
-    .run(name, req.body.phone || null,
+    .run(name, phone,
          req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0,
          isActive, Number(req.params.id));
   if (!isActive) {
     invalidateUserSessions(req.params.id);
   }
   logAudit(req, 'ADMIN_UPDATE_MENTOR', { target_user_id: req.params.id });
-  flash(req, 'ok', 'Mentor updated.');
+  flash(req, 'ok', 'Mentor profile updated successfully.');
   res.redirect('/admin/mentors');
 });
 

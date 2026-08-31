@@ -201,10 +201,42 @@ function getMissingStudentProfileFields(user) {
   return missing;
 }
 
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim();
+  return trimmed.length <= 150 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
+
+function isValidUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  return trimmed.length <= 500 && /^https?:\/\/[^\s<>"']+$/i.test(trimmed);
+}
+
+function isValidPhone(phone) {
+  if (!phone || typeof phone !== 'string') return false;
+  const trimmed = phone.trim();
+  return trimmed.length <= 25 && /^[+]?[\d\s\-().]{7,25}$/.test(trimmed);
+}
+
+function isValidDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  const trimmed = dateStr.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
+  const [y, m, d] = trimmed.split('-').map(Number);
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+function isValidTime(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return false;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr.trim());
+}
+
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
   normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
   getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
+  isValidEmail, isValidUrl, isValidPhone, isValidDate, isValidTime,
 };
-
-
