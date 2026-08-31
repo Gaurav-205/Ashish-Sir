@@ -410,6 +410,52 @@ const login = async (who, email) => {
   ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(pIv.id).status === 'booked',
      'student cannot cancel a past booking');
 
+  section('Admin cancel booking');
+  const adminIv = db.prepare(`SELECT i.*, u.email FROM interviews i
+                              JOIN users u ON u.id = i.student_id
+                              JOIN slots s ON s.id = i.slot_id
+                              WHERE i.status='booked'
+                                AND (s.slot_date || ' ' || s.start_time) > ?
+                              ORDER BY i.id DESC LIMIT 1`)
+                              .get(new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 16).replace('T', ' '));
+  ok(!!adminIv, 'there is an upcoming booking for admin to cancel');
+
+  // Non-admin cannot call admin cancel
+  const unauthCancel = await post('canceller', '/admin/interviews/' + adminIv.id + '/cancel');
+  ok(unauthCancel.status === 302 || unauthCancel.status === 403, 'student cannot call admin booking cancel');
+
+  // Admin cancels booking
+  await post('admin', '/admin/interviews/' + adminIv.id + '/cancel');
+  ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(adminIv.id).status === 'cancelled'
+     && db.prepare('SELECT status FROM slots WHERE id=?').get(adminIv.slot_id).status === 'open',
+     'admin cancels a booking and the slot reopens');
+
+  // Audit log recorded
+  const adminCancelAudit = db.prepare(`SELECT * FROM audit_logs WHERE action='ADMIN_CANCEL_BOOKING' AND details LIKE ?`)
+    .get(`%"interview_id":${adminIv.id}%`);
+  ok(!!adminCancelAudit, 'admin booking cancellation is recorded in audit logs');
+
+  // Completed interview cannot be cancelled by admin
+  const doneIv = db.prepare('SELECT id, status FROM interviews WHERE slot_id=?').get(doneSlot.id);
+  await post('admin', '/admin/interviews/' + doneIv.id + '/cancel');
+  ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(doneIv.id).status === 'completed',
+     'admin cannot cancel a completed interview');
+
+  // Admin cancel booking alias /admin/bookings/:id/cancel
+  const testStudent = db.prepare(`SELECT * FROM users WHERE role='student' AND active=1 LIMIT 1`).get();
+  const openSlotForAdmin = db.prepare(`SELECT * FROM slots WHERE status='open' LIMIT 1`).get();
+  db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(openSlotForAdmin.id);
+  const newIvRes = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type, status) VALUES (?, ?, ?, ?, 'booked')`)
+    .run(testStudent.id, openSlotForAdmin.mentor_id, openSlotForAdmin.id, openSlotForAdmin.type);
+  await post('admin', '/admin/bookings/' + newIvRes.lastInsertRowid + '/cancel');
+  ok(db.prepare('SELECT status FROM interviews WHERE id=?').get(newIvRes.lastInsertRowid).status === 'cancelled'
+     && db.prepare('SELECT status FROM slots WHERE id=?').get(openSlotForAdmin.id).status === 'open',
+     'admin cancels a booking via /admin/bookings/:id/cancel alias');
+
+  // UI check
+  const adminInterviewsPage = await get('admin', '/admin/interviews');
+  ok(adminInterviewsPage.body.includes('Cancel booking'), 'admin interviews table includes Cancel booking action');
+
   section('Google OAuth & Calendar Integration');
   const google = require('../src/services/googleService');
   const sessionAuth = require('../src/middleware/sessionAuth');
@@ -901,6 +947,293 @@ const login = async (who, email) => {
     // 4. googleService exports createSlotCalendarEvent
     const google = require('../src/services/googleService');
     ok(typeof google.createSlotCalendarEvent === 'function', 'googleService exports createSlotCalendarEvent');
+  }
+
+  section('Developer Role & Dynamic Role Switching');
+  {
+    // Ensure Gaurav Khandelwal is present and marked as developer
+    const devUser = db.prepare(`SELECT * FROM users WHERE lower(email) = 'gauravkhandelwal205@gmail.com'`).get();
+    ok(!!devUser, 'gauravkhandelwal205@gmail.com account exists');
+    ok(devUser.is_developer === 1, 'gauravkhandelwal205@gmail.com is marked as developer in db');
+
+    // Login as developer
+    await login('devuser', 'gauravkhandelwal205@gmail.com', 'pass123');
+
+    // 1. Developer can access everything across roles
+    const adminPage = await get('devuser', '/admin');
+    ok(adminPage.status === 200 && adminPage.body.includes('Admin dashboard'), 'developer can access /admin');
+
+    const mentorPage = await get('devuser', '/mentor');
+    ok(mentorPage.status === 200 && mentorPage.body.includes('My interviews'), 'developer can access /mentor');
+
+    const studentPage = await get('devuser', '/student');
+    ok(studentPage.status === 200 && studentPage.body.includes('My interviews'), 'developer can access /student');
+
+    // 2. Role switcher UI is present in topbar
+    ok(adminPage.body.includes('dev-role-switcher') && adminPage.body.includes('/dev/switch-role'),
+       'developer view renders role switcher control in navigation');
+
+    // 3. Switch role to student
+    const switchToStudent = await post('devuser', '/dev/switch-role', { role: 'student' });
+    ok(switchToStudent.status === 302 && switchToStudent.location === '/student', 'switching to student redirects to /student');
+    const studentDashAfterSwitch = await get('devuser', '/student');
+    ok(studentDashAfterSwitch.body.includes('DEV') && studentDashAfterSwitch.body.includes('STUDENT'),
+       'developer acts as student after switching');
+
+    // 4. Switch role to mentor
+    const switchToMentor = await post('devuser', '/dev/switch-role', { role: 'mentor' });
+    ok(switchToMentor.status === 302 && switchToMentor.location === '/mentor', 'switching to mentor redirects to /mentor');
+    const mentorDashAfterSwitch = await get('devuser', '/mentor');
+    ok(mentorDashAfterSwitch.body.includes('DEV') && mentorDashAfterSwitch.body.includes('MENTOR'),
+       'developer acts as mentor after switching');
+
+    // 5. Switch role via GET endpoint
+    const switchToAdmin = await get('devuser', '/dev/switch-role/admin');
+    ok(switchToAdmin.status === 302 && switchToAdmin.location === '/admin', 'GET /dev/switch-role/admin switches and redirects');
+
+    // 6. Switch back to developer mode
+    const switchToDev = await get('devuser', '/dev/switch-role/developer');
+    ok(switchToDev.status === 302 && switchToDev.location === '/admin', 'switching back to developer mode succeeds');
+
+    // 7. Non-developer cannot switch roles
+    const unauthSwitch = await post('canceller', '/dev/switch-role', { role: 'admin' });
+    ok(unauthSwitch.status === 403, 'non-developer cannot switch roles');
+
+    const unauthGetSwitch = await get('canceller', '/dev/switch-role/admin');
+    ok(unauthGetSwitch.status === 403, 'non-developer cannot switch roles via GET');
+  }
+
+  section('Mentor Slot Editing & Cancellation');
+  {
+    // Mentor publishes a test slot
+    const createSlotRes = await post('mentor', '/mentor/slots', {
+      type: 'technical',
+      slot_date: '2026-09-25',
+      start_time: '14:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+      location: 'https://meet.google.com/test-edit-cancel',
+    });
+    ok(createSlotRes.status === 302, 'mentor creates slot successfully');
+
+    const createdSlot = db.prepare(`
+      SELECT * FROM slots WHERE slot_date = '2026-09-25' AND start_time = '14:00' AND status = 'open'
+    `).get();
+    ok(!!createdSlot, 'created slot is present in database');
+
+    // 1. Mentor edits / reschedules the slot
+    const editRes = await post('mentor', `/mentor/slots/${createdSlot.id}/edit`, {
+      slot_date: '2026-09-26',
+      start_time: '15:00',
+      end_time: '15:30',
+      mode: 'Online',
+      location: 'https://meet.google.com/rescheduled-link',
+    });
+    ok(editRes.status === 302, 'mentor edits slot successfully');
+    const updatedSlot = db.prepare('SELECT * FROM slots WHERE id=?').get(createdSlot.id);
+    ok(updatedSlot.slot_date === '2026-09-26' && updatedSlot.start_time === '15:00', 'slot updated with new date and time');
+
+    // 2. Mentor cancels the open slot
+    const cancelRes = await post('mentor', `/mentor/slots/${createdSlot.id}/cancel`, {});
+    ok(cancelRes.status === 302, 'mentor cancels open slot successfully');
+    const cancelledSlot = db.prepare('SELECT * FROM slots WHERE id=?').get(createdSlot.id);
+    ok(cancelledSlot.status === 'cancelled', 'slot status is set to cancelled');
+
+    // 3. Unauthorized user cannot cancel another mentor's slot
+    const mentor2Slot = db.prepare(`
+      SELECT * FROM slots WHERE status = 'open' AND mentor_id != (SELECT id FROM users WHERE email = 'test.mentor@konfident.in') LIMIT 1
+    `).get();
+    if (mentor2Slot) {
+      await post('mentor', `/mentor/slots/${mentor2Slot.id}/cancel`, {});
+      const untouchedSlot = db.prepare('SELECT * FROM slots WHERE id=?').get(mentor2Slot.id);
+      ok(untouchedSlot.status === 'open', 'mentor cannot cancel another mentor slot');
+    }
+  }
+
+  section('Arvind Admin Account & Administrative Superpowers');
+  {
+    // 1. Check arvind account existence and role
+    const arvindUser = db.prepare(`SELECT * FROM users WHERE email = 'arvind@kalvium.com'`).get();
+    ok(!!arvindUser && arvindUser.role === 'admin', 'arvind@kalvium.com is provisioned as administrator');
+
+    // 2. Arvind signs in
+    const arvindLogin = await login('arvind', 'arvind@kalvium.com');
+    ok(arvindLogin.status === 302 && arvindLogin.location === '/admin', 'arvind@kalvium.com logs into admin successfully');
+
+    // 3. Access admin sections
+    const arvindDash = await get('arvind', '/admin');
+    ok(arvindDash.status === 200 && arvindDash.body.includes('Admin dashboard'), 'arvind can view admin dashboard');
+    const arvindStudents = await get('arvind', '/admin/students');
+    ok(arvindStudents.status === 200, 'arvind can view students directory');
+
+    // 4. Arvind creates a slot on behalf of a mentor
+    const targetMentor = db.prepare(`SELECT id FROM users WHERE role = 'mentor' LIMIT 1`).get();
+    const createSlotAdmin = await post('arvind', '/admin/slots', {
+      mentor_id: targetMentor.id,
+      type: 'technical',
+      slot_date: '2026-10-01',
+      start_time: '11:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+      location: 'https://meet.google.com/arvind-admin-room',
+    });
+    ok(createSlotAdmin.status === 302, 'arvind creates slot on behalf of mentor');
+    const adminCreatedSlot = db.prepare(`SELECT * FROM slots WHERE slot_date = '2026-10-01' AND start_time = '11:00'`).get();
+    ok(!!adminCreatedSlot && adminCreatedSlot.status === 'open', 'admin-created slot is active and open');
+  }
+
+  section('Complete Student Journey: Discovery, Booking, Meet UI, Results & Attendance');
+  {
+    // 1. Create a dedicated candidate and mentor for full lifecycle testing
+    await post('admin', '/admin/students', {
+      name: 'Priya Sharma',
+      email: 'priya.sharma@student.in',
+      password: 'pass123',
+      roll_no: 'PS-101',
+      branch: 'CSE',
+      squad: 'Alpha',
+      resume_url: 'https://drive.google.com/priya-resume',
+    });
+    const studentUser = db.prepare(`SELECT * FROM users WHERE email = 'priya.sharma@student.in'`).get();
+    ok(!!studentUser, 'test candidate registered');
+
+    await post('admin', '/admin/mentors', {
+      name: 'Lifecycle Mentor',
+      email: 'lifecycle.mentor@konfident.in',
+      password: 'pass123',
+      can_technical: '1',
+      can_hr: '1',
+    });
+    const mentorUser = db.prepare(`SELECT * FROM users WHERE email = 'lifecycle.mentor@konfident.in'`).get();
+    ok(!!mentorUser, 'test lifecycle mentor registered');
+
+    // Log in mentor first
+    await login('lifecycle_mentor', 'lifecycle.mentor@konfident.in');
+
+    // Mentor creates a slot for tomorrow
+    const mSlotRes = await post('lifecycle_mentor', '/mentor/slots', {
+      type: 'technical',
+      slot_date: '2026-09-15',
+      start_time: '10:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+      location: 'https://meet.google.com/lifecycle-meet-link',
+    });
+    const bookedSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id = ? AND slot_date = '2026-09-15'`).get(mentorUser.id);
+    ok(!!bookedSlot, 'mentor slot created for booking');
+
+    // 2. Candidate logs in and views mentors and slots
+    await login('priya', 'priya.sharma@student.in');
+    const mentorsPage = await get('priya', '/student/mentors');
+    ok(mentorsPage.status === 200 && mentorsPage.body.includes('Lifecycle Mentor'), 'student can view mentor profiles');
+
+    const slotsPage = await get('priya', '/student/slots?type=technical');
+    ok(slotsPage.status === 200, 'student can browse available technical slots');
+
+    // 3. Candidate books the slot
+    const bookRes = await post('priya', '/student/book', { slot_id: bookedSlot.id });
+    ok(bookRes.status === 302 && bookRes.location === '/student', 'student books technical slot successfully');
+
+    const interview = db.prepare(`SELECT * FROM interviews WHERE slot_id = ?`).get(bookedSlot.id);
+    ok(!!interview && interview.status === 'booked', 'interview created with status booked');
+
+    // 4. Candidate dashboard shows Google Meet & Instant Meet buttons
+    const dashPage = await get('priya', '/student');
+    ok(dashPage.body.includes('Join Google Meet') && dashPage.body.includes('lifecycle-meet-link'),
+       'student dashboard shows Join Google Meet link');
+    ok(dashPage.body.includes('Start Instant Google Meet'),
+       'student dashboard offers Instant Google Meet option');
+
+    // 5. Candidate cancels the booking
+    const cancelBookingRes = await post('priya', `/student/cancel/${interview.id}`, {});
+    ok(cancelBookingRes.status === 302, 'student can cancel booked interview');
+    const slotAfterCancel = db.prepare(`SELECT * FROM slots WHERE id = ?`).get(bookedSlot.id);
+    ok(slotAfterCancel.status === 'open', 'cancelling booking returns slot to open state');
+
+    // 6. Re-book the slot for evaluation test
+    await post('priya', '/student/book', { slot_id: bookedSlot.id });
+    const rebookedInterview = db.prepare(`SELECT * FROM interviews WHERE slot_id = ? AND status = 'booked'`).get(bookedSlot.id);
+    ok(!!rebookedInterview, 'candidate re-booked slot for evaluation flow');
+
+    // 7. Mentor desk: view candidate and record attendance & evaluation
+    await login('lifecycle_m_session', 'lifecycle.mentor@konfident.in');
+    const deskPage = await get('lifecycle_m_session', `/mentor/interview/${rebookedInterview.id}`);
+    ok(deskPage.status === 200 && deskPage.body.includes('Priya Sharma'), 'mentor opens interview desk for candidate');
+
+    // Mentor records attendance as attended
+    await post('lifecycle_m_session', `/mentor/interview/${rebookedInterview.id}/attendance`, { attendance: 'attended' });
+    const ivAttended = db.prepare(`SELECT * FROM interviews WHERE id = ?`).get(rebookedInterview.id);
+    ok(ivAttended.attendance === 'attended', 'mentor marks student as attended (present)');
+
+    // Mentor submits evaluation
+    const evalRes = await post('lifecycle_m_session', `/mentor/interview/${rebookedInterview.id}/evaluate`, {
+      resume_marks: '8',
+      project_marks: '9',
+      dsa_marks: '9',
+      feedback: 'Excellent problem solving skills and strong algorithmic intuition.',
+    });
+    ok(evalRes.status === 302, 'mentor submits rubric evaluation');
+
+    const evalRow = db.prepare(`SELECT * FROM evaluations WHERE interview_id = ?`).get(rebookedInterview.id);
+    ok(!!evalRow && evalRow.total === 26, 'evaluation stored with correct total score');
+
+    // 8. Candidate checks results
+    const resultsPage = await get('priya', '/student/results');
+    ok(resultsPage.status === 200 && resultsPage.body.includes('Marked Present (Attended)'),
+       'student results page displays marked present');
+    ok(resultsPage.body.includes('26'), 'student results page displays score total');
+    ok(resultsPage.body.includes('Excellent problem solving'), 'student results page displays mentor feedback');
+  }
+
+  section('Passed Slot Attendance Status Display');
+  {
+    // Test passed slot with attendance pending
+    const pastSlot = db.prepare(`
+      INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+      VALUES ((SELECT id FROM users WHERE role='mentor' LIMIT 1), 'hr', '2020-01-01', '09:00', '09:30', 'Online', 'https://meet.google.com/past-pending', 'booked')
+      RETURNING id
+    `).get();
+
+    const pastStudent = db.prepare(`SELECT id FROM users WHERE role='student' LIMIT 1`).get();
+    const pastInterview = db.prepare(`
+      INSERT INTO interviews (student_id, mentor_id, slot_id, type, status, attendance)
+      VALUES (?, (SELECT id FROM users WHERE role='mentor' LIMIT 1), ?, 'hr', 'booked', 'pending')
+      RETURNING id
+    `).get(pastStudent.id, pastSlot.id);
+
+    // Admin interviews view shows "Slot Passed · Pending"
+    const adminIvsPage = await get('admin', '/admin/interviews');
+    ok(adminIvsPage.body.includes('Slot Passed · Pending'), 'admin interviews table shows Slot Passed · Pending');
+
+    // Mark as absent
+    db.prepare(`UPDATE interviews SET attendance = 'absent' WHERE id = ?`).run(pastInterview.id);
+    const adminIvsAbsent = await get('admin', '/admin/interviews');
+    ok(adminIvsAbsent.body.includes('Absent'), 'admin interviews table shows Absent');
+
+    // Mark as attended
+    db.prepare(`UPDATE interviews SET attendance = 'attended' WHERE id = ?`).run(pastInterview.id);
+    const adminIvsAttended = await get('admin', '/admin/interviews');
+    ok(adminIvsAttended.body.includes('Attended (Present)'), 'admin interviews table shows Attended (Present)');
+  }
+
+  section('Performance & Consolidated Query Verification');
+  {
+    const q = require('../src/queries');
+    const stats = q.adminStats();
+    ok(typeof stats.students === 'number' && stats.students > 0, 'adminStats returns valid student count');
+    ok(typeof stats.mentors === 'number' && stats.mentors > 0, 'adminStats returns valid mentor count');
+    ok(typeof stats.slots === 'number', 'adminStats returns valid slots count');
+    ok(typeof stats.fullyBooked === 'number', 'adminStats returns valid fullyBooked count');
+
+    const mentorsList = q.mentorsWithOpenSlots();
+    ok(Array.isArray(mentorsList) && mentorsList.length > 0, 'mentorsWithOpenSlots returns mentor array');
+    ok(typeof mentorsList[0].total_open_slots === 'number', 'mentorsWithOpenSlots calculates total_open_slots correctly');
+
+    const summaries = q.allStudentSummaries();
+    ok(Array.isArray(summaries) && summaries.length > 0, 'allStudentSummaries generates complete student summaries');
   }
 
   server.close();

@@ -70,9 +70,11 @@
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <span class="pill p-<%= iv.status %>"><%= iv.status %></span>
               <% if (iv.attendance === 'attended') { %>
-                <span class="pill p-completed">Attended</span>
+                <span class="pill p-completed">✓ Marked Present (Attended)</span>
               <% } else if (iv.attendance === 'absent') { %>
-                <span class="pill p-cancelled">Absent / No-Show</span>
+                <span class="pill p-cancelled">✗ Marked Absent</span>
+              <% } else if (h.isPast(iv)) { %>
+                <span class="pill" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;font-weight:600">Slot Passed · Awaiting Mentor Attendance</span>
               <% } %>
             </div>
           </div>

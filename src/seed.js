@@ -86,12 +86,16 @@ if (mode === 'dev' || mode === 'test') {
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 }, // Admin + HR Mentor
-    { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0 },
+    { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 1, can_hr: 1, is_dev: 1 },
   ];
 
   kalviumAdmins.forEach((a) => {
     try {
       addUser.run(a.name, a.email.toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, null, a.can_t, a.can_hr);
+      if (a.is_dev) {
+        db.prepare(`UPDATE users SET is_developer = 1, can_technical = 1, can_hr = 1 WHERE lower(email) = ?`).run(a.email.toLowerCase());
+      }
     } catch (_) {}
   });
 }

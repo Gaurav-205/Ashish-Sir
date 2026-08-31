@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
+const h = require('../helpers');
 const { requireLogin, homeFor } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
@@ -57,9 +58,16 @@ router.post('/login', authLimiter, (req, res) => {
   
   let to = req.session.redirectTo;
   if (to) {
-    if (to.startsWith('/admin') && row.role !== 'admin') to = null;
-    else if (to.startsWith('/student') && row.role !== 'student') to = null;
-    else if (to.startsWith('/mentor') && row.role !== 'mentor') to = null;
+    const isDev = Boolean(
+      row.is_developer ||
+      (row.email && row.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+      row.role === 'developer'
+    );
+    if (!isDev) {
+      if (to.startsWith('/admin') && row.role !== 'admin') to = null;
+      else if (to.startsWith('/student') && row.role !== 'student') to = null;
+      else if (to.startsWith('/mentor') && row.role !== 'mentor') to = null;
+    }
   }
 
   // Session fixation protection
@@ -199,9 +207,16 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     let to = req.session.redirectTo;
     delete req.session.redirectTo;
     if (to) {
-      if (to.startsWith('/admin') && user.role !== 'admin') to = null;
-      else if (to.startsWith('/student') && user.role !== 'student') to = null;
-      else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
+      const isDev = Boolean(
+        user.is_developer ||
+        (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+        user.role === 'developer'
+      );
+      if (!isDev) {
+        if (to.startsWith('/admin') && user.role !== 'admin') to = null;
+        else if (to.startsWith('/student') && user.role !== 'student') to = null;
+        else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
+      }
     }
     const redirectTo = to || homeFor(user.role);
 
@@ -473,6 +488,83 @@ router.post('/profile/password', requireLogin, (req, res) => {
     ok,
     googleConfigured: google.isConfigured(),
   });
+});
+
+/* -------------------------- Developer Role Switcher ----------------------- */
+router.post(['/dev/switch-role', '/switch-role'], requireLogin, (req, res) => {
+  const isDev = Boolean(
+    res.locals.isDeveloper ||
+    (req.session.user && (
+      req.session.user.is_developer ||
+      (req.session.user.email && req.session.user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+      req.session.user.role === 'developer'
+    ))
+  );
+  if (!isDev) {
+    return res.status(403).render('error', {
+      title: 'Access denied',
+      message: 'Only developers can switch roles.',
+    });
+  }
+
+  const targetRole = String(req.body.role || '').trim().toLowerCase();
+  const validRoles = ['admin', 'mentor', 'student', 'developer'];
+  if (!validRoles.includes(targetRole)) {
+    req.session.flash = { type: 'err', msg: 'Invalid role selected.' };
+    return res.redirect(h.safeRedirectTarget(req, '/'));
+  }
+
+  req.session.activeRole = targetRole;
+  req.session.user.role = targetRole;
+  logAudit(req, 'DEV_SWITCH_ROLE', { to_role: targetRole }, req.session.user.id);
+  req.session.flash = { type: 'ok', msg: `Switched view mode to ${targetRole}.` };
+
+  const destinations = {
+    admin: '/admin',
+    mentor: '/mentor',
+    student: '/student',
+    developer: '/admin',
+  };
+
+  res.redirect(destinations[targetRole] || '/');
+});
+
+router.get('/dev/switch-role/:role', requireLogin, (req, res) => {
+  const isDev = Boolean(
+    res.locals.isDeveloper ||
+    (req.session.user && (
+      req.session.user.is_developer ||
+      (req.session.user.email && req.session.user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+      req.session.user.role === 'developer'
+    ))
+  );
+  if (!isDev) {
+    return res.status(403).render('error', {
+      title: 'Access denied',
+      message: 'Only developers can switch roles.',
+    });
+  }
+
+  const targetRole = String(req.params.role || '').trim().toLowerCase();
+  const validRoles = ['admin', 'mentor', 'student', 'developer'];
+  if (!validRoles.includes(targetRole)) {
+    req.session.flash = { type: 'err', msg: 'Invalid role selected.' };
+    return res.redirect(h.safeRedirectTarget(req, '/'));
+  }
+
+  req.session.activeRole = targetRole;
+  req.session.user.role = targetRole;
+  logAudit(req, 'DEV_SWITCH_ROLE', { to_role: targetRole }, req.session.user.id);
+  req.session.flash = { type: 'ok', msg: `Switched view mode to ${targetRole}.` };
+
+  const destinations = {
+    admin: '/admin',
+    mentor: '/mentor',
+    student: '/student',
+    developer: '/admin',
+  };
+
+  res.redirect(destinations[targetRole] || '/');
 });
 
 module.exports = router;

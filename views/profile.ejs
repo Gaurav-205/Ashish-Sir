@@ -38,12 +38,13 @@
         <% } %>
         <p class="faint" style="margin-bottom:12px">
           Role: <strong><%= me.role %></strong>
+          <% if (isDeveloper) { %> · <span class="pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">Developer (All-Access)</span><% } %>
           <% if (me.roll_no) { %> · Roll No: <strong><%= me.roll_no %></strong><% } %>
           <% if (me.squad) { %> · Squad: <strong><%= me.squad %></strong><% } %>
-          <% if (me.role === 'mentor') { %>
+          <% if (me.role === 'mentor' || isDeveloper) { %>
             · Capabilities:
-            <% if (me.can_technical) { %><span class="pill p-technical">Technical</span><% } %>
-            <% if (me.can_hr) { %><span class="pill p-hr">HR</span><% } %>
+            <% if (me.can_technical || isDeveloper) { %><span class="pill p-technical">Technical</span><% } %>
+            <% if (me.can_hr || isDeveloper) { %><span class="pill p-hr">HR</span><% } %>
           <% } %>
         </p>
         <button class="btn primary sm">Save profile details</button>

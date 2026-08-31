@@ -2,11 +2,20 @@
 const db = require('./db');
 const { clearAuthSession } = require('./middleware/sessionAuth');
 
-const HOME = { admin: '/admin', mentor: '/mentor', student: '/student' };
+const HOME = { admin: '/admin', mentor: '/mentor', student: '/student', developer: '/admin' };
 
 /** Where a signed-in user belongs. Unknown roles fall back to the profile page. */
 function homeFor(role) {
   return HOME[role] || '/profile';
+}
+
+function isUserDeveloper(user) {
+  if (!user) return false;
+  return Boolean(
+    user.is_developer ||
+    user.role === 'developer' ||
+    (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com')
+  );
 }
 
 /**
@@ -24,11 +33,16 @@ function resolveCurrentUser(req, res) {
   }
 
   let user = null;
-  try {
-    user = db.prepare('SELECT id, name, email, role, active FROM users WHERE id = ?')
-      .get(req.session.user.id);
-  } catch (err) {
-    console.error('Auth lookup failed:', err);
+  if (req._resolvedUser && req._resolvedUser.id === req.session.user.id) {
+    user = req._resolvedUser;
+  } else {
+    try {
+      user = db.prepare('SELECT * FROM users WHERE id = ?')
+        .get(req.session.user.id);
+      if (user) req._resolvedUser = user;
+    } catch (err) {
+      console.error('Auth lookup failed:', err);
+    }
   }
 
   if (!user || !user.active) {
@@ -38,10 +52,21 @@ function resolveCurrentUser(req, res) {
     return null;
   }
 
+  const isDev = isUserDeveloper(user);
+
   req.session.user.name = user.name;
   req.session.user.email = user.email;
-  req.session.user.role = user.role;
+  req.session.user.is_developer = isDev;
+
+  if (isDev && req.session.activeRole) {
+    req.session.user.role = req.session.activeRole;
+  } else {
+    req.session.user.role = isDev ? (req.session.activeRole || user.role || 'developer') : user.role;
+  }
+
   res.locals.user = req.session.user;
+  res.locals.isDeveloper = isDev;
+  res.locals.activeRole = req.session.user.role;
   return user;
 }
 
@@ -61,14 +86,21 @@ function requireRole(...roles) {
     const user = resolveCurrentUser(req, res);
     if (!user) return;
 
-    if (!roles.includes(user.role)) {
+    const isDev = isUserDeveloper(user);
+    // Developer can access everything across all roles
+    if (isDev) {
+      return next();
+    }
+
+    const currentRole = (req.session.user && req.session.user.role) || user.role;
+    if (!roles.includes(currentRole)) {
       if (!req.accepts('html')) {
         return res.status(403).json({ error: 'You do not have permission to perform this action.' });
       }
       return res.status(403).render('error', {
         title: 'Access denied',
         message: 'You do not have permission to view this page.',
-        backHref: homeFor(user.role),
+        backHref: homeFor(currentRole),
         backLabel: 'Go to my dashboard',
       });
     }
@@ -76,4 +108,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireLogin, requireRole, homeFor, HOME };
+module.exports = { requireLogin, requireRole, homeFor, isUserDeveloper, HOME };
