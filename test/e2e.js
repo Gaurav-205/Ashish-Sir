@@ -955,6 +955,7 @@ const login = async (who, email) => {
     const devUser = db.prepare(`SELECT * FROM users WHERE lower(email) = 'gauravkhandelwal205@gmail.com'`).get();
     ok(!!devUser, 'gauravkhandelwal205@gmail.com account exists');
     ok(devUser.is_developer === 1, 'gauravkhandelwal205@gmail.com is marked as developer in db');
+    ok(devUser.can_technical === 0 && devUser.can_hr === 0, 'gauravkhandelwal205@gmail.com is not an evaluator / mentor');
 
     // Login as developer
     await login('devuser', 'gauravkhandelwal205@gmail.com', 'pass123');
