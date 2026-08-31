@@ -26,8 +26,8 @@
             <% hrMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="hr" hidden><%= m.name %></option><% }); %>
           </select>
           <div class="hint">Only mentors enabled for that interview type are listed.</div></div>
-        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= defaultDate %>" required></div>
-        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" required></div>
+        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= defaultDate %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
+        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" step="300" required></div>
         <div class="field"><label>Slot length (min)</label><input type="number" name="duration" value="30" min="10" max="180"></div>
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
@@ -103,9 +103,9 @@
                 <form method="post" action="/admin/slots/<%= s.id %>/reschedule">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <div class="row">
-                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" required></div>
-                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" required></div>
-                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" required></div>
+                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
+                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" step="300" required></div>
+                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" step="300" required></div>
                   </div>
                   <div class="field"><label>Mentor</label>
                     <select name="mentor_id">

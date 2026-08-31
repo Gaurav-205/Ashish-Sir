@@ -46,6 +46,21 @@ function nowMinute() {
 function today() {
   return nowStamp().slice(0, 10);
 }
+/** Current time in IST as 'HH:MM'. */
+function nowTime() {
+  return nowStamp().slice(11, 16);
+}
+/** Normalizes any time string ('9:00', '09:00', '09:00:00') to standard 'HH:MM'. Returns '' if invalid. */
+function normalizeTime(hm) {
+  if (!hm) return '';
+  const trimmed = String(hm).trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{1,2})(?::\d{1,2})?$/);
+  if (!match) return '';
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return '';
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 /** Renders a stored 'YYYY-MM-DD HH:MM:SS' timestamp for humans. */
 function fmtStamp(stamp) {
   if (!stamp) return '—';
@@ -134,7 +149,7 @@ function safeRedirectTarget(req, fallback = '/') {
 }
 
 module.exports = {
-  fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowStamp, nowMinute, addDays,
-  titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
+  fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
+  normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
 };
 

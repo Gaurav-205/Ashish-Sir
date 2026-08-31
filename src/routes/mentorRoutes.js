@@ -33,6 +33,7 @@ router.get('/', (req, res) => {
     slots,
     mentor,
     defaultDate: h.addDays(h.today(), 1),
+    today: h.today(),
   });
 });
 
@@ -47,8 +48,11 @@ router.post('/slots', (req, res) => {
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview domain. Must be technical or hr.');
     if (type === 'technical' && !mentor.can_technical && !isDev) throw new Error('Your profile is not enabled for Technical interviews.');
     if (type === 'hr' && !mentor.can_hr && !isDev) throw new Error('Your profile is not enabled for HR interviews.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
-    if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
+    
+    const cleanDate = String(slot_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid date.');
+    const cleanStart = h.normalizeTime(start_time);
+    if (!cleanStart) throw new Error('Pick a valid start time.');
 
     if (duration !== undefined && duration !== null && String(duration).trim() !== '') {
       const minsVal = Number(duration);
@@ -56,7 +60,7 @@ router.post('/slots', (req, res) => {
     }
     const mins = Number(duration) || 30;
     const n = Math.min(Math.max(Number(count) || 1, 1), 20);
-    const [sh, sm] = start_time.split(':').map(Number);
+    const [sh, sm] = cleanStart.split(':').map(Number);
     let made = 0, skipped = 0;
     const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                             VALUES (?,?,?,?,?,?,?)`);
@@ -232,22 +236,25 @@ router.post(['/slots/:id/edit', '/slots/:id/reschedule'], validateId('id'), asyn
 
   const { slot_date, start_time, end_time, mode, location } = req.body;
   try {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(slot_date)) throw new Error('Pick a valid date.');
-    if (!/^\d{2}:\d{2}$/.test(start_time)) throw new Error('Pick a valid start time.');
-    if (!/^\d{2}:\d{2}$/.test(end_time)) throw new Error('Pick a valid end time.');
-    if (start_time >= end_time) throw new Error('Start time must be before end time.');
+    const cleanDate = String(slot_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid date.');
+    const cleanStart = h.normalizeTime(start_time);
+    const cleanEnd = h.normalizeTime(end_time);
+    if (!cleanStart) throw new Error('Pick a valid start time.');
+    if (!cleanEnd) throw new Error('Pick a valid end time.');
+    if (cleanStart >= cleanEnd) throw new Error('Start time must be before end time.');
 
     const overlap = db.prepare(`
       SELECT 1 FROM slots
        WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled' AND id <> ?
          AND start_time < ? AND end_time > ?
-    `).get(slot.mentor_id, slot_date, slotId, end_time, start_time);
+    `).get(slot.mentor_id, cleanDate, slotId, cleanEnd, cleanStart);
     if (overlap) throw new Error('You already have another slot at that time.');
 
     const loc = (location && location.trim()) ? location.trim() : (slot.location || h.generateMeetingLink(slot.type));
 
     db.prepare(`UPDATE slots SET slot_date=?, start_time=?, end_time=?, mode=?, location=? WHERE id=?`)
-      .run(slot_date, start_time, end_time, mode || 'Online', loc, slotId);
+      .run(cleanDate, cleanStart, cleanEnd, mode || 'Online', loc, slotId);
 
     if (iv) {
       const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);

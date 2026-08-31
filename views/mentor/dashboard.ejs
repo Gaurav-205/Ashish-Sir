@@ -61,8 +61,8 @@
             <% if (mentor.can_technical) { %><option value="technical">Technical</option><% } %>
             <% if (mentor.can_hr) { %><option value="hr">HR</option><% } %>
           </select></div>
-        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" required></div>
-        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" required></div>
+        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
+        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" step="300" required></div>
         <div class="field"><label>Slot length (min)</label><input type="number" name="duration" value="30" min="10" max="180"></div>
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
@@ -70,6 +70,10 @@
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Publish slots →</button>
+        <span class="faint" style="font-size:12px">Presets:</span>
+        <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00, 4 slots)</button>
+        <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00, 6 slots)</button>
+        <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00, 4 slots)</button>
         <span class="faint" style="font-size:12px">Overlapping slots are skipped automatically.</span>
       </div>
     </form>
@@ -182,9 +186,9 @@
                 <form method="post" action="/mentor/slots/<%= s.id %>/edit">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <div class="row">
-                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" required></div>
-                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" required></div>
-                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" required></div>
+                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
+                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" step="300" required></div>
+                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" step="300" required></div>
                   </div>
                   <div class="row">
                     <div class="field"><label>Mode</label><select name="mode">
@@ -207,4 +211,14 @@
     </table></div><% } %>
   </div>
 </div>
+<script>
+window.applyPreset = function (start, duration, count) {
+  var s = document.querySelector('input[name="start_time"]');
+  var d = document.querySelector('input[name="duration"]');
+  var c = document.querySelector('input[name="count"]');
+  if (s) s.value = start;
+  if (d) d.value = duration;
+  if (c) c.value = count;
+};
+</script>
 <%- include('../partials/foot') %>
