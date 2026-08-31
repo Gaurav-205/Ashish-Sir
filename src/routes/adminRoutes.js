@@ -191,10 +191,16 @@ router.post('/mentors', actionLimiter, (req, res) => {
       throw new Error('Please enter a valid contact phone number.');
     }
 
-    db.prepare(`INSERT INTO users (name,email,password_hash,role,phone,can_technical,can_hr)
-                VALUES (?,?,?,'mentor',?,?,?)`)
+    const canTechnical = req.body.can_technical ? 1 : 0;
+    const canHr = req.body.can_hr ? 1 : 0;
+    if (!canTechnical && !canHr) {
+      throw new Error('Please select at least one interview domain (Technical or HR).');
+    }
+
+    db.prepare(`INSERT INTO users (name,email,password_hash,role,phone,can_technical,can_hr,active)
+                VALUES (?,?,?,'mentor',?,?,?,1)`)
       .run(cleanName, cleanEmail, bcrypt.hashSync(cleanPw, 10), cleanPhone,
-           req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0);
+           canTechnical, canHr);
     logAudit(req, 'ADMIN_CREATE_MENTOR', { email: cleanEmail });
     flash(req, 'ok', `Mentor ${cleanName} registered successfully.`);
   } catch (e) {

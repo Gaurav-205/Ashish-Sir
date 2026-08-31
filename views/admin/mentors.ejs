@@ -32,28 +32,49 @@
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
       </div>
       <div style="display:flex;gap:18px;margin:12px 0 6px;flex-wrap:wrap">
-        <label class="check"><input type="checkbox" name="can_technical" value="1" checked> Can conduct Technical interviews</label>
-        <label class="check"><input type="checkbox" name="can_hr" value="1"> Can conduct HR interviews</label>
+        <label class="check"><input type="checkbox" name="can_technical" id="reg_can_technical" value="1" checked onchange="validateMentorDomains()"> Can conduct Technical interviews</label>
+        <label class="check"><input type="checkbox" name="can_hr" id="reg_can_hr" value="1" onchange="validateMentorDomains()"> Can conduct HR interviews</label>
+      </div>
+      <div id="domain_err_msg" style="color:var(--error);font-size:12px;display:none;margin-top:4px">
+        ⚠️ Please select at least one interview domain (Technical or HR).
       </div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" onclick="document.getElementById('registerMentorModal').close()">Cancel</button>
-      <button class="btn primary">Register Mentor →</button>
+      <button class="btn primary" id="reg_mentor_btn">Register Mentor →</button>
     </div>
   </form>
 </dialog>
 
+<div class="search-toolbar" style="margin-bottom:20px">
+  <div class="search-input-wrap">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" id="mentorAdminSearchInput" placeholder="Search evaluators by name, email, domain…" oninput="filterMentorsTable()">
+  </div>
+  <div class="filter-chips">
+    <button type="button" class="filter-chip active" onclick="setAdminMentorFilter('all', this)">All (<%= mentors.length %>)</button>
+    <button type="button" class="filter-chip" onclick="setAdminMentorFilter('technical', this)">Technical (<%= mentors.filter(m => m.can_technical).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setAdminMentorFilter('hr', this)">HR (<%= mentors.filter(m => m.can_hr).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setAdminMentorFilter('active', this)">Active (<%= mentors.filter(m => m.active).length %>)</button>
+  </div>
+</div>
+
 <div class="card">
-  <div class="card-head"><h2>Verified Evaluators (<%= mentors.length %>)</h2></div>
+  <div class="card-head">
+    <h2>Verified Evaluators (<%= mentors.length %>)</h2>
+    <span class="faint" id="mentorCountLabel">Showing all <%= mentors.length %> evaluator(s)</span>
+  </div>
   <div class="card-body tight">
-    <div class="table-scroll"><table>
+    <div class="table-scroll"><table id="mentorsTable">
       <thead><tr><th>Mentor</th><th>Domains</th><th class="num">Published Slots</th><th class="num">Upcoming</th>
         <th class="num">Completed</th><th class="num">Action</th></tr></thead>
       <tbody>
       <% mentors.forEach(function(m){ %>
-        <tr>
-          <td><strong><%= m.name %></strong><br><span class="faint"><%= m.email %></span>
-            <% if (!m.active) { %> <span class="pill p-cancelled">inactive</span><% } %></td>
+        <tr data-tech="<%= m.can_technical ? '1' : '0' %>" data-hr="<%= m.can_hr ? '1' : '0' %>" data-active="<%= m.active ? '1' : '0' %>">
+          <td><strong><%= m.name %></strong><br><span class="faint"><%= m.email %><%= m.phone ? ' · ' + m.phone : '' %></span>
+            <% if (!m.active) { %> <span class="pill p-cancelled" style="font-size:10px">inactive</span><% } %></td>
           <td><% if (m.can_technical) { %><span class="pill p-technical">Technical</span> <% } %>
               <% if (m.can_hr) { %><span class="pill p-hr">HR</span><% } %>
               <% if (!m.can_technical && !m.can_hr) { %><span class="faint">—</span><% } %></td>
@@ -116,6 +137,56 @@
 </dialog>
 
 <script>
+function validateMentorDomains() {
+  var t = document.getElementById('reg_can_technical');
+  var h = document.getElementById('reg_can_hr');
+  var err = document.getElementById('domain_err_msg');
+  var btn = document.getElementById('reg_mentor_btn');
+  var isValid = (t && t.checked) || (h && h.checked);
+  if (err) err.style.display = isValid ? 'none' : 'block';
+  if (btn) btn.disabled = !isValid;
+  return isValid;
+}
+
+var currentAdminMentorFilter = 'all';
+
+function setAdminMentorFilter(domain, btn) {
+  document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  currentAdminMentorFilter = domain;
+  filterMentorsTable();
+}
+
+function filterMentorsTable() {
+  var search = (document.getElementById('mentorAdminSearchInput').value || '').trim().toLowerCase();
+  var rows = document.querySelectorAll('#mentorsTable tbody tr');
+  var count = 0;
+
+  rows.forEach(function(r) {
+    var text = r.textContent.toLowerCase();
+    var isTech = r.getAttribute('data-tech') === '1';
+    var isHr = r.getAttribute('data-hr') === '1';
+    var isActive = r.getAttribute('data-active') === '1';
+
+    var matchesDomain = (currentAdminMentorFilter === 'all') ||
+      (currentAdminMentorFilter === 'technical' && isTech) ||
+      (currentAdminMentorFilter === 'hr' && isHr) ||
+      (currentAdminMentorFilter === 'active' && isActive);
+
+    var matchesSearch = !search || text.indexOf(search) !== -1;
+
+    if (matchesDomain && matchesSearch) {
+      r.style.display = '';
+      count++;
+    } else {
+      r.style.display = 'none';
+    }
+  });
+
+  var label = document.getElementById('mentorCountLabel');
+  if (label) label.textContent = 'Showing ' + count + ' evaluator(s)';
+}
+
 window.openEditMentorModal = function (mentor) {
   var modal = document.getElementById('editMentorModal');
   if (!modal || !mentor) return;
@@ -149,17 +220,5 @@ window.openEditMentorModal = function (mentor) {
 
   modal.showModal();
 };
-
-['registerMentorModal', 'editMentorModal'].forEach(function (id) {
-  var m = document.getElementById(id);
-  if (m) {
-    m.addEventListener('click', function (e) {
-      var rect = m.getBoundingClientRect();
-      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
-        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-      if (!inDialog) m.close();
-    });
-  }
-});
 </script>
 <%- include('../partials/foot') %>
