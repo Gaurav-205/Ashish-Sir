@@ -90,7 +90,7 @@ router.post('/students', actionLimiter, (req, res) => {
     logAudit(req, 'ADMIN_CREATE_STUDENT', { email: cleanEmail });
     flash(req, 'ok', `Candidate ${cleanName} registered successfully.`);
   } catch (e) {
-    flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
+    flash(req, 'err', e.message.includes('UNIQUE') || e.message.includes('duplicate key') ? 'That email is already registered.' : e.message);
   }
   res.redirect('/admin/students');
 });
@@ -198,7 +198,7 @@ router.post('/mentors', actionLimiter, (req, res) => {
     logAudit(req, 'ADMIN_CREATE_MENTOR', { email: cleanEmail });
     flash(req, 'ok', `Mentor ${cleanName} registered successfully.`);
   } catch (e) {
-    flash(req, 'err', e.message.includes('UNIQUE') ? 'That email is already registered.' : e.message);
+    flash(req, 'err', e.message.includes('UNIQUE') || e.message.includes('duplicate key') ? 'That email is already registered.' : e.message);
   }
   res.redirect('/admin/mentors');
 });
@@ -405,7 +405,7 @@ router.post('/slots', actionLimiter, (req, res) => {
           };
           google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
         } catch (e) {
-          if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
+          if (String(e.message).includes('UNIQUE') || String(e.message).includes('duplicate key')) skipped++; else throw e;
         }
       }
     }
@@ -482,7 +482,7 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
     logAudit(req, 'ADMIN_RESCHEDULE_SLOT', { slot_id: id, slot_date, start_time, end_time, mentor_id });
     flash(req, 'ok', 'Slot updated. The student and mentor now see the new schedule.');
   } catch (e) {
-    flash(req, 'err', e.message.includes('UNIQUE') ? 'That mentor already has a slot at that time.' : e.message);
+    flash(req, 'err', e.message.includes('UNIQUE') || e.message.includes('duplicate key') ? 'That mentor already has a slot at that time.' : e.message);
   }
   res.redirect('/admin/slots');
 });

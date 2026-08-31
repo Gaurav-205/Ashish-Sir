@@ -145,7 +145,7 @@ router.post('/slots', (req, res) => {
           };
           google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
         } catch (e) {
-          if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
+          if (String(e.message).includes('UNIQUE') || String(e.message).includes('duplicate key')) skipped++; else throw e;
         }
       }
     }
@@ -254,7 +254,7 @@ router.post('/interview/:id/evaluate', validateId('id'), (req, res) => {
       .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
            val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) {
+    if (e.message.includes('UNIQUE') || e.message.includes('duplicate key')) {
       return rerender('An evaluation has already been submitted for this interview.');
     }
     return rerender('Could not save evaluation: ' + e.message);

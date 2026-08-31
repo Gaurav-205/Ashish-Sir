@@ -82,6 +82,7 @@ router.post('/login', authLimiter, (req, res) => {
         message: 'Could not complete login. Please try again.',
       });
     }
+    authLimiter.reset(req);
     setAuthSession(req, res, row);
     logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row.id);
     res.redirect(redirectTo);

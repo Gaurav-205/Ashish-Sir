@@ -39,7 +39,7 @@ function createRateLimiter(options = {}) {
     }
   }, 60 * 1000).unref();
 
-  return function rateLimitMiddleware(req, res, next) {
+  const middleware = function rateLimitMiddleware(req, res, next) {
     if (hits.size > 10000) hits.clear();
     // Key on both the source address and the submitted identity: keying on the
     // email alone lets one attacker lock a victim out, keying on the IP alone
@@ -72,6 +72,15 @@ function createRateLimiter(options = {}) {
     }
     next();
   };
+
+  middleware.reset = function(req) {
+    const emailKey = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
+    const ipKey = req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip';
+    const key = `${ipKey}|${emailKey}`;
+    hits.delete(key);
+  };
+
+  return middleware;
 }
 
 /**
