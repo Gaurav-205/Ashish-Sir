@@ -179,8 +179,6 @@ th.num, td.num { text-align: right; }
 .nav {
   display: flex;
   gap: 6px;
-  flex: 1;
-  flex-wrap: wrap;
   align-items: center;
 }
 .nav a {
