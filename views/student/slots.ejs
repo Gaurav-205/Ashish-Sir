@@ -42,6 +42,19 @@
   </div>
 <% } %>
 
+<% if (typeof limitReached !== 'undefined' && limitReached) { %>
+  <div class="note" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;background:#eff6ff;border-color:#bfdbfe">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="16" x2="12" y2="12"></line>
+      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+    <div>
+      <strong>Weekly Limit Reached:</strong> You have booked/conducted <%= weeklyCount %> of <%= maxAllowed %> allowed <%= h.titleCase(type) %> interview<%= maxAllowed > 1 ? 's' : '' %> for this weekly cycle (<%= slotWeek ? slotWeek.label : '' %>).
+    </div>
+  </div>
+<% } %>
+
 <!-- Smart Auto-Select Earliest Slot Banner -->
 <div id="smart-auto-banner" class="card" style="margin-bottom:20px;display:none;background:var(--pale-green);border-color:#bbf7d0">
   <div class="card-body" style="padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
@@ -60,8 +73,8 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="slot_id" id="smart-auto-slot-id" value="">
       <input type="hidden" name="type" value="<%= type %>">
-      <button class="btn primary sm" id="smart-auto-btn" <%= (already && already.status !== 'cancelled') || !s.profileComplete ? 'disabled' : '' %>>
-        <%= !s.profileComplete ? 'Complete profile to book' : 'Quick Book Earliest Slot →' %>
+      <button class="btn primary sm" id="smart-auto-btn" <%= (typeof limitReached !== 'undefined' && limitReached) || !s.profileComplete ? 'disabled' : '' %>>
+        <%= !s.profileComplete ? 'Complete profile to book' : ((typeof limitReached !== 'undefined' && limitReached) ? 'Weekly limit reached' : 'Quick Book Earliest Slot →') %>
       </button>
     </form>
   </div>
@@ -101,6 +114,7 @@
        data-type="<%= type %>"
        data-csrf="<%= csrfToken %>"
        data-already-booked="<%= (already && already.status !== 'cancelled') ? 'true' : 'false' %>"
+       data-limit-reached="<%= (typeof limitReached !== 'undefined' && limitReached) ? 'true' : 'false' %>"
        data-profile-complete="<%= s.profileComplete ? 'true' : 'false' %>">
     <% if (!byDate.length) { %>
       <div class="empty" id="empty-state" style="padding:48px 24px;text-align:center">

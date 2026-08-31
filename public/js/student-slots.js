@@ -14,6 +14,7 @@
   var currentType = container.dataset.type || '';
   var csrfToken = container.dataset.csrf || '';
   var isAlreadyBooked = container.dataset.alreadyBooked === 'true';
+  var isLimitReached = container.dataset.limitReached === 'true';
   var isProfileComplete = container.dataset.profileComplete !== 'false';
 
   var statusEl = document.getElementById('last-updated-text');
@@ -54,8 +55,8 @@
       return;
     }
     var html = '';
-    var canBook = !isAlreadyBooked && isProfileComplete;
-    var btnText = !isProfileComplete ? 'Complete profile to book' : (isAlreadyBooked ? 'Already booked' : 'Book this slot →');
+    var canBook = !isLimitReached && isProfileComplete;
+    var btnText = !isProfileComplete ? 'Complete profile to book' : (isLimitReached ? 'Weekly limit reached' : 'Book this slot →');
 
     byDate.forEach(function (g) {
       html += '<div class="slot-day" data-date="' + escHtml(g.date) + '">' +
@@ -105,16 +106,20 @@
         if (data.profileComplete !== undefined) {
           isProfileComplete = data.profileComplete !== false;
         }
+        if (data.limitReached !== undefined) {
+          isLimitReached = data.limitReached === true;
+        }
 
-        if (data.earliest && !isAlreadyBooked) {
+        if (data.earliest && !isLimitReached) {
           if (autoText) {
             autoText.innerHTML = '<strong>' + escHtml(data.earliest.slotFormatted) + '</strong> with <strong>' +
               escHtml(data.earliest.mentor_name) + '</strong> (' + escHtml(data.earliest.mode) + ')';
           }
           if (autoSlotId) autoSlotId.value = data.earliest.id;
           if (autoBtn) {
-            autoBtn.disabled = !isProfileComplete || isAlreadyBooked;
+            autoBtn.disabled = !isProfileComplete || isLimitReached;
             if (!isProfileComplete) autoBtn.textContent = 'Complete profile to book';
+            else if (isLimitReached) autoBtn.textContent = 'Weekly limit reached';
           }
           if (banner) banner.style.display = 'block';
         } else if (banner) {

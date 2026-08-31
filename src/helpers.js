@@ -256,10 +256,29 @@ function isValidTime(timeStr) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr.trim());
 }
 
+function checkWeeklyInterviewLimit(db, studentId, type, slotDate) {
+  const week = getWeekRange(slotDate || today());
+  const maxAllowed = type === 'technical' ? 3 : 1;
+  const count = db.prepare(`
+    SELECT COUNT(*) AS c FROM interviews i
+    JOIN slots s2 ON s2.id = i.slot_id
+    WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
+      AND s2.slot_date >= ? AND s2.slot_date <= ?
+  `).get(studentId, type, week.start, week.end).c;
+
+  return {
+    reached: count >= maxAllowed,
+    count,
+    maxAllowed,
+    week,
+  };
+}
+
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
   normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, isUniqueViolation,
   safeRedirectTarget, isSafeLocalPath,
   getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
   isValidEmail, isValidUrl, isValidPhone, isValidDate, isValidTime,
+  checkWeeklyInterviewLimit,
 };

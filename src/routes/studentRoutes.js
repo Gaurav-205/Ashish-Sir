@@ -96,12 +96,18 @@ router.get('/slots', (req, res) => {
     g.slots.push(slot);
   }
 
+  const limitCheck = h.checkWeeklyInterviewLimit(db, req.session.user.id, type, h.today());
+
   const mentors = q.mentorsList(type);
   res.render('student/slots', {
     title: `Book ${h.titleCase(type)} interview`,
     type,
     byDate,
     already,
+    limitReached: limitCheck.reached,
+    weeklyCount: limitCheck.count,
+    maxAllowed: limitCheck.maxAllowed,
+    slotWeek: limitCheck.week,
     s,
     mentors,
     selectedMentor: mentorId,
@@ -116,6 +122,7 @@ router.get('/api/slots/available', (req, res) => {
     return res.status(401).json({ ok: false, error: 'Your session is no longer valid. Please sign in again.' });
   }
   const already = type === 'hr' ? s.hr : s.technical;
+  const limitCheck = h.checkWeeklyInterviewLimit(db, req.session.user.id, type, h.today());
 
   const where = [
     's.type = ?',
@@ -160,6 +167,9 @@ router.get('/api/slots/available', (req, res) => {
     ok: true,
     type,
     already: already ? { id: already.id, status: already.status, mentor_name: already.mentor_name, slotFormatted: h.fmtSlot(already) } : null,
+    limitReached: limitCheck.reached,
+    weeklyCount: limitCheck.count,
+    maxAllowed: limitCheck.maxAllowed,
     count: slots.length,
     earliest: formattedSlots[0] || null,
     profileComplete: s ? s.profileComplete : false,
@@ -192,13 +202,17 @@ router.post('/book', actionLimiter, async (req, res) => {
     if (slot.mentor_id === studentId) throw new Error('You cannot book your own slot.');
 
     const slotWeek = h.getWeekRange(slot.slot_date);
-    const existing = db.prepare(`
-      SELECT i.*, s2.slot_date FROM interviews i
+    const maxAllowed = slot.type === 'technical' ? 3 : 1;
+    const existingCount = db.prepare(`
+      SELECT COUNT(*) AS c FROM interviews i
       JOIN slots s2 ON s2.id = i.slot_id
       WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
         AND s2.slot_date >= ? AND s2.slot_date <= ?
-    `).get(studentId, slot.type, slotWeek.start, slotWeek.end);
-    if (existing) throw new Error(`You have already booked your ${h.titleCase(slot.type)} interview for this weekly cycle (${slotWeek.label}).`);
+    `).get(studentId, slot.type, slotWeek.start, slotWeek.end).c;
+
+    if (existingCount >= maxAllowed) {
+      throw new Error(`You have reached the maximum limit of ${maxAllowed} ${h.titleCase(slot.type)} interview${maxAllowed > 1 ? 's' : ''} for this weekly cycle (${slotWeek.label}).`);
+    }
 
     // no clashing booking at the same date/time for this student
     const clash = db.prepare(`

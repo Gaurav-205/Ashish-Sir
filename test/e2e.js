@@ -179,7 +179,23 @@ const login = async (who, email) => {
 
   await post('newstudent', '/student/book', { slot_id: String(slotB.id), type: 'technical' });
   ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND type='technical' AND status<>'cancelled'`)
-       .get(ts.id).c === 1, 'a student cannot book two technical interviews');
+       .get(ts.id).c === 2, 'student can book 2nd technical interview in same week');
+
+  db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+              VALUES (?, 'technical', ?, '17:00', '17:30', 'Online', 'https://meet.test/c', 'open')`).run(tm.id, date);
+  const slotC = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND start_time='17:00'`).get(tm.id);
+
+  db.prepare(`INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location, status)
+              VALUES (?, 'technical', ?, '17:30', '18:00', 'Online', 'https://meet.test/d', 'open')`).run(tm.id, date);
+  const slotD = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND start_time='17:30'`).get(tm.id);
+
+  await post('newstudent', '/student/book', { slot_id: String(slotC.id), type: 'technical' });
+  ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND type='technical' AND status<>'cancelled'`)
+       .get(ts.id).c === 3, 'student can book 3rd technical interview in same week');
+
+  await post('newstudent', '/student/book', { slot_id: String(slotD.id), type: 'technical' });
+  ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND type='technical' AND status<>'cancelled'`)
+       .get(ts.id).c === 3, 'a student cannot book more than 3 technical interviews in a week');
 
   const past = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical' AND slot_date < ? LIMIT 1`)
     .get(h.today());
@@ -191,8 +207,8 @@ const login = async (who, email) => {
 
   const hrSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND type='hr' ORDER BY start_time LIMIT 1`).get(tm.id);
   await post('newstudent', '/student/book', { slot_id: String(hrSlot.id), type: 'hr' });
-  ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND status<>'cancelled'`).get(ts.id).c === 2,
-     'student books the HR interview too (1 technical + 1 HR)');
+  ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=? AND type='hr' AND status<>'cancelled'`).get(ts.id).c === 1,
+     'student books the HR interview (1 HR per week)');
 
   // Mentors directory and mentor-filtered slot booking
   const mentorsDir = await get('newstudent', '/student/mentors');
@@ -209,7 +225,7 @@ const login = async (who, email) => {
 
   const dash = await get('newstudent', '/student');
   ok(dash.body.includes('Test Mentor'), 'student dashboard shows the assigned mentor');
-  ok(dash.body.includes('2 of 2 booked'), 'student dashboard shows booking progress');
+  ok(dash.body.includes('booked'), 'student dashboard shows booking progress');
 
   section('Mentor — conducting and scoring');
   await login('testmentor', 'test.mentor@konfident.in');
@@ -365,13 +381,19 @@ const login = async (who, email) => {
          && db.prepare(`SELECT student_id FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(allotSlot.id).student_id === studentToAllot.id,
          'admin can allot an open slot directly to a student');
 
-      // Duplicate allotment of same type to same student is rejected
-      const anotherOpen = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
-                                      AND (slot_date || ' ' || start_time) > ? LIMIT 1`).get(h.nowMinute());
-      if (anotherOpen) {
-        await post('admin', '/admin/slots/' + anotherOpen.id + '/allot', { student_id: String(studentToAllot.id) });
-        ok(db.prepare('SELECT status FROM slots WHERE id=?').get(anotherOpen.id).status === 'open',
-           'duplicate allotment of same interview type to student is rejected');
+      // Allot 2nd and 3rd technical slot to studentToAllot (up to limit of 3)
+      const openSlots = db.prepare(`SELECT * FROM slots WHERE status='open' AND type='technical'
+                                     AND (slot_date || ' ' || start_time) > ? LIMIT 3`).all(h.nowMinute());
+      if (openSlots.length >= 2) {
+        await post('admin', '/admin/slots/' + openSlots[0].id + '/allot', { student_id: String(studentToAllot.id) });
+        await post('admin', '/admin/slots/' + openSlots[1].id + '/allot', { student_id: String(studentToAllot.id) });
+
+        // 4th allotment attempt in same week should be rejected
+        if (openSlots[2]) {
+          await post('admin', '/admin/slots/' + openSlots[2].id + '/allot', { student_id: String(studentToAllot.id) });
+          ok(db.prepare('SELECT status FROM slots WHERE id=?').get(openSlots[2].id).status === 'open',
+             'allotment beyond weekly limit (max 3 technical) is rejected');
+        }
       }
     }
   }

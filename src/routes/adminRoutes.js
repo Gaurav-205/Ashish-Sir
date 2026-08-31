@@ -630,9 +630,18 @@ router.post('/slots/:id/allot', validateId('id'), async (req, res) => {
     if (!student) throw new Error('Student not found.');
     if (!student.active) throw new Error('This student account is inactive.');
 
-    const existing = db.prepare(`SELECT id FROM interviews
-                                 WHERE student_id = ? AND type = ? AND status <> 'cancelled'`).get(studentId, slot.type);
-    if (existing) throw new Error(`${student.name} already has an active ${h.titleCase(slot.type)} interview.`);
+    const slotWeek = h.getWeekRange(slot.slot_date);
+    const maxAllowed = slot.type === 'technical' ? 3 : 1;
+    const existingCount = db.prepare(`
+      SELECT COUNT(*) AS c FROM interviews i
+      JOIN slots s2 ON s2.id = i.slot_id
+      WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
+        AND s2.slot_date >= ? AND s2.slot_date <= ?
+    `).get(studentId, slot.type, slotWeek.start, slotWeek.end).c;
+
+    if (existingCount >= maxAllowed) {
+      throw new Error(`${student.name} has reached the maximum limit of ${maxAllowed} ${h.titleCase(slot.type)} interview${maxAllowed > 1 ? 's' : ''} for this weekly cycle (${slotWeek.label}).`);
+    }
 
     // check clash for student at that date/time
     const clash = db.prepare(`
