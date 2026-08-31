@@ -86,6 +86,7 @@ if (mode === 'dev' || mode === 'test') {
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0, is_dev: 1 },
+    { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 },
     { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
     { name: 'Test User', email: 'test@user.com', password: 'test@1501', can_t: 1, can_hr: 1, is_dev: 1 },
   ];
@@ -111,7 +112,6 @@ if (mode !== 'empty') {
 
 // 2. Kalvium Mentor Accounts (Strict Tech vs Non-Tech segregation)
 const kalviumMentors = [
-  { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 },
   { name: 'Manav Verma', email: 'manav.verma@kalvium.com', can_t: 1, can_hr: 0 },
   { name: 'Muskan Srivastava', email: 'muskan.srivastava@kalvium.com', can_t: 0, can_hr: 1 },
   { name: 'Ritu Soni', email: 'ritu.soni@kalvium.com', can_t: 1, can_hr: 0 },

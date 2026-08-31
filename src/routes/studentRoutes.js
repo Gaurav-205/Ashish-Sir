@@ -281,7 +281,7 @@ router.get('/results', (req, res) => {
   res.render('student/results', { title: 'My results', s });
 });
 
-router.post('/feedback/:interviewId', validateId('interviewId'), actionLimiter, (req, res) => {
+router.post(['/feedback/:interviewId', '/interview/:interviewId/feedback'], validateId('interviewId'), actionLimiter, (req, res) => {
   const interviewId = Number(req.params.interviewId);
   const studentId = req.session.user.id;
   const iv = db.prepare(`SELECT i.*, s.type FROM interviews i JOIN slots s ON s.id = i.slot_id WHERE i.id = ? AND i.student_id = ?`).get(interviewId, studentId);

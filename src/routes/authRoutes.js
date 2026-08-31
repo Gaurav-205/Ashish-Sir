@@ -506,4 +506,47 @@ router.post('/profile/password', requireLogin, (req, res) => {
   });
 });
 
+router.post('/switch-role', (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.redirect('/login');
+  }
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  if (!user || !user.active) {
+    return res.redirect('/login');
+  }
+
+  const isDev = Boolean(
+    user.is_developer ||
+    (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+    user.role === 'developer'
+  );
+  const canEval = Boolean(user.can_technical || user.can_hr);
+  const isAkshata = Boolean(user.email && user.email.toLowerCase() === 'akshata.sanap@kalvium.com');
+  const isDual = isDev || isAkshata || (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || isAkshata));
+
+  if (!isDual) {
+    req.session.flash = { type: 'err', msg: 'You do not have permission to switch roles.' };
+    return res.redirect('/profile');
+  }
+
+  const targetRole = String(req.body.targetRole || '').trim().toLowerCase();
+  const allowedRoles = isDev ? ['admin', 'mentor', 'student', 'developer'] : ['admin', 'mentor'];
+
+  if (!allowedRoles.includes(targetRole)) {
+    req.session.flash = { type: 'err', msg: 'Invalid role requested.' };
+    return res.redirect('/profile');
+  }
+
+  req.session.activeRole = targetRole;
+  req.session.user.role = targetRole;
+  logAudit(req, 'AUTH_ROLE_SWITCH', { new_role: targetRole });
+
+  req.session.flash = { type: 'ok', msg: `Switched view mode to ${targetRole === 'admin' ? 'Admin Dashboard' : 'Mentor Desk'}.` };
+  
+  if (targetRole === 'admin') return res.redirect('/admin');
+  if (targetRole === 'mentor') return res.redirect('/mentor');
+  if (targetRole === 'student') return res.redirect('/student');
+  return res.redirect('/admin');
+});
+
 module.exports = router;

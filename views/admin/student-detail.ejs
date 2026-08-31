@@ -64,8 +64,13 @@ const sInitials = s.student.name ? s.student.name.split(/\s+/).map(w => w[0] || 
               </div>
               <% if (iv.feedback) { %>
                 <p class="muted" style="margin-top:10px;font-style:italic;background:var(--surface-alt);padding:10px 14px;border-radius:var(--radius-sm)">
-                  “<%= iv.feedback %>”
+                  <strong>Mentor Evaluation:</strong> “<%= iv.feedback %>”
                 </p>
+              <% } %>
+              <% if (iv.student_feedback_id) { %>
+                <div style="margin-top:8px;font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;padding:8px 12px;border-radius:var(--radius-sm)">
+                  <strong>Candidate Experience Feedback:</strong> Rated <strong><%= iv.feedback_satisfaction %>/5</strong> · <%= iv.feedback_structured ? 'Structured ✓' : 'Unstructured ✗' %><% if (iv.feedback_comments) { %> — “<%= iv.feedback_comments %>”<% } %>
+                </div>
               <% } %>
             <% } else if (iv.status === 'completed') { %>
               <div class="faint" style="margin-top:6px">Session completed · Awaiting mentor evaluation.</div>

@@ -273,7 +273,7 @@ if (usePostgres) {
     db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_developer INTEGER NOT NULL DEFAULT 0`);
     db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'arvind@kalvium.com', 'test@user.com')`);
     db.exec(`UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com'`);
-    db.exec(`UPDATE users SET role = 'mentor', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com'`);
+    db.exec(`UPDATE users SET role = 'admin', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com'`);
 
     db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_mentor_status ON slots(mentor_id, status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_date_status ON slots(slot_date, status)`);
@@ -435,7 +435,7 @@ if (usePostgres) {
         sqliteDb.exec("UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com';");
       } catch (_) {}
       try {
-        sqliteDb.exec("UPDATE users SET role = 'mentor', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com';");
+        sqliteDb.exec("UPDATE users SET role = 'admin', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com';");
       } catch (_) {}
       try {
         sqliteDb.exec(`
