@@ -969,38 +969,11 @@ const login = async (who, email) => {
     const studentPage = await get('devuser', '/student');
     ok(studentPage.status === 200 && studentPage.body.includes('My interviews'), 'developer can access /student');
 
-    // 2. Role switcher UI is present in topbar
-    ok(adminPage.body.includes('dev-role-switcher') && adminPage.body.includes('/dev/switch-role'),
-       'developer view renders role switcher control in navigation');
-
-    // 3. Switch role to student
-    const switchToStudent = await post('devuser', '/dev/switch-role', { role: 'student' });
-    ok(switchToStudent.status === 302 && switchToStudent.location === '/student', 'switching to student redirects to /student');
-    const studentDashAfterSwitch = await get('devuser', '/student');
-    ok(studentDashAfterSwitch.body.includes('DEV') && studentDashAfterSwitch.body.includes('STUDENT'),
-       'developer acts as student after switching');
-
-    // 4. Switch role to mentor
-    const switchToMentor = await post('devuser', '/dev/switch-role', { role: 'mentor' });
-    ok(switchToMentor.status === 302 && switchToMentor.location === '/mentor', 'switching to mentor redirects to /mentor');
-    const mentorDashAfterSwitch = await get('devuser', '/mentor');
-    ok(mentorDashAfterSwitch.body.includes('DEV') && mentorDashAfterSwitch.body.includes('MENTOR'),
-       'developer acts as mentor after switching');
-
-    // 5. Switch role via GET endpoint
-    const switchToAdmin = await get('devuser', '/dev/switch-role/admin');
-    ok(switchToAdmin.status === 302 && switchToAdmin.location === '/admin', 'GET /dev/switch-role/admin switches and redirects');
-
-    // 6. Switch back to developer mode
-    const switchToDev = await get('devuser', '/dev/switch-role/developer');
-    ok(switchToDev.status === 302 && switchToDev.location === '/admin', 'switching back to developer mode succeeds');
-
-    // 7. Non-developer cannot switch roles
-    const unauthSwitch = await post('canceller', '/dev/switch-role', { role: 'admin' });
-    ok(unauthSwitch.status === 403, 'non-developer cannot switch roles');
-
-    const unauthGetSwitch = await get('canceller', '/dev/switch-role/admin');
-    ok(unauthGetSwitch.status === 403, 'non-developer cannot switch roles via GET');
+    // 2. Role switcher UI is removed from topbar, showing clean DEV pill
+    ok(!adminPage.body.includes('dev-role-switcher') && !adminPage.body.includes('/dev/switch-role'),
+       'developer view does not render role switcher control in navigation');
+    ok(adminPage.body.includes('pill role-pill') && adminPage.body.includes('>DEV<'),
+       'developer view renders clean DEV pill in navigation');
   }
 
   section('Mentor Slot Editing & Cancellation');
