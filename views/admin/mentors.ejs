@@ -47,29 +47,7 @@
           <td class="num font-mono"><%= m.upcoming %></td>
           <td class="num font-mono"><%= m.done %></td>
           <td class="num">
-            <details class="inline"><summary>Edit profile</summary>
-              <div class="panel">
-                <form method="post" action="/admin/mentors/<%= m.id %>/update">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <div class="row">
-                    <div class="field"><label>Name</label><input name="name" value="<%= m.name %>" required></div>
-                    <div class="field"><label>Phone</label><input name="phone" value="<%= m.phone || '' %>"></div>
-                  </div>
-                  <div style="display:flex;gap:12px;margin:8px 0;flex-wrap:wrap">
-                    <label class="check"><input type="checkbox" name="can_technical" value="1" <%= m.can_technical ? 'checked' : '' %>> Technical</label>
-                    <label class="check"><input type="checkbox" name="can_hr" value="1" <%= m.can_hr ? 'checked' : '' %>> HR</label>
-                    <label class="check"><input type="checkbox" name="active" value="1" <%= m.active ? 'checked' : '' %>> Active</label>
-                  </div>
-                  <button class="btn primary sm">Save changes</button>
-                </form>
-                <form method="post" action="/admin/mentors/<%= m.id %>/reset-password" class="btn-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <input name="admin_password" type="password" placeholder="Your admin password" required style="max-width:160px">
-                  <input name="password" type="password" autocomplete="new-password" placeholder="New password" minlength="6" required style="max-width:160px">
-                  <button class="btn sm">Reset password</button>
-                </form>
-              </div>
-            </details>
+            <button type="button" class="btn sm" onclick='openEditMentorModal(<%- JSON.stringify({ id: m.id, name: m.name, phone: m.phone || "", can_technical: !!m.can_technical, can_hr: !!m.can_hr, active: !!m.active }) %>)'>Edit Profile</button>
           </td>
         </tr>
       <% }); %>
@@ -78,4 +56,94 @@
     </table></div>
   </div>
 </div>
+
+<dialog id="editMentorModal" class="modal-dialog" style="max-width:520px">
+  <div class="modal-head">
+    <h2 id="edit_mentor_title">Edit Evaluator Profile</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('editMentorModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <form id="edit_mentor_form" method="post" action="">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="row">
+        <div class="field"><label>Full Name *</label><input name="name" id="em_name" required></div>
+        <div class="field"><label>Phone Number</label><input name="phone" id="em_phone" placeholder="+91 98765 43210"></div>
+      </div>
+      <div style="display:flex;gap:14px;margin:12px 0 16px;flex-wrap:wrap">
+        <label class="check"><input type="checkbox" name="can_technical" id="em_can_technical" value="1"> Technical Interviews</label>
+        <label class="check"><input type="checkbox" name="can_hr" id="em_can_hr" value="1"> HR Interviews</label>
+        <label class="check"><input type="checkbox" name="active" id="em_active" value="1"> Active Account</label>
+      </div>
+      <button class="btn primary" style="width:100%">Save Profile Changes →</button>
+    </form>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+      <h3 style="font-size:14px;margin:0 0 8px">Administrative Password Reset</h3>
+      <p class="faint" style="font-size:12px;margin:0 0 12px">Require your admin password to securely reset this evaluator's login.</p>
+      <form id="reset_mentor_pw_form" method="post" action="">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="row">
+          <div class="field">
+            <label>Admin Password</label>
+            <input name="admin_password" type="password" placeholder="Your admin password" required>
+          </div>
+          <div class="field">
+            <label>New Evaluator Password</label>
+            <input name="password" type="password" autocomplete="new-password" placeholder="New password" minlength="6" required>
+          </div>
+        </div>
+        <button class="btn sm" style="width:100%;margin-top:6px">Reset Password</button>
+      </form>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="btn" onclick="document.getElementById('editMentorModal').close()">Close</button>
+  </div>
+</dialog>
+
+<script>
+window.openEditMentorModal = function (mentor) {
+  var modal = document.getElementById('editMentorModal');
+  if (!modal || !mentor) return;
+
+  var titleEl = document.getElementById('edit_mentor_title');
+  if (titleEl) {
+    titleEl.textContent = 'Edit Profile — ' + mentor.name;
+  }
+
+  var editForm = document.getElementById('edit_mentor_form');
+  if (editForm) {
+    editForm.action = '/admin/mentors/' + mentor.id + '/update';
+  }
+
+  var pwForm = document.getElementById('reset_mentor_pw_form');
+  if (pwForm) {
+    pwForm.action = '/admin/mentors/' + mentor.id + '/reset-password';
+  }
+
+  var nameEl = document.getElementById('em_name');
+  var phoneEl = document.getElementById('em_phone');
+  var canTechEl = document.getElementById('em_can_technical');
+  var canHrEl = document.getElementById('em_can_hr');
+  var activeEl = document.getElementById('em_active');
+
+  if (nameEl) nameEl.value = mentor.name || '';
+  if (phoneEl) phoneEl.value = mentor.phone || '';
+  if (canTechEl) canTechEl.checked = !!mentor.can_technical;
+  if (canHrEl) canHrEl.checked = !!mentor.can_hr;
+  if (activeEl) activeEl.checked = !!mentor.active;
+
+  modal.showModal();
+};
+
+var editModal = document.getElementById('editMentorModal');
+if (editModal) {
+  editModal.addEventListener('click', function (e) {
+    var rect = editModal.getBoundingClientRect();
+    var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+    if (!inDialog) editModal.close();
+  });
+}
+</script>
 <%- include('../partials/foot') %>

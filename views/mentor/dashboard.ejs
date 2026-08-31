@@ -217,36 +217,62 @@
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
           <td class="faint"><%= s.mode %></td>
           <td class="num">
-            <details class="inline"><summary>Manage</summary>
-              <div class="panel" style="text-align:left;min-width:280px">
-                <form method="post" action="/mentor/slots/<%= s.id %>/edit">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <div class="row">
-                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
-                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" step="300" required></div>
-                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" step="300" required></div>
-                  </div>
-                  <div class="row">
-                    <div class="field"><label>Mode</label><select name="mode">
-                      <option <%= s.mode==='Online'?'selected':'' %>>Online</option>
-                      <option <%= s.mode==='Offline'?'selected':'' %>>Offline</option></select></div>
-                  </div>
-                  <button class="btn primary sm" style="width:100%">Save changes</button>
-                </form>
-                <div class="btn-row" style="margin-top:10px">
-                  <form method="post" action="/mentor/slots/<%= s.id %>/cancel" onsubmit="return confirm('Cancel this open slot?')">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button class="btn sm danger" style="width:100%">Cancel slot</button>
-                  </form>
-                </div>
-              </div>
-            </details>
+            <button type="button" class="btn sm" onclick='openMentorSlotManageModal(<%- JSON.stringify({ id: s.id, slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time, mode: s.mode, type: s.type }) %>)'>Manage</button>
           </td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>
   </div>
 </div>
+
+<dialog id="mentorManageSlotModal" class="modal-dialog" style="max-width:500px">
+  <div class="modal-head">
+    <h2 id="mng_slot_title">Manage Interview Slot</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('mentorManageSlotModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <form id="mng_slot_edit_form" method="post" action="">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="row">
+        <div class="field">
+          <label>Date *</label>
+          <input type="date" name="slot_date" id="mng_m_slot_date" min="<%= typeof today !== 'undefined' ? today : '' %>" required>
+        </div>
+        <div class="field">
+          <label>Start Time *</label>
+          <input type="time" name="start_time" id="mng_m_start_time" step="300" required>
+        </div>
+        <div class="field">
+          <label>End Time *</label>
+          <input type="time" name="end_time" id="mng_m_end_time" step="300" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select name="mode" id="mng_m_mode">
+          <option value="Online">Online (Auto Google Meet)</option>
+          <option value="Offline">Offline</option>
+        </select>
+      </div>
+      <button class="btn primary" style="width:100%;margin-top:10px">Save Changes →</button>
+    </form>
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong style="font-size:13px;color:var(--ink)">Need to cancel this slot?</strong>
+        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancelling will immediately remove it from student booking lists.</p>
+      </div>
+      <form id="mng_slot_cancel_form" method="post" action="" onsubmit="return confirm('Cancel this interview slot?')">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn danger sm">Cancel Slot</button>
+      </form>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="btn" onclick="document.getElementById('mentorManageSlotModal').close()">Close</button>
+  </div>
+</dialog>
+
 <script src="/js/multi-date-picker.js"></script>
 <script>
 window.updatePreview = function () {
@@ -273,14 +299,48 @@ if (typeof window.initMultiDatePicker === 'function' && document.getElementById(
   });
 }
 
-var mentorModal = document.getElementById('createSlotModal');
-if (mentorModal) {
-  mentorModal.addEventListener('click', function (e) {
-    var rect = mentorModal.getBoundingClientRect();
-    var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
-      rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-    if (!inDialog) mentorModal.close();
-  });
-}
+window.openMentorSlotManageModal = function (slot) {
+  var modal = document.getElementById('mentorManageSlotModal');
+  if (!modal || !slot) return;
+
+  var titleEl = document.getElementById('mng_slot_title');
+  if (titleEl) {
+    titleEl.textContent = 'Manage Slot — ' + (slot.type === 'hr' ? 'HR' : 'Technical') + ' (' + slot.slot_date + ')';
+  }
+
+  var editForm = document.getElementById('mng_slot_edit_form');
+  if (editForm) {
+    editForm.action = '/mentor/slots/' + slot.id + '/edit';
+  }
+
+  var cancelForm = document.getElementById('mng_slot_cancel_form');
+  if (cancelForm) {
+    cancelForm.action = '/mentor/slots/' + slot.id + '/cancel';
+  }
+
+  var dInput = document.getElementById('mng_m_slot_date');
+  var sInput = document.getElementById('mng_m_start_time');
+  var eInput = document.getElementById('mng_m_end_time');
+  var modeInput = document.getElementById('mng_m_mode');
+
+  if (dInput) dInput.value = slot.slot_date || '';
+  if (sInput) sInput.value = slot.start_time || '';
+  if (eInput) eInput.value = slot.end_time || '';
+  if (modeInput) modeInput.value = slot.mode || 'Online';
+
+  modal.showModal();
+};
+
+['createSlotModal', 'mentorManageSlotModal'].forEach(function (id) {
+  var m = document.getElementById(id);
+  if (m) {
+    m.addEventListener('click', function (e) {
+      var rect = m.getBoundingClientRect();
+      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+      if (!inDialog) m.close();
+    });
+  }
+});
 </script>
 <%- include('../partials/foot') %>
