@@ -13,6 +13,9 @@ function securityHeaders(req, res, next) {
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; frame-ancestors 'self';"
   );
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production' || req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   res.removeHeader('X-Powered-By');
   next();
 }
@@ -37,6 +40,7 @@ function createRateLimiter(options = {}) {
   }, 60 * 1000).unref();
 
   return function rateLimitMiddleware(req, res, next) {
+    if (hits.size > 10000) hits.clear();
     // Key on both the source address and the submitted identity: keying on the
     // email alone lets one attacker lock a victim out, keying on the IP alone
     // lets a shared campus NAT lock out a whole cohort.
