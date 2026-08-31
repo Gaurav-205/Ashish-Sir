@@ -184,7 +184,7 @@ if (mode === 'test') {
   const mentors = db.prepare(`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1`).all();
 
   const students = kalviumStudents.map((st) => {
-    addUser.run(st.name, st.email, PW, 'student', null, st.roll_no, 'CSE', st.squad,
+    addUser.run(st.name, st.email, PW, 'student', '+91 98765 43210', st.roll_no, 'CSE', st.squad,
       `https://example.com/resumes/${st.roll_no}.pdf`, 0, 0);
     return db.prepare('SELECT * FROM users WHERE email=?').get(st.email);
   });

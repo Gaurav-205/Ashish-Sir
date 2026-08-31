@@ -169,9 +169,42 @@ function getWeekKey(dateStr) {
   return getWeekRange(dateStr).start;
 }
 
+/** Checks if a student profile has all required details completed (name, phone, squad, branch, resume_url). */
+function isStudentProfileComplete(user) {
+  if (!user || user.role !== 'student') return true;
+  const name = String(user.name || '').trim();
+  const phone = String(user.phone || '').trim();
+  const squad = String(user.squad || '').trim();
+  const branch = String(user.branch || '').trim();
+  const resume_url = String(user.resume_url || '').trim();
+
+  return Boolean(
+    name &&
+    phone &&
+    squad &&
+    branch &&
+    resume_url &&
+    /^https?:\/\//i.test(resume_url)
+  );
+}
+
+/** Returns a list of missing profile field names for a student. */
+function getMissingStudentProfileFields(user) {
+  if (!user || user.role !== 'student') return [];
+  const missing = [];
+  if (!String(user.name || '').trim()) missing.push('Full name');
+  if (!String(user.phone || '').trim()) missing.push('Phone number');
+  if (!String(user.squad || '').trim()) missing.push('Squad');
+  if (!String(user.branch || '').trim()) missing.push('Branch / Specialization');
+  const resume = String(user.resume_url || '').trim();
+  if (!resume || !/^https?:\/\//i.test(resume)) missing.push('Resume link');
+  return missing;
+}
+
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
   normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
-  getWeekRange, getWeekKey,
+  getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
 };
+
 

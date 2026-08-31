@@ -75,7 +75,7 @@ if (usePostgres) {
   // --- Neon Postgres Mode ---
   const { Pool } = require('pg');
   const { Worker } = require('worker_threads');
-  const cleanDbUrl = DATABASE_URL ? DATABASE_URL.replace(/([?&])sslmode=(require|prefer|verify-ca)/gi, '$1sslmode=verify-full') : DATABASE_URL;
+  const cleanDbUrl = DATABASE_URL;
   const pool = new Pool({
     connectionString: cleanDbUrl,
     ssl: { rejectUnauthorized: false },
@@ -104,6 +104,11 @@ if (usePostgres) {
     const startWait = Date.now();
     while (Atomics.load(control, 0) !== 100 && (Date.now() - startWait) < 5000) {
       Atomics.wait(control, 0, 0, 100);
+    }
+    if (Atomics.load(control, 0) !== 100) {
+      try { pgWorker.terminate(); } catch (_) {}
+      pgWorker = null;
+      console.warn('[db] PG Worker initialization timed out, using HTTP/subprocess fallback');
     }
   } catch (workerErr) {
     console.warn('[db] PG Worker initialization failed, using HTTP/subprocess fallback:', workerErr.message);

@@ -153,6 +153,8 @@ router.get('/api/slots/available', (req, res) => {
     already: already ? { id: already.id, status: already.status, mentor_name: already.mentor_name, slotFormatted: h.fmtSlot(already) } : null,
     count: slots.length,
     earliest: formattedSlots[0] || null,
+    profileComplete: s ? s.profileComplete : false,
+    missingFields: s ? s.missingFields : [],
     byDate,
     slots: formattedSlots,
     fetchedAt: new Date().toISOString(),
@@ -162,6 +164,14 @@ router.get('/api/slots/available', (req, res) => {
 router.post('/book', async (req, res) => {
   const slotId = Number(req.body.slot_id);
   const studentId = req.session.user.id;
+  const studentUser = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url FROM users WHERE id = ?').get(studentId);
+
+  if (!h.isStudentProfileComplete(studentUser)) {
+    const missing = h.getMissingStudentProfileFields(studentUser);
+    flash(req, 'err', `Profile Incomplete: Please complete all profile details (${missing.join(', ')}) before booking an interview slot.`);
+    return res.redirect('/profile');
+  }
+
   try {
     db.exec('BEGIN IMMEDIATE');
     const slot = db.prepare(`SELECT s.*, m.active AS mentor_active FROM slots s

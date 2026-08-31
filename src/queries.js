@@ -99,6 +99,8 @@ function studentSummary(studentId) {
     evaluatedCount: history.filter((i) => i.eval_id != null).length,
     allBooked: !!(byType.technical && byType.hr),
     allEvaluated: done,
+    profileComplete: h.isStudentProfileComplete(student),
+    missingFields: h.getMissingStudentProfileFields(student),
   };
 }
 

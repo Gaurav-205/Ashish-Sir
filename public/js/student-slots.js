@@ -14,12 +14,14 @@
   var currentType = container.dataset.type || '';
   var csrfToken = container.dataset.csrf || '';
   var isAlreadyBooked = container.dataset.alreadyBooked === 'true';
+  var isProfileComplete = container.dataset.profileComplete !== 'false';
 
   var statusEl = document.getElementById('last-updated-text');
   var badgeEl = document.getElementById('auto-fetch-badge');
   var banner = document.getElementById('smart-auto-banner');
   var autoText = document.getElementById('smart-auto-text');
   var autoSlotId = document.getElementById('smart-auto-slot-id');
+  var autoBtn = document.getElementById('smart-auto-btn');
   var mentorSelect = document.getElementById('mentor-select');
 
   var timer = null;
@@ -48,6 +50,9 @@
       return;
     }
     var html = '';
+    var canBook = !isAlreadyBooked && isProfileComplete;
+    var btnText = !isProfileComplete ? 'Complete profile to book' : (isAlreadyBooked ? 'Already booked' : 'Book this slot →');
+
     byDate.forEach(function (g) {
       html += '<div class="slot-day" data-date="' + escHtml(g.date) + '">' +
               '<h3>' + escHtml(g.dateFormatted || g.date) + '</h3><div class="slot-list">';
@@ -60,8 +65,8 @@
                 '<input type="hidden" name="_csrf" value="' + escHtml(csrfToken) + '">' +
                 '<input type="hidden" name="slot_id" value="' + escHtml(sl.id) + '">' +
                 '<input type="hidden" name="type" value="' + escHtml(currentType) + '">' +
-                '<button class="btn primary sm" style="width:100%"' + (isAlreadyBooked ? ' disabled' : '') + '>' +
-                (isAlreadyBooked ? 'Already booked' : 'Book this slot →') + '</button>' +
+                '<button class="btn primary sm" style="width:100%"' + (!canBook ? ' disabled' : '') + '>' +
+                escHtml(btnText) + '</button>' +
                 '</form></div>';
       });
       html += '</div></div>';
@@ -93,12 +98,20 @@
         if (!data) return;
         setStatus('Synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), false);
 
+        if (data.profileComplete !== undefined) {
+          isProfileComplete = data.profileComplete !== false;
+        }
+
         if (data.earliest && !isAlreadyBooked) {
           if (autoText) {
             autoText.innerHTML = '<strong>' + escHtml(data.earliest.slotFormatted) + '</strong> with <strong>' +
               escHtml(data.earliest.mentor_name) + '</strong> (' + escHtml(data.earliest.mode) + ')';
           }
           if (autoSlotId) autoSlotId.value = data.earliest.id;
+          if (autoBtn) {
+            autoBtn.disabled = !isProfileComplete || isAlreadyBooked;
+            if (!isProfileComplete) autoBtn.textContent = 'Complete profile to book';
+          }
           if (banner) banner.style.display = 'block';
         } else if (banner) {
           banner.style.display = 'none';

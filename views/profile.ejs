@@ -4,6 +4,15 @@
   <div class="card">
     <div class="card-head"><h2>My details</h2></div>
     <div class="card-body">
+      <% if (me.role === 'student') { 
+         const isComplete = h.isStudentProfileComplete(me);
+         if (!isComplete) { %>
+           <div class="note" style="margin-bottom:14px;background:#fffbeb;border-color:#fde68a">
+             <strong style="color:#b45309">⚠️ Action Required to Unlock Slot Booking:</strong>
+             Please complete all required details below (Phone number, Squad, Branch, and a valid Resume link) to book interview slots.
+           </div>
+         <% }
+      } %>
       <form method="post" action="/profile/update">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="field">
@@ -17,23 +26,23 @@
         <div class="row">
           <div class="field">
             <label>Phone number</label>
-            <input name="phone" value="<%= me.phone || '' %>" placeholder="+91 98765 43210">
+            <input name="phone" value="<%= me.phone || '' %>" placeholder="+91 98765 43210" <%= me.role === 'student' ? 'required' : '' %>>
           </div>
           <% if (me.role === 'student') { %>
             <div class="field">
               <label>Squad</label>
-              <input name="squad" value="<%= me.squad || '' %>" placeholder="115 or 116">
+              <input name="squad" value="<%= me.squad || '' %>" placeholder="115 or 116" required>
             </div>
             <div class="field">
               <label>Branch / Specialization</label>
-              <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE">
+              <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE" required>
             </div>
           <% } %>
         </div>
         <% if (me.role === 'student') { %>
           <div class="field" id="resume">
             <label for="resume_url">Resume link (Google Drive / Notion / Portfolio)</label>
-            <input id="resume_url" type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…">
+            <input id="resume_url" type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…" required>
           </div>
         <% } %>
         <p class="faint" style="margin-bottom:12px">

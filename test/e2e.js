@@ -146,15 +146,32 @@ const login = async (who, email) => {
   await login('newstudent', 'test.student@student.in');
   const slotA = made[0], slotB = made[1];
 
+  // Verify booking is blocked when profile is incomplete (missing phone, squad, resume_url)
+  const incompleteBookingAttempt = await post('newstudent', '/student/book', { slot_id: String(slotA.id), type: 'technical' });
+  ok(incompleteBookingAttempt.location === '/profile' || incompleteBookingAttempt.location === 'http://127.0.0.1:' + server.address().port + '/profile',
+     'incomplete student profile booking is blocked and redirected to profile');
+  ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE student_id=?`).get(ts.id).c === 0,
+     'no interview booking created when profile is incomplete');
+
+  // Complete profile details
+  await post('newstudent', '/profile/update', {
+    name: 'Test Student', phone: '+91 98765 43210', squad: '116', branch: 'CSE', resume_url: 'https://drive.google.com/test-resume'
+  });
+  const updatedTs = db.prepare(`SELECT * FROM users WHERE email='test.student@student.in'`).get();
+  ok(!!updatedTs.phone && !!updatedTs.squad && !!updatedTs.resume_url, 'student profile details updated successfully');
+
   await post('newstudent', '/student/book', { slot_id: String(slotA.id), type: 'technical' });
   const iv = db.prepare(`SELECT * FROM interviews WHERE student_id=? AND type='technical'`).get(ts.id);
-  ok(!!iv, 'student books a technical slot');
+  ok(!!iv, 'student books a technical slot after completing profile');
   ok(db.prepare('SELECT status FROM slots WHERE id=?').get(slotA.id).status === 'booked',
      'the slot is marked booked');
   ok(iv.mentor_id === tm.id, 'the mentor is taken from the slot (student never picks one)');
 
-  // second student tries the same slot
+  // second student tries the same slot (ensure student2 has complete profile)
   await login('student2', 'aditya.talikoti.s.116@kalvium.community');
+  await post('student2', '/profile/update', {
+    name: 'Aditya Talikoti', phone: '+91 98765 43210', squad: '116', branch: 'CSE', resume_url: 'https://drive.google.com/aditya-resume'
+  });
   const v = db.prepare(`SELECT * FROM users WHERE email='aditya.talikoti.s.116@kalvium.community'`).get();
   await post('student2', '/student/book', { slot_id: String(slotA.id), type: 'technical' });
   ok(db.prepare(`SELECT COUNT(*) c FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(slotA.id).c === 1,
@@ -548,7 +565,8 @@ const login = async (who, email) => {
   // Register 3 fresh students for the race test
   for (let i = 1; i <= 3; i++) {
     await post('admin', '/admin/students', {
-      name: `Racer ${i}`, email: `racer${i}@student.in`, password: 'pass123', roll_no: `KONRACE0${i}`, branch: 'CSE'
+      name: `Racer ${i}`, email: `racer${i}@student.in`, password: 'pass123', roll_no: `KONRACE0${i}`, branch: 'CSE',
+      squad: '116', phone: '+91 98765 43210', resume_url: `https://drive.google.com/racer${i}`
     });
     await login(`racer${i}`, `racer${i}@student.in`);
   }
@@ -568,7 +586,8 @@ const login = async (who, email) => {
   section('Input Validation & Boundary Testing');
   // Register a dedicated candidate for boundary evaluations
   await post('admin', '/admin/students', {
-    name: 'Boundary Candidate', email: 'boundary.candidate@student.in', password: 'pass123', roll_no: 'KONBND01', branch: 'IT'
+    name: 'Boundary Candidate', email: 'boundary.candidate@student.in', password: 'pass123', roll_no: 'KONBND01', branch: 'IT',
+    squad: '115', phone: '+91 98765 43210', resume_url: 'https://drive.google.com/bnd'
   });
   const bc = db.prepare(`SELECT * FROM users WHERE email='boundary.candidate@student.in'`).get();
   await login('bndstudent', 'boundary.candidate@student.in');
@@ -1111,6 +1130,7 @@ const login = async (who, email) => {
       roll_no: 'PS-101',
       branch: 'CSE',
       squad: 'Alpha',
+      phone: '+91 98765 43210',
       resume_url: 'https://drive.google.com/priya-resume',
     });
     const studentUser = db.prepare(`SELECT * FROM users WHERE email = 'priya.sharma@student.in'`).get();

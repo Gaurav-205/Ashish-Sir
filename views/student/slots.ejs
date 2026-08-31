@@ -13,6 +13,18 @@
   </div>
 </div>
 
+<% if (!s.profileComplete) { %>
+  <div class="note" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;background:#fffbeb;border-color:#fde68a">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>
+        <strong>Profile incomplete:</strong> Complete all your details (<%= s.missingFields.join(', ') %>) to unlock slot booking.
+      </div>
+    </div>
+    <a class="btn sm primary" href="/profile" style="white-space:nowrap">Complete Profile →</a>
+  </div>
+<% } %>
+
 <% if (already && already.status !== 'cancelled') { %>
   <div class="note" style="display:flex;align-items:center;gap:10px">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--action-blue)">
@@ -48,8 +60,8 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="slot_id" id="smart-auto-slot-id" value="">
       <input type="hidden" name="type" value="<%= type %>">
-      <button class="btn primary sm" id="smart-auto-btn" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
-        Quick Book Earliest Slot →
+      <button class="btn primary sm" id="smart-auto-btn" <%= (already && already.status !== 'cancelled') || !s.profileComplete ? 'disabled' : '' %>>
+        <%= !s.profileComplete ? 'Complete profile to book' : 'Quick Book Earliest Slot →' %>
       </button>
     </form>
   </div>
@@ -88,7 +100,8 @@
   <div class="card-body tight" id="slots-container"
        data-type="<%= type %>"
        data-csrf="<%= csrfToken %>"
-       data-already-booked="<%= (already && already.status !== 'cancelled') ? 'true' : 'false' %>">
+       data-already-booked="<%= (already && already.status !== 'cancelled') ? 'true' : 'false' %>"
+       data-profile-complete="<%= s.profileComplete ? 'true' : 'false' %>">
     <% if (!byDate.length) { %>
       <div class="empty" id="empty-state">No open <%= h.titleCase(type) %> slots available currently. The system will auto-detect when new slots are published.</div>
     <% } %>
@@ -104,8 +117,8 @@
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <input type="hidden" name="slot_id" value="<%= sl.id %>">
                 <input type="hidden" name="type" value="<%= type %>">
-                <button class="btn primary sm" style="width:100%" <%= already && already.status !== 'cancelled' ? 'disabled' : '' %>>
-                  <%= already && already.status !== 'cancelled' ? 'Already booked' : 'Book this slot →' %>
+                <button class="btn primary sm" style="width:100%" <%= (already && already.status !== 'cancelled') || !s.profileComplete ? 'disabled' : '' %>>
+                  <%= !s.profileComplete ? 'Complete profile to book' : ((already && already.status !== 'cancelled') ? 'Already booked' : 'Book this slot →') %>
                 </button>
               </form>
             </div>
