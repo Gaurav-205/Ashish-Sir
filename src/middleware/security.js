@@ -41,7 +41,7 @@ function createRateLimiter(options = {}) {
 
   // Key on IP + submitted email + authenticated user id. IP alone lets one
   // shared campus NAT exhaust a whole cohort's budget; adding the signed-in
-  // user id gives每 authenticated actor their own bucket regardless of NAT.
+  // user id gives each authenticated actor their own bucket regardless of NAT.
   function rlKey(req) {
     const emailKey = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
     const ipKey = req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip';
