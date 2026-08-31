@@ -100,6 +100,8 @@ router.get('/slots', async (req, res) => {
   }
 
   const limitCheck = await h.checkWeeklyInterviewLimit(null, req.session.user.id, type, h.today());
+  const allMentors = await q.mentorsList();
+  const filteredMentors = allMentors.filter(m => type === 'hr' ? m.can_hr : m.can_technical);
 
   res.render('student/slots', {
     title: `Book ${h.titleCase(type)} mock interview`,
@@ -107,6 +109,8 @@ router.get('/slots', async (req, res) => {
     byDate,
     already,
     s,
+    mentors: filteredMentors,
+    selectedMentor: mentorId,
     mentorFilter: mentorId,
     limitCheck,
     isComplete: h.isStudentProfileComplete(s.student),
