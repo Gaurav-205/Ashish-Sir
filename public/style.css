@@ -1227,9 +1227,61 @@ a.btn[aria-disabled="true"] {
   .table-scroll { -webkit-overflow-scrolling: touch; }
   .dossier-hero { flex-direction: column; align-items: flex-start; gap: 16px; }
 }
-@media (max-width: 520px) {
-  .stats { grid-template-columns: 1fr; }
-  .login-card { padding: 26px 20px; }
+/* ---- Modal Dialog ------------------------------------------------------- */
+dialog.modal-dialog {
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: var(--radius-md, 12px);
+  background: var(--surface, #ffffff);
+  color: var(--ink, #1e293b);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  padding: 0;
+  max-width: 580px;
+  width: calc(100% - 32px);
+  margin: auto;
+}
+dialog.modal-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line, #e2e8f0);
+  background: var(--surface-alt, #f8fafc);
+}
+.modal-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--slate, #64748b);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.modal-close-btn:hover {
+  background: var(--line, #e2e8f0);
+  color: var(--ink, #1e293b);
+}
+.modal-body {
+  padding: 20px;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line, #e2e8f0);
+  background: var(--surface-alt, #f8fafc);
 }
 
 /* ---- Print Scorecard Styles --------------------------------------------- */

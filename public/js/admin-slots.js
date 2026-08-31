@@ -27,17 +27,13 @@
     if (c) c.value = count;
   };
 
-  window.autoGenLink = function () {
-    var loc = document.querySelector('input[name="location"]');
-    var letters = 'abcdefghijklmnopqrstuvwxyz';
-    var randLetters = function (n) {
-      var s = '';
-      for (var i = 0; i < n; i++) {
-        s += letters.charAt(Math.floor(Math.random() * letters.length));
-      }
-      return s;
-    };
-    var code = randLetters(3) + '-' + randLetters(4) + '-' + randLetters(3);
-    if (loc) loc.value = 'https://meet.google.com/' + code;
-  };
+  var modal = document.getElementById('createSlotModal');
+  if (modal) {
+    modal.addEventListener('click', function (e) {
+      var rect = modal.getBoundingClientRect();
+      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+      if (!inDialog) modal.close();
+    });
+  }
 })();

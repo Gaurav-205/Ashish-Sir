@@ -1,49 +1,88 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1>Interview slots</h1><p class="sub">Students can only book from slots you publish here. One slot = one student.</p></div>
-</div>
-
-<div class="card">
-  <div class="card-head"><h2>Create slots</h2><span class="faint">Generate several back-to-back slots at once</span></div>
-  <div class="card-body">
-    <% if (!techMentors.length && !hrMentors.length) { %>
-      <div class="note" style="margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <span>No evaluators are enabled for Technical or HR interviews yet, so there is nobody to publish slots for.</span>
-        <a class="btn sm primary" href="/admin/mentors">Register a mentor →</a>
-      </div>
-    <% } else { %>
-    <form method="post" action="/admin/slots">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <div class="row">
-        <div class="field"><label>Interview type *</label>
-          <select name="type" id="typeSel" required>
-            <% if (techMentors.length) { %><option value="technical">Technical</option><% } %>
-            <% if (hrMentors.length) { %><option value="hr">HR</option><% } %>
-          </select></div>
-        <div class="field"><label>Mentor *</label>
-          <select name="mentor_id" id="mentorSel" required>
-            <% techMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="technical"><%= m.name %></option><% }); %>
-            <% hrMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="hr" hidden><%= m.name %></option><% }); %>
-          </select>
-          <div class="hint">Only mentors enabled for that interview type are listed.</div></div>
-        <div class="field"><label>Date *</label><input type="date" name="slot_date" value="<%= defaultDate %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
-        <div class="field"><label>Start time *</label><input type="time" name="start_time" value="10:00" step="300" required></div>
-        <div class="field"><label>Slot length (min)</label><input type="number" name="duration" value="30" min="10" max="180"></div>
-        <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
-        <div class="field"><label>Mode</label>
-          <select name="mode"><option>Online</option><option>Offline</option></select></div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <button class="btn primary">Create slots</button>
-        <span class="faint" style="font-size:12px">Quick presets:</span>
-        <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00 - 12:00, 4 slots)</button>
-        <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00 - 17:00, 6 slots)</button>
-        <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00 - 20:00, 4 slots)</button>
-      </div>
-    </form>
+  <div>
+    <h1>Interview slots</h1>
+    <p class="sub">Students can only book from slots you publish here. One slot = one student.</p>
+  </div>
+  <div class="btn-row">
+    <% if (techMentors.length || hrMentors.length) { %>
+      <button type="button" class="btn primary" onclick="document.getElementById('createSlotModal').showModal()">+ Create Slots</button>
     <% } %>
   </div>
 </div>
+
+<% if (techMentors.length || hrMentors.length) { %>
+<dialog id="createSlotModal" class="modal-dialog">
+  <div class="modal-head">
+    <h2>Create Interview Slots</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('createSlotModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <form method="post" action="/admin/slots" style="margin:0">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="modal-body">
+      <div class="field">
+        <label>Interview Type *</label>
+        <select name="type" id="typeSel" required>
+          <% if (techMentors.length) { %><option value="technical">Technical Mock Interview</option><% } %>
+          <% if (hrMentors.length) { %><option value="hr">HR Mock Interview</option><% } %>
+        </select>
+      </div>
+      <div class="field">
+        <label>Assigned Mentor *</label>
+        <select name="mentor_id" id="mentorSel" required>
+          <% techMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="technical"><%= m.name %></option><% }); %>
+          <% hrMentors.forEach(function(m){ %><option value="<%= m.id %>" data-type="hr" hidden><%= m.name %></option><% }); %>
+        </select>
+        <div class="hint">Only mentors enabled for that interview type are listed.</div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Date *</label>
+          <input type="date" name="slot_date" value="<%= defaultDate %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required>
+        </div>
+        <div class="field">
+          <label>Start Time *</label>
+          <input type="time" name="start_time" value="10:00" step="300" required>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Slot Length (minutes)</label>
+          <input type="number" name="duration" value="30" min="10" max="180">
+        </div>
+        <div class="field">
+          <label>Number of Slots</label>
+          <input type="number" name="count" value="4" min="1" max="20">
+        </div>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select name="mode">
+          <option>Online</option>
+          <option>Offline</option>
+        </select>
+      </div>
+      <div style="margin-top:12px">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Quick Presets:</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00, 4 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00, 6 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00, 4 slots)</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="document.getElementById('createSlotModal').close()">Cancel</button>
+      <button class="btn primary">Create Slots →</button>
+    </div>
+  </form>
+</dialog>
+<% } else { %>
+  <div class="note" style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <span>No evaluators are enabled for Technical or HR interviews yet, so there is nobody to publish slots for.</span>
+    <a class="btn sm primary" href="/admin/mentors">Register a mentor →</a>
+  </div>
+<% } %>
 
 <div class="card">
   <div class="card-head">
