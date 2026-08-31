@@ -288,43 +288,6 @@ if (mode === 'test') {
       addUser.run(st.name, st.email, PW, 'student', null, st.roll_no, 'CSE', st.squad, null, 0, 0);
     } catch (_) {}
   });
-
-  // Seed sample available slots for tomorrow and the upcoming week
-  const addSlot = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
-                              VALUES (?,?,?,?,?,?,?)`);
-
-  // Publish a realistic interview week: every evaluator runs a block of
-  // half-hour sessions over the next three days, so the whole cohort can
-  // actually book both of their mandatory interviews.
-  const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-  const SLOT_MINUTES = 30;
-  const TECH_START = 10 * 60;  // 10:00
-  const HR_START = 14 * 60;    // 14:00
-  const BLOCKS_PER_DAY = 8;    // 4 hours of sessions per evaluator per day
-  const DAYS = [1, 2, 3];
-
-  const activeMentors = db.prepare(`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1`).all();
-  DAYS.forEach((offset) => {
-    const date = h.addDays(h.today(), offset);
-    activeMentors.forEach((m) => {
-      for (let k = 0; k < BLOCKS_PER_DAY; k++) {
-        if (m.can_technical) {
-          const start = TECH_START + k * SLOT_MINUTES;
-          try {
-            addSlot.run(m.id, 'technical', date, fmt(start), fmt(start + SLOT_MINUTES),
-              'Online', h.generateMeetingLink('technical'));
-          } catch (_) { /* unique (mentor, date, start_time) — already published */ }
-        }
-        if (m.can_hr) {
-          const start = HR_START + k * SLOT_MINUTES;
-          try {
-            addSlot.run(m.id, 'hr', date, fmt(start), fmt(start + SLOT_MINUTES),
-              'Online', h.generateMeetingLink('hr'));
-          } catch (_) { /* unique (mentor, date, start_time) — already published */ }
-        }
-      }
-    });
-  });
 }
 
 const c = (s) => db.prepare(s).get().c;
