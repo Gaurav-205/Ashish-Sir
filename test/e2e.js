@@ -1070,7 +1070,7 @@ const login = async (who, email) => {
     ok(arvindStudents.status === 200, 'arvind can view students directory');
 
     // 4. Arvind creates a slot on behalf of a mentor
-    const targetMentor = db.prepare(`SELECT id FROM users WHERE role = 'mentor' LIMIT 1`).get();
+    const targetMentor = db.prepare(`SELECT id FROM users WHERE role = 'mentor' AND can_technical = 1 LIMIT 1`).get();
     const createSlotAdmin = await post('arvind', '/admin/slots', {
       mentor_id: targetMentor.id,
       type: 'technical',
