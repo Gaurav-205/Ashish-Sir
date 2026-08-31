@@ -13,25 +13,36 @@
   </div>
 </div>
 
-<div class="search-toolbar" style="margin-bottom:20px">
+<%
+  const techCount = mentors.filter(m => m.can_technical).length;
+  const hrCount = mentors.filter(m => m.can_hr).length;
+%>
+<div class="search-toolbar" style="margin-bottom:24px">
+  <div class="search-input-wrap">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" id="mentorSearchInput" placeholder="Search mentors by name or email…" oninput="filterMentorsCombined()">
+  </div>
   <div class="filter-chips">
-    <button type="button" class="filter-chip active" onclick="filterMentors('all', this)">All Mentors (<%= mentors.length %>)</button>
-    <button type="button" class="filter-chip" onclick="filterMentors('technical', this)">Technical Mentors</button>
-    <button type="button" class="filter-chip" onclick="filterMentors('hr', this)">HR Mentors</button>
+    <button type="button" class="filter-chip active" id="chip-all" onclick="setDomainFilter('all', this)">All Mentors (<%= mentors.length %>)</button>
+    <button type="button" class="filter-chip" id="chip-tech" onclick="setDomainFilter('technical', this)">Technical (<%= techCount %>)</button>
+    <button type="button" class="filter-chip" id="chip-hr" onclick="setDomainFilter('hr', this)">HR / Non-Tech (<%= hrCount %>)</button>
   </div>
 </div>
 
 <div class="grid mentors-grid" id="mentorsGrid">
 <% mentors.forEach(function(m){ %>
-  <div class="card mentor-card" data-tech="<%= m.can_technical ? '1' : '0' %>" data-hr="<%= m.can_hr ? '1' : '0' %>">
+  <div class="card mentor-card" data-name="<%= (m.name || '').toLowerCase() %>" data-email="<%= (m.email || '').toLowerCase() %>" data-tech="<%= m.can_technical ? '1' : '0' %>" data-hr="<%= m.can_hr ? '1' : '0' %>">
     <div class="card-head">
       <div class="mentor-info">
         <% const mName = (m && m.name) ? String(m.name).trim() : ''; %>
         <% const mInitials = mName ? mName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?'; %>
-        <span class="avatar" style="width:40px;height:40px;font-size:13px"><%= mInitials %></span>
+        <span class="avatar" style="width:42px;height:42px;font-size:14px;background:<%= m.can_technical ? 'var(--pale-blue)' : 'var(--hr-soft)' %>;color:<%= m.can_technical ? 'var(--action-blue)' : 'var(--hr)' %>;border-color:<%= m.can_technical ? '#bfdbfe' : '#f3e8ff' %>"><%= mInitials %></span>
         <div class="mentor-meta">
-          <h2 title="<%= m.name %>"><%= m.name %></h2>
-          <span class="faint" title="<%= m.email %>"><%= m.email %></span>
+          <h2 title="<%= m.name %>" style="font-size:16px;margin:0 0 2px"><%= m.name %></h2>
+          <span class="faint" title="<%= m.email %>" style="font-size:12px"><%= m.email %></span>
         </div>
       </div>
       <div class="mentor-badges">
@@ -40,34 +51,37 @@
       </div>
     </div>
     <div class="card-body">
-      <div class="stats" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 18px;">
-        <div class="stat" style="padding:10px 14px">
-          <div class="n" style="font-size:18px"><%= m.total_open_slots %></div>
-          <div class="l">Open slots</div>
+      <div class="stats" style="grid-template-columns: repeat(3, 1fr); gap:8px; margin-bottom: 18px;">
+        <div class="stat" style="padding:10px 12px;text-align:center;background:<%= m.total_open_slots > 0 ? 'var(--pale-green)' : 'var(--surface-alt)' %>;border-color:<%= m.total_open_slots > 0 ? '#bbf7d0' : 'var(--card-border)' %>">
+          <div class="n" style="font-size:20px;color:<%= m.total_open_slots > 0 ? 'var(--deep-green)' : 'var(--slate)' %>"><%= m.total_open_slots %></div>
+          <div class="l" style="font-size:10px;margin-top:2px">Total Open</div>
         </div>
-        <div class="stat" style="padding:10px 14px">
-          <div class="n" style="font-size:18px"><%= m.tech_open_slots %></div>
-          <div class="l">Tech slots</div>
+        <div class="stat" style="padding:10px 12px;text-align:center;background:<%= m.tech_open_slots > 0 ? 'var(--pale-blue)' : 'var(--surface-alt)' %>;border-color:<%= m.tech_open_slots > 0 ? '#bfdbfe' : 'var(--card-border)' %>">
+          <div class="n" style="font-size:20px;color:<%= m.tech_open_slots > 0 ? 'var(--action-blue)' : 'var(--slate)' %>"><%= m.tech_open_slots %></div>
+          <div class="l" style="font-size:10px;margin-top:2px">Tech Slots</div>
         </div>
-        <div class="stat" style="padding:10px 14px">
-          <div class="n" style="font-size:18px"><%= m.hr_open_slots %></div>
-          <div class="l">HR slots</div>
+        <div class="stat" style="padding:10px 12px;text-align:center;background:<%= m.hr_open_slots > 0 ? 'var(--hr-soft)' : 'var(--surface-alt)' %>;border-color:<%= m.hr_open_slots > 0 ? '#f3e8ff' : 'var(--card-border)' %>">
+          <div class="n" style="font-size:20px;color:<%= m.hr_open_slots > 0 ? 'var(--hr)' : 'var(--slate)' %>"><%= m.hr_open_slots %></div>
+          <div class="l" style="font-size:10px;margin-top:2px">HR Slots</div>
         </div>
       </div>
 
-      <div class="btn-row">
+      <div class="btn-row" style="gap:8px">
         <% if (m.can_technical && m.tech_open_slots > 0) { %>
-          <a class="btn sm primary" href="/student/slots?type=technical&mentor=<%= m.id %>">
-            Book Technical slot (<%= m.tech_open_slots %> open) →
+          <a class="btn sm primary" href="/student/slots?type=technical&mentor=<%= m.id %>" style="flex:1">
+            Book Technical (<%= m.tech_open_slots %>) →
           </a>
         <% } %>
         <% if (m.can_hr && m.hr_open_slots > 0) { %>
-          <a class="btn sm <%= (!m.can_technical || m.tech_open_slots === 0) ? 'primary' : '' %>" href="/student/slots?type=hr&mentor=<%= m.id %>">
-            Book HR slot (<%= m.hr_open_slots %> open) →
+          <a class="btn sm <%= (!m.can_technical || m.tech_open_slots === 0) ? 'primary' : '' %>" href="/student/slots?type=hr&mentor=<%= m.id %>" style="flex:1;background:<%= (!m.can_technical || m.tech_open_slots === 0) ? 'var(--hr)' : 'var(--surface)' %>;color:<%= (!m.can_technical || m.tech_open_slots === 0) ? '#ffffff' : 'var(--hr)' %>;border-color:<%= (!m.can_technical || m.tech_open_slots === 0) ? 'var(--hr)' : '#f3e8ff' %>">
+            Book HR (<%= m.hr_open_slots %>) →
           </a>
         <% } %>
         <% if (m.total_open_slots === 0) { %>
-          <span class="faint" style="font-size:12px;padding:6px 0">No open slots currently scheduled. Check back soon.</span>
+          <span class="faint" style="font-size:12px;padding:6px 0;display:flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--slate)"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            No open slots currently scheduled. Check back soon.
+          </span>
         <% } %>
       </div>
     </div>
@@ -78,17 +92,37 @@
 <% } %>
 </div>
 <script>
-function filterMentors(domain, btn) {
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+var currentDomainFilter = 'all';
+
+function setDomainFilter(domain, btn) {
+  document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  const cards = document.querySelectorAll('.mentor-card');
-  cards.forEach(c => {
-    if (domain === 'all') {
+  currentDomainFilter = domain;
+  filterMentorsCombined();
+}
+
+function filterMentorsCombined() {
+  var search = (document.getElementById('mentorSearchInput').value || '').trim().toLowerCase();
+  var cards = document.querySelectorAll('.mentor-card');
+  var matchCount = 0;
+  
+  cards.forEach(function(c) {
+    var name = c.getAttribute('data-name') || '';
+    var email = c.getAttribute('data-email') || '';
+    var isTech = c.getAttribute('data-tech') === '1';
+    var isHr = c.getAttribute('data-hr') === '1';
+    
+    var matchesDomain = (currentDomainFilter === 'all') ||
+      (currentDomainFilter === 'technical' && isTech) ||
+      (currentDomainFilter === 'hr' && isHr);
+      
+    var matchesSearch = !search || name.indexOf(search) !== -1 || email.indexOf(search) !== -1;
+    
+    if (matchesDomain && matchesSearch) {
       c.style.display = '';
-    } else if (domain === 'technical') {
-      c.style.display = c.getAttribute('data-tech') === '1' ? '' : 'none';
-    } else if (domain === 'hr') {
-      c.style.display = c.getAttribute('data-hr') === '1' ? '' : 'none';
+      matchCount++;
+    } else {
+      c.style.display = 'none';
     }
   });
 }

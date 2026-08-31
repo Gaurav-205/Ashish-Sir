@@ -45,8 +45,12 @@
 
   function renderSlots(byDate) {
     if (!byDate || !byDate.length) {
-      container.innerHTML = '<div class="empty">No open ' + escHtml(typeLabel) +
-        ' slots available right now. New slots appear here automatically as mentors publish them.</div>';
+      container.innerHTML = '<div class="empty" id="empty-state" style="padding:48px 24px;text-align:center">' +
+        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--slate);margin-bottom:12px">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>' +
+        '<div style="font-weight:600;font-size:15px;color:var(--ink);margin-bottom:4px">No open ' + escHtml(typeLabel) + ' slots scheduled right now</div>' +
+        '<div class="faint" style="max-width:380px;margin:0 auto 16px">The system continuously auto-refreshes in the background and will immediately display new evaluator slots when published.</div>' +
+        '<a class="btn sm" href="/student/mentors" style="display:inline-flex;align-items:center;gap:6px">Browse Mentors Directory &rarr;</a></div>';
       return;
     }
     var html = '';
