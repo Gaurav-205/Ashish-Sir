@@ -85,13 +85,15 @@ if (mode === 'dev' || mode === 'test') {
     { name: 'Utkarsha Kasar', email: 'utkarsha.kasar@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
-    { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0, is_dev: 1 },
     { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
+    { name: 'Test User', email: 'test@user.com', password: 'test@1501', can_t: 1, can_hr: 1, is_dev: 1 },
   ];
 
   kalviumAdmins.forEach((a) => {
     try {
-      addUser.run(a.name, a.email.toLowerCase(), PW, 'admin', '+91 98000 00000', null, null, null, null, a.can_t, a.can_hr);
+      const pHash = a.password ? bcrypt.hashSync(a.password, 10) : PW;
+      addUser.run(a.name, a.email.toLowerCase(), pHash, 'admin', '+91 98000 00000', null, null, null, null, a.can_t, a.can_hr);
       if (a.is_dev) {
         db.prepare(`UPDATE users SET is_developer = 1, can_technical = 0, can_hr = 0 WHERE lower(email) = ?`).run(a.email.toLowerCase());
       }

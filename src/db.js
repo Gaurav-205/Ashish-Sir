@@ -15,8 +15,20 @@ function convertSql(sql) {
   const cache = typeof sqlConversionCache !== 'undefined' ? sqlConversionCache : null;
   if (cache && cache.has(sql)) return cache.get(sql);
 
+  let converted = '';
   let paramIndex = 1;
-  let converted = sql.replace(/\?/g, () => `$${paramIndex++}`);
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === "'") {
+      inString = !inString;
+      converted += char;
+    } else if (char === '?' && !inString) {
+      converted += `$${paramIndex++}`;
+    } else {
+      converted += char;
+    }
+  }
   
   // Convert comparisons of datetime(slot_date || ' ' || start_time) first to avoid type mismatch
   converted = converted.replace(/datetime\(([^)]+)\)\s*(>=|<=|>|<|=|<>)\s*datetime\('now'[^)]*\)/gi, 
@@ -259,7 +271,7 @@ if (usePostgres) {
     )`);
     db.exec(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS google_event_id TEXT`);
     db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_developer INTEGER NOT NULL DEFAULT 0`);
-    db.exec(`UPDATE users SET is_developer = 1, can_technical = 0, can_hr = 0 WHERE lower(email) = 'gauravkhandelwal205@gmail.com'`);
+    db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'arvind@kalvium.com', 'test@user.com')`);
     db.exec(`UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com'`);
     db.exec(`UPDATE users SET role = 'mentor', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com'`);
 
@@ -417,7 +429,7 @@ if (usePostgres) {
         sqliteDb.exec("ALTER TABLE users ADD COLUMN is_developer INTEGER NOT NULL DEFAULT 0;");
       } catch (_) {}
       try {
-        sqliteDb.exec("UPDATE users SET is_developer = 1, can_technical = 0, can_hr = 0 WHERE lower(email) = 'gauravkhandelwal205@gmail.com';");
+        sqliteDb.exec("UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'arvind@kalvium.com', 'test@user.com');");
       } catch (_) {}
       try {
         sqliteDb.exec("UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com';");

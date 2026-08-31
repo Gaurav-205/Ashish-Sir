@@ -8,9 +8,15 @@ const { requireRole } = require('../auth');
 const router = express.Router();
 const google = require('../services/googleService');
 const emailService = require('../services/emailService');
-const { validateId } = require('../middleware/security');
+const { validateId, createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
 router.use(requireRole('student'));
+
+const actionLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 30, // limit each IP/user to 30 requests per windowMs
+  message: 'Too many requests. Please wait a moment before trying again.',
+});
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
@@ -161,7 +167,7 @@ router.get('/api/slots/available', (req, res) => {
   });
 });
 
-router.post('/book', async (req, res) => {
+router.post('/book', actionLimiter, async (req, res) => {
   const slotId = Number(req.body.slot_id);
   const studentId = req.session.user.id;
   const studentUser = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url FROM users WHERE id = ?').get(studentId);
@@ -198,9 +204,13 @@ router.post('/book', async (req, res) => {
       .get(studentId, slot.slot_date, slot.end_time, slot.start_time);
     if (clash) throw new Error('You already have another interview at that time.');
 
+    const updateRes = db.prepare(`UPDATE slots SET status='booked' WHERE id=? AND status='open'`).run(slot.id);
+    if (updateRes.changes === 0) {
+      throw new Error('Sorry — someone just booked that slot. Please pick another.');
+    }
+
     const insert = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
                                VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
-    db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
     db.exec('COMMIT');
 
     // Asynchronously sync to Google Calendar and dispatch confirmation email
@@ -221,7 +231,7 @@ router.post('/book', async (req, res) => {
   }
 });
 
-router.post('/cancel/:id', validateId('id'), async (req, res) => {
+router.post('/cancel/:id', validateId('id'), actionLimiter, async (req, res) => {
   const iv = db.prepare(`SELECT * FROM interviews WHERE id=? AND student_id=?`)
     .get(Number(req.params.id), req.session.user.id);
   if (!iv) {
@@ -271,7 +281,7 @@ router.get('/results', (req, res) => {
   res.render('student/results', { title: 'My results', s });
 });
 
-router.post('/feedback/:interviewId', validateId('interviewId'), (req, res) => {
+router.post('/feedback/:interviewId', validateId('interviewId'), actionLimiter, (req, res) => {
   const interviewId = Number(req.params.interviewId);
   const studentId = req.session.user.id;
   const iv = db.prepare(`SELECT i.*, s.type FROM interviews i JOIN slots s ON s.id = i.slot_id WHERE i.id = ? AND i.student_id = ?`).get(interviewId, studentId);

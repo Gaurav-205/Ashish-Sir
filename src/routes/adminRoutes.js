@@ -8,12 +8,18 @@ const { requireRole } = require('../auth');
 const { RUBRIC, GRAND_TOTAL } = require('../rubric');
 const google = require('../services/googleService');
 const emailService = require('../services/emailService');
-const { validateId } = require('../middleware/security');
+const { validateId, createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
 const { invalidateUserSessions } = require('../middleware/sessionAuth');
 
 const router = express.Router();
 router.use(requireRole('admin'));
+
+const actionLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 100,
+  message: 'Too many administrative requests. Please wait a moment.',
+});
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
@@ -53,7 +59,7 @@ router.get('/students', (req, res) => {
   res.render('admin/students', { title: 'Students', summaries, error: null });
 });
 
-router.post('/students', (req, res) => {
+router.post('/students', actionLimiter, (req, res) => {
   const { name, email, password, roll_no, branch, squad, phone, resume_url } = req.body;
   try {
     const cleanName = String(name || '').trim();
@@ -169,7 +175,7 @@ router.get('/mentors', (req, res) => {
   res.render('admin/mentors', { title: 'Mentors', mentors });
 });
 
-router.post('/mentors', (req, res) => {
+router.post('/mentors', actionLimiter, (req, res) => {
   const { name, email, password, phone } = req.body;
   try {
     const cleanName = String(name || '').trim();
@@ -250,11 +256,13 @@ router.get('/slots', (req, res) => {
     status: req.query.status || '',
     when: req.query.when || 'upcoming',
     date: req.query.date || '',
+    mentor: req.query.mentor || '',
   };
   const where = [];
   const args = [];
   if (filter.type)   { where.push('s.type = ?');   args.push(filter.type); }
   if (filter.status) { where.push('s.status = ?'); args.push(filter.status); }
+  if (filter.mentor) { where.push('s.mentor_id = ?'); args.push(Number(filter.mentor)); }
   if (filter.date)   { where.push('s.slot_date = ?'); args.push(filter.date); }
   else if (filter.when === 'upcoming') { where.push('s.slot_date >= ?'); args.push(h.today()); }
   else if (filter.when === 'past')     { where.push('s.slot_date <  ?'); args.push(h.today()); }
@@ -294,7 +302,7 @@ router.get('/slots', (req, res) => {
   });
 });
 
-router.post('/slots', (req, res) => {
+router.post('/slots', actionLimiter, (req, res) => {
   const { type, mentor_id, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
   try {
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview type. Must be technical or hr.');
@@ -626,9 +634,13 @@ router.post('/slots/:id/allot', validateId('id'), async (req, res) => {
       .get(studentId, slot.slot_date, slot.end_time, slot.start_time);
     if (clash) throw new Error(`${student.name} already has another interview at that date and time.`);
 
+    const updateRes = db.prepare(`UPDATE slots SET status='booked' WHERE id=? AND status='open'`).run(slot.id);
+    if (updateRes.changes === 0) {
+      throw new Error('This slot is already booked or cancelled.');
+    }
+
     const insert = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
                                VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
-    db.prepare(`UPDATE slots SET status='booked' WHERE id=?`).run(slot.id);
     db.exec('COMMIT');
 
     const mentor = {

@@ -60,7 +60,6 @@ router.post('/login', authLimiter, (req, res) => {
   if (to) {
     const isDev = Boolean(
       row.is_developer ||
-      (row.email && row.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
       row.role === 'developer'
     );
     if (!isDev) {
@@ -132,6 +131,15 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
   let redirectUri = req.session.oauthState ? req.session.oauthState.redirectUri : null;
+
+  if (req.session.oauthState && state !== req.session.oauthState.token && process.env.NODE_ENV !== 'test') {
+    return res.status(403).render('login', {
+      title: 'Sign in',
+      error: 'Invalid OAuth state. Please try signing in again.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
+  }
 
   if (req.headers.cookie) {
     try {
@@ -209,7 +217,6 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     if (to) {
       const isDev = Boolean(
         user.is_developer ||
-        (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
         user.role === 'developer'
       );
       if (!isDev) {
