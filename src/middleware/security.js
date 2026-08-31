@@ -92,9 +92,55 @@ function validateId(paramName = 'id') {
 
 const crypto = require('crypto');
 
+function getCsrfSecret() {
+  return process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret';
+}
+
+function generateCsrfToken(userId) {
+  const data = `${userId || 'anon'}:${Date.now()}`;
+  const sig = crypto.createHmac('sha256', getCsrfSecret()).update(data).digest('base64url');
+  return Buffer.from(data).toString('base64url') + '.' + sig;
+}
+
+function verifyCsrfToken(token, userId) {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [dataB64, sig] = parts;
+  let raw = '';
+  try {
+    raw = Buffer.from(dataB64, 'base64url').toString('utf8');
+  } catch (_) {
+    return false;
+  }
+  const expectedSig = crypto.createHmac('sha256', getCsrfSecret()).update(raw).digest('base64url');
+  
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return false;
+  }
+
+  try {
+    const [tUserId, ts] = raw.split(':');
+    // Token valid for 24 hours
+    if (Date.now() - Number(ts) > 24 * 60 * 60 * 1000) return false;
+    if (userId && tUserId !== 'anon' && String(tUserId) !== String(userId)) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function csrfProtection(req, res, next) {
-  if (!req.session.csrfToken) {
-    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+  const userId = req.session && req.session.user ? req.session.user.id : null;
+
+  if (!req.session) {
+    req.session = {};
+  }
+
+  if (!req.session.csrfToken || !verifyCsrfToken(req.session.csrfToken, userId)) {
+    req.session.csrfToken = generateCsrfToken(userId);
   }
   res.locals.csrfToken = req.session.csrfToken;
 
@@ -108,7 +154,14 @@ function csrfProtection(req, res, next) {
       return next();
     }
     const submitted = req.body._csrf || req.headers['x-csrf-token'];
-    if (!submitted || submitted !== req.session.csrfToken) {
+    
+    // Check if matches session or is a valid HMAC-signed token
+    const isValid = submitted && (
+      submitted === req.session.csrfToken ||
+      verifyCsrfToken(submitted, userId)
+    );
+
+    if (!isValid) {
       if (req.accepts('html')) {
         return res.status(403).render('error', {
           title: 'Forbidden',
@@ -127,4 +180,6 @@ module.exports = {
   createRateLimiter,
   validateId,
   csrfProtection,
+  generateCsrfToken,
+  verifyCsrfToken,
 };

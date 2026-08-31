@@ -46,8 +46,10 @@ router.post('/slots', (req, res) => {
     const isDev = Boolean(res.locals.isDeveloper || mentor.is_developer || (mentor.email && mentor.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') || mentor.role === 'developer');
     if (!isDev && mentor.role !== 'mentor') throw new Error('Mentor account not found.');
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview domain. Must be technical or hr.');
-    if (type === 'technical' && !mentor.can_technical && !isDev) throw new Error('Your profile is not enabled for Technical interviews.');
-    if (type === 'hr' && !mentor.can_hr && !isDev) throw new Error('Your profile is not enabled for HR interviews.');
+    const canTech = Boolean(mentor.can_technical && mentor.can_technical !== '0' && mentor.can_technical !== 0);
+    const canHr = Boolean(mentor.can_hr && mentor.can_hr !== '0' && mentor.can_hr !== 0);
+    if (type === 'technical' && !canTech && !isDev) throw new Error('Your profile is not enabled for Technical interviews.');
+    if (type === 'hr' && !canHr && !isDev) throw new Error('Your profile is not enabled for HR interviews.');
     
     const selectedList = (req.body.selected_dates ? String(req.body.selected_dates).split(',') : [])
       .map(d => d.trim())
