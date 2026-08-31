@@ -39,14 +39,19 @@ function createRateLimiter(options = {}) {
     }
   }, 60 * 1000).unref();
 
-  const middleware = function rateLimitMiddleware(req, res, next) {
-    if (hits.size > 10000) hits.clear();
-    // Key on both the source address and the submitted identity: keying on the
-    // email alone lets one attacker lock a victim out, keying on the IP alone
-    // lets a shared campus NAT lock out a whole cohort.
+  // Key on IP + submitted email + authenticated user id. IP alone lets one
+  // shared campus NAT exhaust a whole cohort's budget; adding the signed-in
+  // user id gives每 authenticated actor their own bucket regardless of NAT.
+  function rlKey(req) {
     const emailKey = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
     const ipKey = req.ip || (req.connection && req.connection.remoteAddress) || 'unknown-ip';
-    const key = `${ipKey}|${emailKey}`;
+    const userKey = (req.session && req.session.user && req.session.user.id) ? `u${req.session.user.id}` : '';
+    return `${ipKey}|${emailKey}|${userKey}`;
+  }
+
+  const middleware = function rateLimitMiddleware(req, res, next) {
+    if (hits.size > 10000) hits.clear();
+    const key = rlKey(req);
     const now = Date.now();
     let record = hits.get(key);
 

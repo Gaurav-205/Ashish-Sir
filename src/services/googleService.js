@@ -15,6 +15,13 @@ const getClientId = () => cleanEnvVal(process.env.GOOGLE_CLIENT_ID);
 const getClientSecret = () => cleanEnvVal(process.env.GOOGLE_CLIENT_SECRET);
 
 const getRedirectUri = (req = null, explicitPath = null) => {
+  // 0. Pinned application origin — trusted, not derived from request headers
+  //    (Host / X-Forwarded-Host are attacker-controlled). Set APP_ORIGIN in prod.
+  const appOrigin = String(process.env.APP_ORIGIN || '').trim().replace(/\/+$/, '');
+  if (appOrigin && !process.env.GOOGLE_REDIRECT_URI) {
+    return `${appOrigin}${explicitPath || '/api/auth/callback/google'}`;
+  }
+
   // 1. Explicit environment variable override (if not a stale localhost entry for a remote request)
   if (process.env.GOOGLE_REDIRECT_URI) {
     const raw = cleanEnvVal(process.env.GOOGLE_REDIRECT_URI).replace(/\/+$/, '');
