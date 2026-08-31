@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS users (
   google_refresh_token    TEXT,
   google_token_expiry     BIGINT,
   google_calendar_enabled INTEGER NOT NULL DEFAULT 1,
+  is_developer            INTEGER NOT NULL DEFAULT 0,
+  -- epoch-ms watermark: auth tokens / sessions issued before this are rejected
+  -- (bumped on password change/reset). See src/auth.js resolveCurrentUser.
+  sessions_invalid_before BIGINT,
   created_at              TEXT    NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text)
 );
 
@@ -45,6 +49,7 @@ CREATE TABLE IF NOT EXISTS slots (
   mode       TEXT    NOT NULL DEFAULT 'Online',
   location   TEXT,
   status     TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open','booked','cancelled')),
+  google_event_id TEXT,
   created_at TEXT    NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::timestamp(0)::text),
   UNIQUE (mentor_id, slot_date, start_time)
 );
@@ -123,3 +128,6 @@ CREATE INDEX IF NOT EXISTS idx_interviews_mentor ON interviews (mentor_id, statu
 CREATE INDEX IF NOT EXISTS idx_interviews_slot   ON interviews (slot_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action      ON audit_logs (action, created_at);
 CREATE INDEX IF NOT EXISTS idx_resets_user       ON password_resets (user_id);
+
+-- Structural guarantee: a slot can hold at most one non-cancelled interview.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interviews_active_slot ON interviews (slot_id) WHERE status <> 'cancelled';
