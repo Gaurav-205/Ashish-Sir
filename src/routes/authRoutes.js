@@ -351,6 +351,11 @@ function resetLinkIsVisible() {
 }
 
 function absoluteUrl(req, path) {
+  // Prefer a pinned origin so the Host/X-Forwarded-Host headers (attacker-
+  // controlled) cannot poison a password-reset link. Falls back to deriving
+  // from the request only when APP_ORIGIN is unset (local dev).
+  const pinned = String(process.env.APP_ORIGIN || '').trim().replace(/\/+$/, '');
+  if (pinned) return `${pinned}${path}`;
   const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || req.protocol || 'http';
   const host = (req.headers['x-forwarded-host'] || '').split(',')[0].trim() || req.headers.host || 'localhost:3000';
   return `${proto}://${host}${path}`;
