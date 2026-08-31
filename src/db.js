@@ -75,8 +75,9 @@ if (usePostgres) {
   // --- Neon Postgres Mode ---
   const { Pool } = require('pg');
   const { Worker } = require('worker_threads');
+  const cleanDbUrl = DATABASE_URL ? DATABASE_URL.replace(/([?&])sslmode=(require|prefer|verify-ca)/gi, '$1sslmode=verify-full') : DATABASE_URL;
   const pool = new Pool({
-    connectionString: DATABASE_URL,
+    connectionString: cleanDbUrl,
     ssl: { rejectUnauthorized: false },
   });
 
@@ -96,7 +97,7 @@ if (usePostgres) {
     dataBuf = Buffer.from(sab, 16);
 
     pgWorker = new Worker(path.join(__dirname, 'pgWorker.js'), {
-      workerData: { sab, databaseUrl: DATABASE_URL },
+      workerData: { sab, databaseUrl: cleanDbUrl },
     });
     pgWorker.unref();
 
