@@ -580,8 +580,38 @@ th.num, td.num { text-align: right; }
   text-decoration: none;
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ---- Button Loading Animations ----------------------------------------- */
+@keyframes btn-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.65s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.btn.loading {
+  position: relative;
+  cursor: wait !important;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.btn.loading.primary {
+  background: var(--cohere-black);
 }
 
 .btn.primary {
