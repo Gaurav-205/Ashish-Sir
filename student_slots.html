@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#17171c">
+<meta name="description" content="Konfident Interview 2025 - Mock Interview & Skill Evaluation Platform">
+<title>Book Technical interview · Konfident Interview 2025</title>
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="dns-prefetch" href="https://fonts.gstatic.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css?v=20260831d">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2317171c'><rect width='24' height='24' rx='6'/><path d='M7 12L10.5 15.5L17 8.5' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a href="/" class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#17171c"/>
+        <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Konfident</span>
+      <span class="brand-tag faint">SYSTEM</span>
+    </a>
+    <nav class="nav">
+      
+        <a href="/admin" class="">Admin Dashboard</a>
+      
+        <a href="/mentor" class="">Mentor Desk</a>
+      
+        <a href="/student" class="">Student View</a>
+      
+        <a href="/admin/slots" class="">Slots</a>
+      
+        <a href="/admin/interviews" class="">Interviews</a>
+      
+        <a href="/admin/reports" class="">Reports</a>
+      
+    </nav>
+    <div class="who">
+      <a href="/profile" class="who-link" title="My profile and password settings">
+        <span class="avatar">TU</span>
+        <span class="name">
+          <strong>Test User</strong>
+          
+            <span class="pill role-pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">DEV</span>
+          
+        </span>
+      </a>
+      
+      <form method="post" action="/logout" style="margin:0">
+        <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+        <button class="btn sm who-action">Sign out</button>
+      </form>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+
+
+<div class="page-head">
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Calendar Scheduling · Real-Time Auto-Fetch
+    </div>
+    <h1>Available Technical slots</h1>
+    <p class="sub">The platform automatically discovers and synchronizes all open slots across verified mentors.</p>
+  </div>
+  <div class="btn-row">
+    <a class="btn primary" href="/student/slots?type=technical">Technical slots</a>
+    <a class="btn " href="/student/slots?type=hr">HR slots</a>
+  </div>
+</div>
+
+
+
+
+
+<!-- Smart Auto-Select Earliest Slot Banner -->
+<div id="smart-auto-banner" class="card" style="margin-bottom:20px;display:none;background:var(--pale-green);border-color:#bbf7d0">
+  <div class="card-body" style="padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <div class="mono" style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--deep-green);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        Smart Match · Earliest Available Slot Found
+      </div>
+      <div id="smart-auto-text" style="font-size:14px;color:var(--deep-green)">
+        Finding earliest slot…
+      </div>
+    </div>
+    <form id="smart-auto-form" method="post" action="/student/book" style="margin:0">
+      <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+      <input type="hidden" name="slot_id" id="smart-auto-slot-id" value="">
+      <input type="hidden" name="type" value="technical">
+      <button class="btn primary sm" id="smart-auto-btn" >
+        Quick Book Earliest Slot →
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Available Technical Slots</h2>
+      <span id="auto-fetch-badge" class="pill p-completed" style="font-size:11px;display:inline-flex;align-items:center;gap:6px">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#003c33;animation:pulse 2s infinite"></span>
+        Auto-fetch active
+      </span>
+      <span id="last-updated-text" class="faint" style="font-size:11px">Synced just now</span>
+    </div>
+
+    <form method="get" id="filter-form" class="btn-row" style="margin:0">
+      <input type="hidden" name="type" id="current-type" value="technical">
+      <select name="mentor" id="mentor-select" onchange="fetchLatestSlots()" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-pill);max-width:200px">
+        <option value="">All mentors</option>
+        
+          <option value="13" >Aditya Kulshreshtha</option>
+        
+          <option value="14" >Hrituparno C</option>
+        
+          <option value="8" >Manav Verma</option>
+        
+          <option value="10" >Ritu Soni</option>
+        
+          <option value="11" >Shikhar Agarwal</option>
+        
+          <option value="12" >Shivam Shrivastava</option>
+        
+      </select>
+      <button type="button" class="btn sm" onclick="fetchLatestSlots()" title="Refresh available slots" style="display:inline-flex;align-items:center;gap:6px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Refresh
+      </button>
+    </form>
+  </div>
+
+  <div class="card-body tight" id="slots-container"
+       data-type="technical"
+       data-csrf="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo"
+       data-already-booked="false"
+       data-profile-complete="true">
+    
+    
+      <div class="slot-day" data-date="2026-09-01">
+        <h3>Tue, 1 Sep 2026</h3>
+        <div class="slot-list">
+          
+            <div class="slot" id="slot-card-1">
+              <div class="t">10:00 AM – 10:30 AM</div>
+              <div class="m">Mentor: <strong>Test User</strong><br><span class="faint">Mode: Virtual</span></div>
+              <form method="post" action="/student/book" style="margin:0">
+                <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+                <input type="hidden" name="slot_id" value="1">
+                <input type="hidden" name="type" value="technical">
+                <button class="btn primary sm" style="width:100%" >
+                  Book this slot →
+                </button>
+              </form>
+            </div>
+          
+        </div>
+      </div>
+    
+  </div>
+</div>
+
+<style>
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+</style>
+
+<script src="/js/student-slots.js"></script>
+</main>
+<script src="/js/countdown.js"></script>
+<script src="/js/button-loading.js"></script>
+</body>
+</html>
+

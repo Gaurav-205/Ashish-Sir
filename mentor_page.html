@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#17171c">
+<meta name="description" content="Konfident Interview 2025 - Mock Interview & Skill Evaluation Platform">
+<title>My interviews · Konfident Interview 2025</title>
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="dns-prefetch" href="https://fonts.gstatic.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css?v=20260831d">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2317171c'><rect width='24' height='24' rx='6'/><path d='M7 12L10.5 15.5L17 8.5' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a href="/" class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#17171c"/>
+        <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Konfident</span>
+      <span class="brand-tag faint">SYSTEM</span>
+    </a>
+    <nav class="nav">
+      
+        <a href="/admin" class="">Admin Dashboard</a>
+      
+        <a href="/mentor" class="on">Mentor Desk</a>
+      
+        <a href="/student" class="">Student View</a>
+      
+        <a href="/admin/slots" class="">Slots</a>
+      
+        <a href="/admin/interviews" class="">Interviews</a>
+      
+        <a href="/admin/reports" class="">Reports</a>
+      
+    </nav>
+    <div class="who">
+      <a href="/profile" class="who-link" title="My profile and password settings">
+        <span class="avatar">TU</span>
+        <span class="name">
+          <strong>Test User</strong>
+          
+            <span class="pill role-pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">DEV</span>
+          
+        </span>
+      </a>
+      
+      <form method="post" action="/logout" style="margin:0">
+        <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+        <button class="btn sm who-action">Sign out</button>
+      </form>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+
+
+<div class="page-head">
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Mentor Workspace · Assigned Cohorts
+    </div>
+    <h1>Evaluator dashboard</h1>
+    <p class="sub">Conduct your assigned candidate interviews, track meeting attendance, and submit rubric evaluations.</p>
+  </div>
+  
+    <div class="btn-row">
+      <button type="button" class="btn primary" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
+    </div>
+  
+</div>
+
+
+<dialog id="createSlotModal" class="modal-dialog" style="max-width:540px">
+  <div class="modal-head">
+    <h2>Publish New Interview Slots</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('createSlotModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <form method="post" action="/mentor/slots" style="margin:0">
+    <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+    <div class="modal-body">
+      <div class="field">
+        <label>Interview Domain *</label>
+        <select name="type" required>
+          <option value="technical">Technical Mock Interview</option>
+          <option value="hr">HR Mock Interview</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Select Date(s) from Calendar *</label>
+        <div id="m_date_picker_container"></div>
+        <input type="hidden" name="selected_dates" id="m_selected_dates" value="2026-09-01">
+        <input type="hidden" name="slot_date" id="m_slot_date" value="2026-09-01">
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Daily Start Time *</label>
+          <input type="time" name="start_time" id="m_start_time" value="09:00" step="300" required onchange="updatePreview()">
+        </div>
+        <div class="field">
+          <label>Slot Length (minutes)</label>
+          <input type="number" name="duration" id="m_duration" value="30" min="10" max="180" onchange="updatePreview()" oninput="updatePreview()">
+        </div>
+      </div>
+      <input type="hidden" name="count" id="m_count" value="1">
+
+      <div class="field">
+        <label>Mode</label>
+        <select name="mode">
+          <option>Online (Auto Google Meet)</option>
+          <option>Offline</option>
+        </select>
+      </div>
+
+      <div id="m_preview_text" style="margin-top:10px;padding:10px 14px;background:var(--surface-alt);border-radius:8px;font-size:13px;font-weight:600;color:var(--action-blue, #2563eb)">
+        ⚡ Generating 1 slot across 1 selected day = 1 total slot
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="document.getElementById('createSlotModal').close()">Cancel</button>
+      <button class="btn primary">Publish Slots →</button>
+    </div>
+  </form>
+</dialog>
+
+
+<div class="stats">
+  <div class="stat">
+    <div class="n">0</div>
+    <div class="l">Upcoming Sessions</div>
+  </div>
+  <div class="stat">
+    <div class="n">0</div>
+    <div class="l">Completed</div>
+  </div>
+  <div class="stat">
+    <div class="n">0</div>
+    <div class="l">Awaiting Score</div>
+  </div>
+  <div class="stat">
+    <div class="n">0</div>
+    <div class="l">Open Slots of Mine</div>
+  </div>
+</div>
+
+
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head">
+    <h2>Upcoming Interview Sessions (0)</h2>
+  </div>
+  <div class="card-body tight">
+    
+      <div class="empty">No upcoming interview sessions scheduled currently.</div>
+    
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head">
+    <h2>Completed Sessions &amp; Evaluation Status</h2>
+  </div>
+  <div class="card-body tight">
+    
+      <div class="empty">No completed interviews yet.</div>
+    
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">My Open Published Slots (0)</h2>
+      <span class="faint">Students can book into any of these slots</span>
+    </div>
+    
+      <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
+    
+  </div>
+  <div class="card-body tight">
+    
+      <div class="empty">
+        You have no open upcoming slots.
+        
+          <div style="margin-top:12px">
+            <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots Now</button>
+          </div>
+        
+      </div>
+    
+  </div>
+</div>
+
+<dialog id="mentorManageSlotModal" class="modal-dialog" style="max-width:500px">
+  <div class="modal-head">
+    <h2 id="mng_slot_title">Manage Interview Slot</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('mentorManageSlotModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <form id="mng_slot_edit_form" method="post" action="">
+      <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+      <div class="row">
+        <div class="field">
+          <label>Date *</label>
+          <input type="date" name="slot_date" id="mng_m_slot_date" min="2026-08-31" required>
+        </div>
+        <div class="field">
+          <label>Start Time *</label>
+          <input type="time" name="start_time" id="mng_m_start_time" step="300" required>
+        </div>
+        <div class="field">
+          <label>End Time *</label>
+          <input type="time" name="end_time" id="mng_m_end_time" step="300" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select name="mode" id="mng_m_mode">
+          <option value="Online">Online (Auto Google Meet)</option>
+          <option value="Offline">Offline</option>
+        </select>
+      </div>
+      <button class="btn primary" style="width:100%;margin-top:10px">Save Changes →</button>
+    </form>
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <strong style="font-size:13px;color:var(--ink)">Slot Actions</strong>
+        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancel to close booking, or permanently delete the slot.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <form id="mng_slot_cancel_form" method="post" action="" onsubmit="return confirm('Cancel this interview slot?')">
+          <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+          <button class="btn sm">Cancel Slot</button>
+        </form>
+        <form id="mng_slot_delete_form" method="post" action="" onsubmit="return confirm('Are you sure you want to permanently delete this slot? This cannot be undone.')">
+          <input type="hidden" name="_csrf" value="NzoxNzg4MTc2ODM0OTU5.O7J7ckK52_0iNeHquzC9p7KSWUoacFDHeiE-YFPIJyo">
+          <button class="btn danger sm">Delete Permanently</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="btn" onclick="document.getElementById('mentorManageSlotModal').close()">Close</button>
+  </div>
+</dialog>
+
+<script src="/js/multi-date-picker.js"></script>
+<script>
+window.updatePreview = function () {
+  var selInput = document.getElementById('m_selected_dates');
+  var countEl = document.getElementById('m_count');
+  var prevEl = document.getElementById('m_preview_text');
+  var durEl = document.getElementById('m_duration');
+  if (!prevEl) return;
+
+  var count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
+  var duration = durEl ? (parseInt(durEl.value, 10) || 30) : 30;
+  var dates = selInput && selInput.value ? selInput.value.split(',').filter(Boolean) : [];
+  var days = Math.max(dates.length, 1);
+  var total = count * days;
+
+  var timeEl = document.getElementById('m_start_time');
+  var timeVal = timeEl && timeEl.value ? timeEl.value : '09:00';
+  var parts = timeVal.split(':').map(Number);
+  var endM = (parts[0] || 0) * 60 + (parts[1] || 0) + duration;
+  var endVal = String(Math.floor(endM / 60) % 24).padStart(2, '0') + ':' + String(endM % 60).padStart(2, '0');
+
+  prevEl.textContent = '⚡ Generating 1 slot (' + timeVal + ' – ' + endVal + ', ' + duration + ' mins) across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
+};
+
+if (typeof window.initMultiDatePicker === 'function' && document.getElementById('m_date_picker_container')) {
+  window.initMultiDatePicker('m_date_picker_container', 'm_selected_dates', function (dates) {
+    var slotDateEl = document.getElementById('m_slot_date');
+    if (slotDateEl && dates.length > 0) {
+      slotDateEl.value = dates[0];
+    }
+    window.updatePreview();
+  });
+}
+
+window.openMentorSlotManageModal = function (slot) {
+  var modal = document.getElementById('mentorManageSlotModal');
+  if (!modal || !slot) return;
+
+  var titleEl = document.getElementById('mng_slot_title');
+  if (titleEl) {
+    titleEl.textContent = 'Manage Slot — ' + (slot.type === 'hr' ? 'HR' : 'Technical') + ' (' + slot.slot_date + ')';
+  }
+
+  var editForm = document.getElementById('mng_slot_edit_form');
+  if (editForm) {
+    editForm.action = '/mentor/slots/' + slot.id + '/edit';
+  }
+
+  var cancelForm = document.getElementById('mng_slot_cancel_form');
+  if (cancelForm) {
+    cancelForm.action = '/mentor/slots/' + slot.id + '/cancel';
+  }
+
+  var delForm = document.getElementById('mng_slot_delete_form');
+  if (delForm) {
+    delForm.action = '/mentor/slots/' + slot.id + '/delete';
+  }
+
+  var dInput = document.getElementById('mng_m_slot_date');
+  var sInput = document.getElementById('mng_m_start_time');
+  var eInput = document.getElementById('mng_m_end_time');
+  var modeInput = document.getElementById('mng_m_mode');
+
+  if (dInput) dInput.value = slot.slot_date || '';
+  if (sInput) sInput.value = slot.start_time || '';
+  if (eInput) eInput.value = slot.end_time || '';
+  if (modeInput) modeInput.value = slot.mode || 'Online';
+
+  modal.showModal();
+};
+
+['createSlotModal', 'mentorManageSlotModal'].forEach(function (id) {
+  var m = document.getElementById(id);
+  if (m) {
+    m.addEventListener('click', function (e) {
+      var rect = m.getBoundingClientRect();
+      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+      if (!inDialog) m.close();
+    });
+  }
+});
+</script>
+</main>
+<script src="/js/countdown.js"></script>
+<script src="/js/button-loading.js"></script>
+</body>
+</html>
+
