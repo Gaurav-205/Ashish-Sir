@@ -7,27 +7,45 @@
     <h1>Student management</h1>
     <p class="sub"><%= summaries.length %> registered candidate(s) · each requires one Technical and one HR mock interview.</p>
   </div>
+  <button type="button" class="btn primary" onclick="document.getElementById('registerStudentModal').showModal()" style="display:inline-flex;align-items:center;gap:6px">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+    Register Candidate
+  </button>
 </div>
 
-<div class="card" style="margin-bottom:24px">
-  <div class="card-head"><h2>Register a candidate</h2></div>
-  <div class="card-body">
-    <form method="post" action="/admin/students">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<dialog id="registerStudentModal" class="modal-dialog" style="max-width:580px">
+  <div class="modal-head">
+    <h2>Register a New Candidate</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('registerStudentModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <form method="post" action="/admin/students" style="margin:0">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="modal-body">
       <div class="row">
         <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Aisha Sharma" required></div>
         <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="aisha@college.edu" required></div>
+      </div>
+      <div class="row">
         <div class="field"><label>Initial Password *</label><input type="password" name="password" placeholder="At least 6 characters" required minlength="6"></div>
         <div class="field"><label>Roll Number</label><input name="roll_no" placeholder="KAL116001"></div>
+      </div>
+      <div class="row">
         <div class="field"><label>Squad</label><input name="squad" placeholder="115 or 116"></div>
         <div class="field"><label>Branch / Major</label><input name="branch" placeholder="CSE, IT, ECE"></div>
+      </div>
+      <div class="row">
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
         <div class="field"><label>Resume Link</label><input type="url" name="resume_url" placeholder="https://drive.google.com/…"></div>
       </div>
-      <button class="btn primary" style="margin-top:8px">Register Candidate →</button>
-    </form>
-  </div>
-</div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="document.getElementById('registerStudentModal').close()">Cancel</button>
+      <button class="btn primary">Register Candidate →</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="search-toolbar">
   <div class="search-input-wrap">
@@ -126,6 +144,16 @@ function filterCandidatesTable() {
   if (label) {
     label.textContent = `Showing ${visibleCount} candidate(s)`;
   }
+}
+
+var regModal = document.getElementById('registerStudentModal');
+if (regModal) {
+  regModal.addEventListener('click', function (e) {
+    var rect = regModal.getBoundingClientRect();
+    var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+    if (!inDialog) regModal.close();
+  });
 }
 </script>
 <%- include('../partials/foot') %>

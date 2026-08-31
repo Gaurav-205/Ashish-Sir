@@ -7,27 +7,41 @@
     <h1>Mentors &amp; evaluators</h1>
     <p class="sub">Manage verified mentors, configure Technical/HR permissions, and inspect slot capacities.</p>
   </div>
+  <button type="button" class="btn primary" onclick="document.getElementById('registerMentorModal').showModal()" style="display:inline-flex;align-items:center;gap:6px">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+    Register Mentor
+  </button>
 </div>
 
-<div class="card" style="margin-bottom:24px">
-  <div class="card-head"><h2>Register a new mentor</h2></div>
-  <div class="card-body">
-    <form method="post" action="/admin/mentors">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<dialog id="registerMentorModal" class="modal-dialog" style="max-width:540px">
+  <div class="modal-head">
+    <h2>Register a New Mentor</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('registerMentorModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <form method="post" action="/admin/mentors" style="margin:0">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="modal-body">
       <div class="row">
         <div class="field"><label>Full Name *</label><input name="name" placeholder="e.g. Arjun Mehta" required></div>
         <div class="field"><label>Email Address *</label><input type="email" name="email" placeholder="arjun.mentor@konfident.in" required></div>
+      </div>
+      <div class="row">
         <div class="field"><label>Initial Password *</label><input type="password" name="password" placeholder="At least 6 characters" required minlength="6"></div>
         <div class="field"><label>Contact Phone</label><input name="phone" placeholder="+91 98765 43210"></div>
       </div>
-      <div style="display:flex;gap:18px;margin:12px 0 16px;flex-wrap:wrap">
+      <div style="display:flex;gap:18px;margin:12px 0 6px;flex-wrap:wrap">
         <label class="check"><input type="checkbox" name="can_technical" value="1" checked> Can conduct Technical interviews</label>
         <label class="check"><input type="checkbox" name="can_hr" value="1"> Can conduct HR interviews</label>
       </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="document.getElementById('registerMentorModal').close()">Cancel</button>
       <button class="btn primary">Register Mentor →</button>
-    </form>
-  </div>
-</div>
+    </div>
+  </form>
+</dialog>
 
 <div class="card">
   <div class="card-head"><h2>Verified Evaluators (<%= mentors.length %>)</h2></div>
@@ -136,14 +150,16 @@ window.openEditMentorModal = function (mentor) {
   modal.showModal();
 };
 
-var editModal = document.getElementById('editMentorModal');
-if (editModal) {
-  editModal.addEventListener('click', function (e) {
-    var rect = editModal.getBoundingClientRect();
-    var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
-      rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-    if (!inDialog) editModal.close();
-  });
-}
+['registerMentorModal', 'editMentorModal'].forEach(function (id) {
+  var m = document.getElementById(id);
+  if (m) {
+    m.addEventListener('click', function (e) {
+      var rect = m.getBoundingClientRect();
+      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+      if (!inDialog) m.close();
+    });
+  }
+});
 </script>
 <%- include('../partials/foot') %>
