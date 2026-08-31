@@ -11,7 +11,7 @@ const { RUBRIC, GRAND_TOTAL, grade } = require('./rubric');
 const { securityHeaders, csrfProtection } = require('./middleware/security');
 const { sessionRehydrateMiddleware } = require('./middleware/sessionAuth');
 
-const zlib = require('zlib');
+const compression = require('compression');
 
 const app = express();
 
@@ -23,39 +23,14 @@ if (process.env.NODE_ENV !== 'test') {
   app.enable('view cache');
 }
 
-// Built-in Gzip response compression for fast delivery of HTML, JSON, CSS, JS
-app.use((req, res, next) => {
-  const acceptEncoding = req.headers['accept-encoding'] || '';
-  if (!acceptEncoding.includes('gzip')) return next();
-
-  const origSend = res.send;
-  res.send = function (body) {
-    if (res.headersSent || !body) return origSend.call(this, body);
-
-    const contentType = String(res.getHeader('Content-Type') || '');
-    const isCompressible = typeof body === 'string' || Buffer.isBuffer(body);
-    const shouldCompress = isCompressible && (
-      contentType.includes('text/') ||
-      contentType.includes('application/json') ||
-      contentType.includes('application/javascript')
-    );
-
-    if (shouldCompress && Buffer.byteLength(body) > 1024) {
-      zlib.gzip(body, (err, gzipped) => {
-        if (!err && gzipped) {
-          res.setHeader('Content-Encoding', 'gzip');
-          res.removeHeader('Content-Length');
-          origSend.call(this, gzipped);
-        } else {
-          origSend.call(this, body);
-        }
-      });
-      return res;
-    }
-    return origSend.call(this, body);
-  };
-  next();
-});
+// Standard streaming HTTP compression (Gzip / Deflate / Brotli)
+app.use(compression({
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));

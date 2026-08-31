@@ -353,6 +353,9 @@ if (usePostgres) {
 
       sqliteDb.exec('PRAGMA foreign_keys = ON');
       sqliteDb.exec('PRAGMA journal_mode = WAL');
+      sqliteDb.exec('PRAGMA synchronous = NORMAL');
+      sqliteDb.exec('PRAGMA cache_size = -64000');
+      sqliteDb.exec('PRAGMA temp_store = MEMORY');
 
       sqliteDb.exec(`
       CREATE TABLE IF NOT EXISTS users (
