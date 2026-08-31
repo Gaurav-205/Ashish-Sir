@@ -396,7 +396,7 @@ router.post('/reset-password/:token', resetLimiter, (req, res) => {
   res.redirect('/login');
 });
 
-router.post('/logout', (req, res) => {
+router.all('/logout', (req, res) => {
   logAudit(req, 'AUTH_LOGOUT');
   clearAuthSession(req, res, () => res.redirect('/login'));
 });

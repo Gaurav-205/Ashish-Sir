@@ -104,6 +104,9 @@ function csrfProtection(req, res, next) {
 
   const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
   if (!safeMethods.includes(req.method)) {
+    if (req.path === '/logout') {
+      return next();
+    }
     const submitted = req.body._csrf || req.headers['x-csrf-token'];
     if (!submitted || submitted !== req.session.csrfToken) {
       if (req.accepts('html')) {

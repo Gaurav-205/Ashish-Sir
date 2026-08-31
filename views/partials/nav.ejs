@@ -53,7 +53,7 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
         </span>
       </a>
       <form method="post" action="/logout" style="margin:0">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <button class="btn sm who-action">Sign out</button>
       </form>
     </div>
