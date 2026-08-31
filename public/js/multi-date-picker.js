@@ -226,6 +226,8 @@
     }
 
     function selectCurrentWeek(offsetDays) {
+      // Locally scoped: `todayIso` in render() is not visible here.
+      var todayIso = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
       var now = new Date();
       now.setUTCDate(now.getUTCDate() + offsetDays);
       var day = now.getUTCDay();

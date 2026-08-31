@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#17171c">
+<meta name="description" content="Konfident Interview 2025 - Mock Interview & Skill Evaluation Platform">
+<title>Admin dashboard · Konfident Interview 2025</title>
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="dns-prefetch" href="https://fonts.gstatic.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css?v=20260831d">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2317171c'><rect width='24' height='24' rx='6'/><path d='M7 12L10.5 15.5L17 8.5' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a href="/" class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#17171c"/>
+        <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Konfident</span>
+      <span class="brand-tag faint">SYSTEM</span>
+    </a>
+    <nav class="nav">
+      
+        <a href="/admin" class="on">Admin Dashboard</a>
+      
+        <a href="/mentor" class="">Mentor Desk</a>
+      
+        <a href="/student" class="">Student View</a>
+      
+        <a href="/admin/slots" class="">Slots</a>
+      
+        <a href="/admin/interviews" class="">Interviews</a>
+      
+        <a href="/admin/reports" class="">Reports</a>
+      
+    </nav>
+    <div class="who">
+      <a href="/profile" class="who-link" title="My profile and password settings">
+        <span class="avatar">TU</span>
+        <span class="name">
+          <strong>Test User</strong>
+          
+            <span class="pill role-pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">DEV</span>
+          
+        </span>
+      </a>
+      
+      <form method="post" action="/logout" style="margin:0">
+        <input type="hidden" name="_csrf" value="NzoxNzg4MTc3MzY4MTA4.nLeTD1CUmA_72kP04RjyoTt8Vtt7dUzYIJLaHatG3wI">
+        <button class="btn sm who-action">Sign out</button>
+      </form>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+
+
+<div class="page-head">
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center">
+      <span class="live-pulse"></span> Platform Administration · Live Telemetry
+    </div>
+    <h1>Admin dashboard</h1>
+    <p class="sub">Comprehensive monitoring of interview slots, candidate bookings, mentor assignments, and evaluation progress.</p>
+  </div>
+  <div class="btn-row">
+    <a class="btn" href="/admin/slots">+ Create slots</a>
+    <a class="btn" href="/admin/students">All candidates</a>
+    <a class="btn primary" href="/admin/reports">View reports &amp; CSV →</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="n">40</div><div class="l">Registered Students</div></div>
+  <div class="stat"><div class="n">7</div><div class="l">Verified Mentors</div></div>
+  <div class="stat"><div class="n">0<small class="faint"> / 0</small></div><div class="l">Open Slots</div></div>
+  <div class="stat"><div class="n">0<small class="faint"> / 40</small></div><div class="l">Fully Booked</div></div>
+  <div class="stat"><div class="n">0</div><div class="l">Upcoming</div></div>
+  <div class="stat"><div class="n">0<small class="faint"> / 0</small></div><div class="l">Attended / Completed</div></div>
+  <div class="stat"><div class="n">0</div><div class="l">Evaluated</div></div>
+</div>
+
+<div class="grid two" style="margin-bottom:24px">
+  <div class="card">
+    <div class="card-head">
+      <h2>Upcoming scheduled interviews</h2>
+      <a class="btn sm" href="/admin/interviews?status=booked">View all →</a>
+    </div>
+    <div class="card-body tight">
+      <div class="empty">Nothing booked yet.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Completed sessions awaiting scores</h2>
+    </div>
+    <div class="card-body tight">
+      <div class="empty">Every completed interview has been evaluated.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-head" style="flex-wrap:wrap;gap:12px;justify-content:space-between">
+    <div>
+      <h2>Student Cohort Overview &amp; Interview Breakdown</h2>
+      <span class="faint">Comprehensive Technical and HR interview records for every candidate</span>
+    </div>
+    <div style="min-width:260px">
+      <input type="text" id="adminStudentFilter" placeholder="Filter by candidate, roll no, squad..." style="padding:7px 14px;font-size:13px;border:1px solid var(--line);border-radius:var(--radius-pill);width:100%" onkeyup="applyFilter()">
+    </div>
+  </div>
+
+  <div style="padding:10px 20px 0;background:var(--surface-alt);border-bottom:1px solid var(--line-soft);display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" class="filter-chip active" onclick="setCohortFilter('all', this)">All Students (40)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('incomplete', this)">Incomplete Bookings (40)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('booked', this)">Fully Booked (0)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('evaluated', this)">Evaluated (0)</button>
+  </div>
+
+  <div class="card-body tight">
+    
+    <div class="table-scroll"><table id="studentBreakdownTable">
+      <thead>
+        <tr>
+          <th>Roll No</th>
+          <th>Student</th>
+          <th>Technical Interview</th>
+          <th>HR Interview</th>
+          <th class="num">Score</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115011</strong></td>
+          <td>
+            <strong>Aadi Jain</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">aadi.jain.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/44">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115001</strong></td>
+          <td>
+            <strong>Aayushman Shukla</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">aayushman.shukla.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/34">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116007</strong></td>
+          <td>
+            <strong>Aditya Sudhir Nagane</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">aditya.nagane.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/22">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116002</strong></td>
+          <td>
+            <strong>Aditya Talikoti</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">aditya.talikoti.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/17">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116004</strong></td>
+          <td>
+            <strong>Anisha Santosh Agrawal</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">anisha.agrawal.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/19">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116005</strong></td>
+          <td>
+            <strong>Areesh Ahmed</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">areesh.ahmed.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/20">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116011</strong></td>
+          <td>
+            <strong>Aryan Patil</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">aryan.patil.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/26">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115013</strong></td>
+          <td>
+            <strong>Atharv Nitin Hargude</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">atharv.hargude.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/46">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116014</strong></td>
+          <td>
+            <strong>Avadhut Murlidhar Pawar</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">avadhut.pawar.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/29">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115006</strong></td>
+          <td>
+            <strong>Ayush Shriam Awchar</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">shriram.awchar.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/39">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115020</strong></td>
+          <td>
+            <strong>Devansh Subhash Pujari</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">devansh.pujari.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/53">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116003</strong></td>
+          <td>
+            <strong>Digvijay Patil</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">digvijay.patil.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/18">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116013</strong></td>
+          <td>
+            <strong>Gauri Mhetre</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">gauri.mhetre.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/28">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115019</strong></td>
+          <td>
+            <strong>Gitesh Makunda Chaudhari</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">gitesh.c.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/52">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116016</strong></td>
+          <td>
+            <strong>Hardik Kaurani</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">hardik.kaurani.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/31">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116001</strong></td>
+          <td>
+            <strong>Isha Agrawal</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">isha.agrawal.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/16">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116006</strong></td>
+          <td>
+            <strong>Kanishka Nishchal Girnar</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">kanishka.girnar.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/21">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116018</strong></td>
+          <td>
+            <strong>Khushal Rajput</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">khushal.rajput.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/33">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115021</strong></td>
+          <td>
+            <strong>Mohammad Aamir Patloo</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">mohammad.patloo.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/54">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115010</strong></td>
+          <td>
+            <strong>Om Jagtap</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">om.jagtap.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/43">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116012</strong></td>
+          <td>
+            <strong>Om Lonkar</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">om.lonkar.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/27">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115003</strong></td>
+          <td>
+            <strong>Palakshi Verma</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">palakshi.verma.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/36">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115012</strong></td>
+          <td>
+            <strong>Parnil Vyawhare</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">parnil.vyawahare.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/45">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115005</strong></td>
+          <td>
+            <strong>Pratite Acharya</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">pratite.a.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/38">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115002</strong></td>
+          <td>
+            <strong>Prithvi Rajvanshi</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">prithvi.rajvanshi.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/35">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115008</strong></td>
+          <td>
+            <strong>Raina George</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">raina.george.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/41">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115015</strong></td>
+          <td>
+            <strong>Rakshaad Ashok Kolhe</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">rakshaad.kolhe.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/48">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116015</strong></td>
+          <td>
+            <strong>Riddhima Sinhal</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">riddhima.sinhal.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/30">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115017</strong></td>
+          <td>
+            <strong>Rishikesh Bagal</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">rishikesh.bagal.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/50">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115004</strong></td>
+          <td>
+            <strong>Ruhaa Bhalerao</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">ruhaa.bhalerao.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/37">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115014</strong></td>
+          <td>
+            <strong>Sasmit Narnaware</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">sasmit.narnaware.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/47">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115009</strong></td>
+          <td>
+            <strong>Shauryvardhan Dadasaheb Undre</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">shauryvardhan.undre.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/42">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115022</strong></td>
+          <td>
+            <strong>Shruti Shardul Itkalkar</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">shruti.itkalkar.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/55">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116008</strong></td>
+          <td>
+            <strong>Shubham Uddhav Reddy</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">shubham.reddy.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/23">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115016</strong></td>
+          <td>
+            <strong>Sohini Tandon</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">sohini.tandon.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/49">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116017</strong></td>
+          <td>
+            <strong>Tejas Vijaykumar Pujari</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">tejas.pujari.s.116@kalvium.com · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/32">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116010</strong></td>
+          <td>
+            <strong>Yashraj Jagtap</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">yashraj.jagtap.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/25">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL116009</strong></td>
+          <td>
+            <strong>Yashwardhan Santosh Chaudhari</strong>
+            <span class="pill p-technical" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 116</span><br>
+            <span class="faint">yashwardhan.chaudhari.s.116@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/24">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115007</strong></td>
+          <td>
+            <strong>varad shahane</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">varad.shahane.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/40">View record →</a>
+          </td>
+        </tr>
+      
+        <tr data-booked-count="0" data-evaluated="0">
+          <td class="mono"><strong>KAL115018</strong></td>
+          <td>
+            <strong>vinayak kulkarni</strong>
+            <span class="pill p-hr" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad 115</span><br>
+            <span class="faint">vinayak.kulkarni.s.115@kalvium.community · CSE</span>
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td>
+            
+              <span class="pill p-cancelled">Not Booked</span>
+            
+          </td>
+          <td class="num">
+            
+              <span class="faint">—</span>
+            
+          </td>
+          <td class="num">
+            <a class="btn sm primary" href="/admin/students/51">View record →</a>
+          </td>
+        </tr>
+      
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<script>
+var activeTab = 'all';
+
+function setCohortFilter(tab, btn) {
+  activeTab = tab;
+  document.querySelectorAll('.card .filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  applyFilter();
+}
+
+function applyFilter() {
+  var query = (document.getElementById('adminStudentFilter').value || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#studentBreakdownTable tbody tr');
+  
+  rows.forEach(function(r) {
+    var bookedCount = parseInt(r.getAttribute('data-booked-count') || '0', 10);
+    var evaluated = r.getAttribute('data-evaluated') === '1';
+    var text = r.textContent.toLowerCase();
+    
+    var matchesTab = true;
+    if (activeTab === 'incomplete') {
+      matchesTab = bookedCount < 2;
+    } else if (activeTab === 'booked') {
+      matchesTab = bookedCount >= 2;
+    } else if (activeTab === 'evaluated') {
+      matchesTab = evaluated;
+    }
+
+    var matchesSearch = !query || text.includes(query);
+    r.style.display = (matchesTab && matchesSearch) ? '' : 'none';
+  });
+}
+</script>
+</main>
+<script src="/js/countdown.js"></script>
+<script src="/js/button-loading.js"></script>
+</body>
+</html>
+
