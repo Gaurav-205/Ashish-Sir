@@ -214,7 +214,7 @@
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
           <td class="faint"><%= s.mode %></td>
           <td class="num">
-            <button type="button" class="btn sm" onclick='openMentorSlotManageModal(<%- JSON.stringify({ id: s.id, slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time, mode: s.mode, type: s.type }) %>)'>Manage</button>
+            <button type="button" class="btn sm" onclick='openMentorSlotManageModal(<%- JSON.stringify({ id: s.id, slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time, mode: s.mode, type: s.type }).replace(/'/g, "&#39;").replace(/</g, "\\u003c") %>)'>Manage</button>
           </td>
         </tr>
       <% }); %></tbody>

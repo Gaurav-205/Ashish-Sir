@@ -61,7 +61,7 @@
           <td class="num font-mono"><%= m.upcoming %></td>
           <td class="num font-mono"><%= m.done %></td>
           <td class="num">
-            <button type="button" class="btn sm" onclick='openEditMentorModal(<%- JSON.stringify({ id: m.id, name: m.name, phone: m.phone || "", can_technical: !!m.can_technical, can_hr: !!m.can_hr, active: !!m.active }) %>)'>Edit Profile</button>
+            <button type="button" class="btn sm" onclick='openEditMentorModal(<%- JSON.stringify({ id: m.id, name: m.name, phone: m.phone || "", can_technical: !!m.can_technical, can_hr: !!m.can_hr, active: !!m.active }).replace(/'/g, "&#39;").replace(/</g, "\\u003c") %>)'>Edit Profile</button>
           </td>
         </tr>
       <% }); %>

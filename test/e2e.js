@@ -491,9 +491,11 @@ const login = async (who, email) => {
   const gLogin = await get('anon', '/auth/google');
   ok(gLogin.status === 200 || gLogin.status === 302, 'GET /auth/google handles request cleanly');
 
-  // Verify diagnostic endpoint for production URLs
-  const debugResp = await get('anon', '/auth/google/debug');
-  ok(debugResp.status === 200, 'GET /auth/google/debug returns 200 OK');
+  // Verify diagnostic endpoint for production URLs — now admin-gated (was public).
+  const debugAnon = await get('anon', '/auth/google/debug');
+  ok(debugAnon.status === 302 || debugAnon.status === 403, 'GET /auth/google/debug is not public (redirects/denies anon)');
+  const debugResp = await get('admin', '/auth/google/debug');
+  ok(debugResp.status === 200, 'GET /auth/google/debug returns 200 OK for admin');
   const debugJson = JSON.parse(debugResp.body);
   ok(debugJson.status === 'ok' && !!debugJson.environment.currentOrigin && !!debugJson.googleCloudConsoleInstructions,
      'debug endpoint provides complete Google Cloud Console setup guidance');

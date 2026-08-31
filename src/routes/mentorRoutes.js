@@ -41,7 +41,7 @@ router.post('/slots', (req, res) => {
   const mentorId = req.session.user.id;
   try {
     const { type, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
-    const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active, is_developer FROM users WHERE id=?`).get(mentorId);
+    const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active, is_developer, google_calendar_enabled FROM users WHERE id=?`).get(mentorId);
     if (!mentor) throw new Error('Mentor account not found.');
     const isDev = Boolean(res.locals.isDeveloper || isUserDeveloper(mentor));
     const isDual = isDualRoleUser(mentor);

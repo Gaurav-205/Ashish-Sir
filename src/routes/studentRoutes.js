@@ -24,13 +24,14 @@ function safeRedirectTarget(req, fallback = '/student') {
   const ref = req.headers.referer || req.headers.referrer;
   if (!ref) return fallback;
   try {
-    if (ref.startsWith('/') && !ref.startsWith('//')) {
+    if (h.isSafeLocalPath(ref)) {
       return ref;
     }
     const parsed = new URL(ref);
     const host = req.get('host');
     if (parsed.host === host) {
-      return parsed.pathname + parsed.search;
+      const local = parsed.pathname + parsed.search;
+      if (h.isSafeLocalPath(local)) return local;
     }
   } catch (_) {}
   return fallback;

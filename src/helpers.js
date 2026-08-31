@@ -143,17 +143,28 @@ function linkify(str) {
   });
 }
 
+/** A path is only safe to redirect to if it is a single-slash-rooted local
+ *  path with no scheme, no authority, no backslashes (browsers fold `\`→`/`,
+ *  so `/\evil.com` is an open redirect) and no control characters. */
+function isSafeLocalPath(p) {
+  return typeof p === 'string'
+    && /^\/[^/\\]/.test(p)
+    && !/[\x00-\x1f\x7f]/.test(p)   // eslint-disable-line no-control-regex
+    && !p.includes('\\');
+}
+
 function safeRedirectTarget(req, fallback = '/') {
   const ref = req.headers.referer || req.headers.referrer;
   if (!ref) return fallback;
   try {
-    if (ref.startsWith('/') && !ref.startsWith('//')) {
+    if (isSafeLocalPath(ref)) {
       return ref;
     }
     const parsed = new URL(ref);
     const host = req.get('host');
     if (parsed.host === host) {
-      return parsed.pathname + parsed.search;
+      const local = parsed.pathname + parsed.search;
+      if (isSafeLocalPath(local)) return local;
     }
   } catch (_) {}
   return fallback;
@@ -247,7 +258,8 @@ function isValidTime(timeStr) {
 
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
-  normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, isUniqueViolation, safeRedirectTarget,
+  normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, isUniqueViolation,
+  safeRedirectTarget, isSafeLocalPath,
   getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
   isValidEmail, isValidUrl, isValidPhone, isValidDate, isValidTime,
 };

@@ -306,7 +306,7 @@ router.post('/slots', actionLimiter, (req, res) => {
   const { type, mentor_id, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
   try {
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview type. Must be technical or hr.');
-    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1`).get(Number(mentor_id));
+    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr, google_calendar_enabled FROM users WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     if (type === 'technical' && !mentor.can_technical) throw new Error(`${mentor.name} is not enabled for Technical interviews.`);
     if (type === 'hr' && !mentor.can_hr) throw new Error(`${mentor.name} is not enabled for HR interviews.`);
@@ -458,13 +458,15 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
         SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
          WHERE i.student_id = ? AND i.status <> 'cancelled' AND i.id <> ?
            AND s2.slot_date = ? AND s2.start_time < ? AND s2.end_time > ?
-      `).get(iv.student_id, iv.id, slot_date, end_time, start_time);
+      `).get(iv.student_id, iv.id, cleanDate, cleanEnd, cleanStart);
       if (studentClash) throw new Error('The booked student already has another interview at that time.');
     }
 
     const loc = (location && location.trim()) ? location.trim() : (slot.location || h.generateMeetingLink(slot.type));
+    // Persist the *normalized* date/time — writing a raw '9:00' would break every
+    // `(slot_date || ' ' || start_time) > now` comparison (lexical, not chronological).
     db.prepare(`UPDATE slots SET slot_date=?, start_time=?, end_time=?, mentor_id=?, mode=?, location=? WHERE id=?`)
-      .run(slot_date, start_time, end_time, mentor.id, mode || 'Online', loc, id);
+      .run(cleanDate, cleanStart, cleanEnd, mentor.id, mode || 'Online', loc, id);
     // keep the linked interview's mentor in sync
     db.prepare(`UPDATE interviews SET mentor_id=? WHERE slot_id=? AND status<>'cancelled'`).run(mentor.id, id);
 
@@ -475,7 +477,7 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
         eventId: iv.google_event_id,
         student,
         mentor,
-        slot: { slot_date, start_time, end_time, mode: mode || 'Online', location, type: slot.type }
+        slot: { slot_date: cleanDate, start_time: cleanStart, end_time: cleanEnd, mode: mode || 'Online', location: loc, type: slot.type }
       }).catch(() => {});
     }
 

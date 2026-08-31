@@ -73,7 +73,11 @@ function resolveCurrentUser(req, res) {
   if (req.session.activeRole && (isDev || isDual)) {
     req.session.user.role = req.session.activeRole;
   } else {
-    req.session.user.role = isDev ? 'developer' : (req.session.activeRole || user.role);
+    // Not (or no longer) dev/dual: a stale activeRole from a past switch must
+    // NOT keep granting the switched role after a demotion. Drop it and fall
+    // back to the account's real role.
+    if (req.session.activeRole) delete req.session.activeRole;
+    req.session.user.role = isDev ? 'developer' : user.role;
   }
 
   res.locals.user = req.session.user;

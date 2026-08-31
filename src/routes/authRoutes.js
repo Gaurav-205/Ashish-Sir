@@ -48,9 +48,11 @@ router.post('/login', authLimiter, (req, res) => {
   }
   if (!row.active) {
     logAudit(req, 'AUTH_LOGIN_DEACTIVATED', { email });
-    return res.status(403).render('login', {
+    // Same wording as a bad password so a probe cannot enumerate which
+    // addresses correspond to real (but disabled) accounts.
+    return res.status(401).render('login', {
       title: 'Sign in',
-      error: 'This account has been deactivated. Contact the admin.',
+      error: 'Invalid email or password.',
       email: req.body.email || '',
       googleConfigured: google.isConfigured(),
     });
@@ -238,8 +240,14 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
   }
 });
 
-/* Diagnostic endpoint to verify Google OAuth configuration on production URLs */
-router.get('/auth/google/debug', (req, res) => {
+/* Diagnostic endpoint to verify Google OAuth configuration on production URLs.
+ * Admin-only: it discloses deployment host/proto, env presence and a partial
+ * client id, which should not be public. */
+router.get('/auth/google/debug', requireLogin, (req, res) => {
+  const role = req.session.user && req.session.user.role;
+  if (role !== 'admin' && role !== 'developer' && !res.locals.isDeveloper) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   const currentRedirectUri = google.getRedirectUri(req);
   const proto = (req.headers && req.headers['x-forwarded-proto']
     ? req.headers['x-forwarded-proto'].split(',')[0].trim()
@@ -398,9 +406,23 @@ router.post('/reset-password/:token', resetLimiter, (req, res) => {
   res.redirect('/login');
 });
 
-router.all('/logout', (req, res) => {
+function doLogout(req, res) {
   logAudit(req, 'AUTH_LOGOUT');
   clearAuthSession(req, res, () => res.redirect('/login'));
+}
+// POST is the real logout (the nav uses a form). It stays CSRF-exempt so a
+// stale token can never trap someone in a session.
+router.post('/logout', doLogout);
+// A GET is honoured only for a user-initiated navigation (typed URL, bookmark,
+// same-origin link). A cross-site top-level navigation — the only way to reach
+// this with cookies under SameSite=Lax — just bounces home, so it cannot be
+// used to force-logout a victim.
+router.get('/logout', (req, res) => {
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'same-site' && site !== 'none') {
+    return res.redirect('/');
+  }
+  return doLogout(req, res);
 });
 
 router.get('/profile', requireLogin, (req, res) => {

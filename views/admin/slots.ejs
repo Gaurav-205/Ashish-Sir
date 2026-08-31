@@ -207,7 +207,7 @@
           <td><% if (s.student_name) { %><%= s.student_name %><br><span class="faint"><%= s.roll_no || '' %></span>
               <% } else { %><span class="faint">—</span><% } %></td>
           <td class="num">
-            <button type="button" class="btn sm" onclick='openSlotManageModal(<%- JSON.stringify(s) %>)'>Manage</button>
+            <button type="button" class="btn sm" onclick='openSlotManageModal(<%- JSON.stringify(s).replace(/'/g, "&#39;").replace(/</g, "\\u003c") %>)'>Manage</button>
           </td>
         </tr>
       <% }); %>
