@@ -162,7 +162,7 @@ function csrfProtection(req, res, next) {
     if (req.path === '/logout') {
       return next();
     }
-    const submitted = req.body._csrf || req.headers['x-csrf-token'];
+    const submitted = (req.body && req.body._csrf) || req.headers['x-csrf-token'];
     
     // Check if matches session or is a valid HMAC-signed token
     const isValid = submitted && (
