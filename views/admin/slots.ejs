@@ -39,8 +39,8 @@
       <div class="field">
         <label>Select Date(s) from Calendar *</label>
         <div id="adm_date_picker_container"></div>
-        <input type="hidden" name="selected_dates" id="adm_selected_dates" value="<%= defaultDate %>">
-        <input type="hidden" name="slot_date" id="adm_slot_date" value="<%= defaultDate %>">
+        <input type="hidden" name="selected_dates" id="adm_selected_dates" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>">
+        <input type="hidden" name="slot_date" id="adm_slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>">
       </div>
 
       <div class="row">
