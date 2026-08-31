@@ -583,6 +583,13 @@ th.num, td.num { text-align: right; }
   opacity: 0.55;
   cursor: not-allowed;
 }
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--focus-blue);
+  outline-offset: 2px;
+}
 
 /* ---- Button Loading Animations ----------------------------------------- */
 @keyframes btn-spin {
@@ -775,6 +782,9 @@ th {
   letter-spacing: 0.05em;
   color: var(--slate);
   border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 td {
   padding: 14px 18px;
@@ -794,23 +804,54 @@ td.empty, div.empty {
 /* ---- Flash Messages & Banners ------------------------------------------- */
 .flash {
   padding: 12px 18px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-sm, 8px);
   margin-bottom: 20px;
   font-size: 13px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  animation: flash-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
+
+@keyframes flash-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .flash.ok {
-  background: var(--pale-green);
-  color: var(--deep-green);
+  background: var(--pale-green, #edfce9);
+  color: var(--deep-green, #003c33);
   border: 1px solid #bbf7d0;
 }
 .flash.err {
-  background: var(--error-soft);
-  color: var(--error);
+  background: var(--error-soft, #fdf2f2);
+  color: var(--error, #b30000);
   border: 1px solid #fecaca;
+}
+.flash.info {
+  background: var(--pale-blue, #eff6ff);
+  color: var(--action-blue, #1863dc);
+  border: 1px solid #bfdbfe;
+}
+
+.flash-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: currentColor;
+  opacity: 0.65;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+  border-radius: 4px;
+  transition: opacity 0.12s ease;
+}
+.flash-close-btn:hover {
+  opacity: 1;
 }
 
 .note {
@@ -821,6 +862,7 @@ td.empty, div.empty {
   font-size: 13px;
   color: var(--ink);
   margin: 18px 0;
+  line-height: 1.55;
 }
 
 /* ---- Login Page (Cohere Command Card) ----------------------------------- */
