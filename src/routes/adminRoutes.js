@@ -450,6 +450,46 @@ router.post('/slots/:id/reopen', validateId('id'), (req, res) => {
   res.redirect('/admin/slots');
 });
 
+router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
+  const id = Number(req.params.id);
+  const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(id);
+  if (!slot) {
+    flash(req, 'err', 'Slot not found.');
+    return res.redirect('/admin/slots');
+  }
+
+  const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
+  if (iv && (iv.status === 'completed' || iv.eval_id)) {
+    flash(req, 'err', 'Completed interviews with evaluations cannot be deleted.');
+    return res.redirect('/admin/slots');
+  }
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    if (iv) {
+      if (iv.google_event_id) {
+        const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
+        const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
+        google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
+      }
+      const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
+      const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.mentor_id);
+      emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot }).catch(() => {});
+    }
+
+    db.prepare('DELETE FROM interviews WHERE slot_id=?').run(id);
+    db.prepare('DELETE FROM slots WHERE id=?').run(id);
+    db.exec('COMMIT');
+
+    logAudit(req, 'ADMIN_DELETE_SLOT', { slot_id: id });
+    flash(req, 'ok', 'Slot permanently deleted.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not delete slot: ' + e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
 router.post(['/slots/:id/release', '/slots/:id/cancel-booking'], validateId('id'), async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);

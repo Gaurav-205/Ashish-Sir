@@ -130,7 +130,7 @@
       </form>
     </div>
 
-    <!-- Actions Section (Release, Cancel, Reopen) -->
+    <!-- Actions Section (Release, Cancel, Reopen, Delete) -->
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft);display:flex;gap:8px;flex-wrap:wrap">
       <form id="mng_release_form" method="post" action="" style="display:none">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -138,11 +138,15 @@
       </form>
       <form id="mng_cancel_form" method="post" action="" style="display:none" onsubmit="return confirm('Cancel this slot?')">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="btn sm danger">Cancel Slot</button>
+        <button class="btn sm">Cancel Slot</button>
       </form>
       <form id="mng_reopen_form" method="post" action="" style="display:none">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <button class="btn sm">Reopen Slot</button>
+      </form>
+      <form id="mng_delete_form" method="post" action="" style="display:none" onsubmit="return confirm('Are you sure you want to permanently delete this slot? This action cannot be undone.')">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn sm danger">Delete Slot Permanently</button>
       </form>
     </div>
   </div>

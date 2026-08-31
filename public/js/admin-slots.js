@@ -133,6 +133,17 @@
       }
     }
 
+    var delForm = document.getElementById('mng_delete_form');
+
+    if (delForm) {
+      if (slot.interview_status !== 'completed') {
+        delForm.style.display = 'inline-block';
+        delForm.action = '/admin/slots/' + slot.id + '/delete';
+      } else {
+        delForm.style.display = 'none';
+      }
+    }
+
     modal.showModal();
   };
 

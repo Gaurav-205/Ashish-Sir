@@ -382,4 +382,48 @@ router.post('/slots/:id/cancel', validateId('id'), async (req, res) => {
   res.redirect('/mentor');
 });
 
+router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
+  const slotId = Number(req.params.id);
+  const mentorId = req.session.user.id;
+  const isDev = Boolean(res.locals.isDeveloper);
+
+  const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(slotId);
+  if (!slot || (slot.mentor_id !== mentorId && !isDev)) {
+    flash(req, 'err', 'Slot not found or access denied.');
+    return res.redirect('/mentor');
+  }
+
+  const iv = db.prepare("SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'").get(slotId);
+  if (iv && (iv.status === 'completed' || iv.eval_id)) {
+    flash(req, 'err', 'Completed interviews with evaluations cannot be deleted.');
+    return res.redirect('/mentor');
+  }
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    if (iv) {
+      const calEventId = iv.google_event_id || slot.google_event_id;
+      if (calEventId) {
+        const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
+        const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
+        google.removeCalendarEvent({ eventId: calEventId, student, mentor }).catch(() => {});
+      }
+      const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
+      const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(slot.mentor_id);
+      emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot }).catch(() => {});
+    }
+
+    db.prepare('DELETE FROM interviews WHERE slot_id=?').run(slotId);
+    db.prepare('DELETE FROM slots WHERE id=?').run(slotId);
+    db.exec('COMMIT');
+
+    logAudit(req, 'MENTOR_DELETE_SLOT', { slot_id: slotId });
+    flash(req, 'ok', 'Slot permanently deleted.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not delete slot: ' + e.message);
+  }
+  res.redirect('/mentor');
+});
+
 module.exports = router;

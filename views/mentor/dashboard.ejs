@@ -254,15 +254,21 @@
       <button class="btn primary" style="width:100%;margin-top:10px">Save Changes →</button>
     </form>
 
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        <strong style="font-size:13px;color:var(--ink)">Need to cancel this slot?</strong>
-        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancelling will immediately remove it from student booking lists.</p>
+        <strong style="font-size:13px;color:var(--ink)">Slot Actions</strong>
+        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancel to close booking, or permanently delete the slot.</p>
       </div>
-      <form id="mng_slot_cancel_form" method="post" action="" onsubmit="return confirm('Cancel this interview slot?')">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="btn danger sm">Cancel Slot</button>
-      </form>
+      <div style="display:flex;gap:8px;align-items:center">
+        <form id="mng_slot_cancel_form" method="post" action="" onsubmit="return confirm('Cancel this interview slot?')">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="btn sm">Cancel Slot</button>
+        </form>
+        <form id="mng_slot_delete_form" method="post" action="" onsubmit="return confirm('Are you sure you want to permanently delete this slot? This cannot be undone.')">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="btn danger sm">Delete Permanently</button>
+        </form>
+      </div>
     </div>
   </div>
   <div class="modal-foot">
@@ -321,6 +327,11 @@ window.openMentorSlotManageModal = function (slot) {
   var cancelForm = document.getElementById('mng_slot_cancel_form');
   if (cancelForm) {
     cancelForm.action = '/mentor/slots/' + slot.id + '/cancel';
+  }
+
+  var delForm = document.getElementById('mng_slot_delete_form');
+  if (delForm) {
+    delForm.action = '/mentor/slots/' + slot.id + '/delete';
   }
 
   var dInput = document.getElementById('mng_m_slot_date');
