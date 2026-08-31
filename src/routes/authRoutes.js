@@ -546,32 +546,8 @@ router.post('/profile/google/toggle-calendar', requireLogin, (req, res) => {
 });
 
 router.post('/profile/password', requireLogin, (req, res) => {
-  const user = db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(req.session.user.id);
-  const { current, next1, next2 } = req.body;
-  let error = null, ok = null;
-  if (!bcrypt.compareSync(String(current || ''), user.password_hash)) error = 'Current password is incorrect.';
-  else if (h.validatePassword(next1)) error = h.validatePassword(next1);
-  else if (next1 !== next2) error = 'The two new passwords do not match.';
-  else {
-    const now = Date.now();
-    db.prepare('UPDATE users SET password_hash = ?, sessions_invalid_before = ? WHERE id = ?')
-      .run(bcrypt.hashSync(String(next1), 10), now, user.id);
-    invalidateUserSessions(user.id, req.sessionID);
-    // Re-mint this device's session/cookie so the watermark bump above logs out
-    // every *other* device without logging out the one making the change.
-    const fresh = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(user.id);
-    setAuthSession(req, res, fresh);
-    logAudit(req, 'AUTH_PASSWORD_CHANGE', null, user.id);
-    ok = 'Password updated. You have been signed out on all other devices.';
-  }
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
-  res.render('profile', {
-    title: 'My profile',
-    me,
-    error,
-    ok,
-    googleConfigured: google.isConfigured(),
-  });
+  req.session.flash = { type: 'err', msg: 'Password updates are disabled. Authentication is managed via Google Sign-In.' };
+  res.redirect('/profile');
 });
 
 router.post('/switch-role', (req, res) => {

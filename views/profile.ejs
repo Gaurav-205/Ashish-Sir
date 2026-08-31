@@ -1,82 +1,64 @@
 <%- include('partials/head') %><%- include('partials/nav') %>
 <div class="page-head"><div><h1>My profile</h1></div></div>
-<div class="grid two">
-  <div class="card">
-    <div class="card-head"><h2>My details</h2></div>
-    <div class="card-body">
-      <% if (me.role === 'student') { 
-         const isComplete = h.isStudentProfileComplete(me);
-         if (!isComplete) { %>
-           <div class="note" style="margin-bottom:14px;background:#fffbeb;border-color:#fde68a">
-             <strong style="color:#b45309">⚠️ Action Required to Unlock Slot Booking:</strong>
-             Please complete all required details below (Phone number, Squad, Branch, and a valid Resume link) to book interview slots.
-           </div>
-         <% }
-      } %>
-      <form method="post" action="/profile/update">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="card">
+  <div class="card-head"><h2>My details</h2></div>
+  <div class="card-body">
+    <% if (me.role === 'student') { 
+       const isComplete = h.isStudentProfileComplete(me);
+       if (!isComplete) { %>
+         <div class="note" style="margin-bottom:14px;background:#fffbeb;border-color:#fde68a">
+           <strong style="color:#b45309">⚠️ Action Required to Unlock Slot Booking:</strong>
+           Please complete all required details below (Phone number, Squad, Branch, and a valid Resume link) to book interview slots.
+         </div>
+       <% }
+    } %>
+    <% if (typeof error !== 'undefined' && error) { %><div class="flash err"><%= error %></div><% } %>
+    <% if (typeof ok !== 'undefined' && ok) { %><div class="flash ok"><%= ok %></div><% } %>
+    <form method="post" action="/profile/update">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label>Full name</label>
+        <input name="name" value="<%= me.name %>" required>
+      </div>
+      <div class="field">
+        <label>Email (read-only)</label>
+        <input value="<%= me.email %>" disabled class="muted">
+      </div>
+      <div class="row">
         <div class="field">
-          <label>Full name</label>
-          <input name="name" value="<%= me.name %>" required>
-        </div>
-        <div class="field">
-          <label>Email (read-only)</label>
-          <input value="<%= me.email %>" disabled class="muted">
-        </div>
-        <div class="row">
-          <div class="field">
-            <label>Phone number</label>
-            <input name="phone" value="<%= me.phone || '' %>" placeholder="+91 98765 43210" <%= me.role === 'student' ? 'required' : '' %>>
-          </div>
-          <% if (me.role === 'student') { %>
-            <div class="field">
-              <label>Squad</label>
-              <input name="squad" value="<%= me.squad || '' %>" placeholder="115 or 116" required>
-            </div>
-            <div class="field">
-              <label>Branch / Specialization</label>
-              <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE" required>
-            </div>
-          <% } %>
+          <label>Phone number</label>
+          <input name="phone" value="<%= me.phone || '' %>" placeholder="+91 98765 43210" <%= me.role === 'student' ? 'required' : '' %>>
         </div>
         <% if (me.role === 'student') { %>
-          <div class="field" id="resume">
-            <label for="resume_url">Resume link (Google Drive / Notion / Portfolio)</label>
-            <input id="resume_url" type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…" required>
+          <div class="field">
+            <label>Squad</label>
+            <input name="squad" value="<%= me.squad || '' %>" placeholder="115 or 116" required>
+          </div>
+          <div class="field">
+            <label>Branch / Specialization</label>
+            <input name="branch" value="<%= me.branch || '' %>" placeholder="e.g. CSE, IT, ECE" required>
           </div>
         <% } %>
-        <p class="faint" style="margin-bottom:12px">
-          Role: <strong><%= me.role %></strong>
-          <% if (isDeveloper) { %> · <span class="pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">Developer (All-Access)</span><% } %>
-          <% if (me.roll_no) { %> · Roll No: <strong><%= me.roll_no %></strong><% } %>
-          <% if (me.squad) { %> · Squad: <strong><%= me.squad %></strong><% } %>
-          <% if (me.role === 'mentor' || isDeveloper) { %>
-            · Capabilities:
-            <% if (me.can_technical || isDeveloper) { %><span class="pill p-technical">Technical</span><% } %>
-            <% if (me.can_hr || isDeveloper) { %><span class="pill p-hr">HR</span><% } %>
-          <% } %>
-        </p>
-        <button class="btn primary sm">Save profile details</button>
-      </form>
-    </div>
-  </div>
-  <div class="card" id="password">
-    <div class="card-head"><h2>Change password</h2></div>
-    <div class="card-body">
-      <p class="hint" style="margin-bottom:14px">
-        Choose a password only you know. Signing in elsewhere will be required again after you change it.
-        Forgot the current one? <a href="/forgot-password">Reset it by email link</a>.
+      </div>
+      <% if (me.role === 'student') { %>
+        <div class="field" id="resume">
+          <label for="resume_url">Resume link (Google Drive / Notion / Portfolio)</label>
+          <input id="resume_url" type="url" name="resume_url" value="<%= me.resume_url || '' %>" placeholder="https://drive.google.com/…" required>
+        </div>
+      <% } %>
+      <p class="faint" style="margin-bottom:12px">
+        Role: <strong><%= me.role %></strong>
+        <% if (isDeveloper) { %> · <span class="pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">Developer (All-Access)</span><% } %>
+        <% if (me.roll_no) { %> · Roll No: <strong><%= me.roll_no %></strong><% } %>
+        <% if (me.squad) { %> · Squad: <strong><%= me.squad %></strong><% } %>
+        <% if (me.role === 'mentor' || isDeveloper) { %>
+          · Capabilities:
+          <% if (me.can_technical || isDeveloper) { %><span class="pill p-technical">Technical</span><% } %>
+          <% if (me.can_hr || isDeveloper) { %><span class="pill p-hr">HR</span><% } %>
+        <% } %>
       </p>
-      <% if (error) { %><div class="flash err"><%= error %></div><% } %>
-      <% if (ok) { %><div class="flash ok"><%= ok %></div><% } %>
-      <form method="post" action="/profile/password">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div class="field"><label for="pw-current">Current password</label><input id="pw-current" type="password" name="current" autocomplete="current-password" required></div>
-        <div class="field"><label for="pw-next1">New password</label><input id="pw-next1" type="password" name="next1" autocomplete="new-password" placeholder="Minimum 6 characters" required minlength="6"></div>
-        <div class="field"><label for="pw-next2">Confirm new password</label><input id="pw-next2" type="password" name="next2" autocomplete="new-password" placeholder="Re-enter new password" required minlength="6"></div>
-        <button class="btn primary sm">Update password</button>
-      </form>
-    </div>
+      <button class="btn primary sm">Save profile details</button>
+    </form>
   </div>
 </div>
 

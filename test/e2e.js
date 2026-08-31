@@ -680,33 +680,12 @@ const login = async (who, email) => {
   const blankNameUpdate = await post('newstudent', '/profile/update', { name: '   ', branch: 'CSE' });
   ok(blankNameUpdate.status === 400, 'blank or whitespace-only name update is rejected');
 
-  // Password change validation
-  const wrongOldPass = await post('newstudent', '/profile/password', {
-    current: 'wrongpass', next1: 'newpass123', next2: 'newpass123'
-  });
-  ok(wrongOldPass.body.includes('Current password is incorrect'), 'password update with incorrect current password is rejected');
-
-  const shortPass = await post('newstudent', '/profile/password', {
-    current: 'pass123', next1: '123', next2: '123'
-  });
-  ok(shortPass.body.includes('at least 6 characters'), 'password update with short password is rejected');
-
-  const mismatchPass = await post('newstudent', '/profile/password', {
-    current: 'pass123', next1: 'newpass123', next2: 'mismatch456'
-  });
-  ok(mismatchPass.body.includes('passwords do not match'), 'password update with mismatched confirmation is rejected');
-
-  const validPass = await post('newstudent', '/profile/password', {
+  // Profile password update is disabled (Google Sign-In is used)
+  const passUpdateAttempt = await post('newstudent', '/profile/password', {
     current: 'pass123', next1: 'newpass123', next2: 'newpass123'
   });
-  ok(validPass.body.includes('Password updated'), 'valid password update succeeds');
-
-  // Verify login with new password and reset back
-  const newPassLogin = await post('newstudent', '/login', { email: 'test.student@student.in', password: 'newpass123' });
-  ok(newPassLogin.location === '/student', 'student can log in with newly updated password');
-  await post('newstudent', '/profile/password', {
-    current: 'newpass123', next1: 'pass123', next2: 'pass123'
-  });
+  ok(passUpdateAttempt.status === 302 && passUpdateAttempt.location === '/profile',
+     'profile password change POST redirects to profile with disabled message');
 
   // Duplicate student email registration rejected
   await post('admin', '/admin/students', {
@@ -741,13 +720,12 @@ const login = async (who, email) => {
   ok(studentsAfterBadResume.body.includes('Resume link must be a valid URL'),
      'admin creating student with invalid resume link is rejected');
 
-  // 2. Profile password reset preserves squad on re-render
-  db.prepare("UPDATE users SET squad='116' WHERE id=?").run(ts.id);
+  // 2. Profile password update POST redirects to profile
   const passResetReRender = await post('newstudent', '/profile/password', {
     current: 'wrongpass', next1: 'pass123456', next2: 'pass123456'
   });
-  ok(passResetReRender.body.includes('value="116"'),
-     'password reset re-render preserves student squad in form');
+  ok(passResetReRender.status === 302 && passResetReRender.location === '/profile',
+     'password reset POST redirects to profile with disabled message');
 
   // 3. Absent candidate feedback is blocked
   // Create an interview marked absent
@@ -871,7 +849,7 @@ const login = async (who, email) => {
 
     const formPage = await get('anon', '/forgot-password');
     ok(formPage.status === 200 && formPage.body.includes('Forgot your password?'), 'GET /forgot-password renders');
-    ok((await get('anon', '/login')).body.includes('/forgot-password'), 'the login page links to password recovery');
+    ok((await get('anon', '/login')).body.includes('Sign in with Google'), 'the login page renders Google Sign-In');
 
     const unknown = await post('anon', '/forgot-password', { email: 'no.such.person@nowhere.test' });
     ok(unknown.status === 200 && !/\/reset-password\//.test(unknown.body),
