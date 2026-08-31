@@ -92,6 +92,7 @@
 
       var firstDay = new Date(Date.UTC(currentYear, currentMonth, 1)).getUTCDay();
       var daysInMonth = new Date(Date.UTC(currentYear, currentMonth + 1, 0)).getUTCDate();
+      var todayIso = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
 
       // Leading blank days
       for (var i = 0; i < firstDay; i++) {
@@ -105,6 +106,7 @@
       for (var day = 1; day <= daysInMonth; day++) {
         var iso = fmtIso(currentYear, currentMonth, day);
         var dayOfWeek = (firstDay + day - 1) % 7;
+        var isPastDate = (iso < todayIso);
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'calendar-day-btn';
@@ -113,27 +115,35 @@
 
         if (isWeekend) btn.classList.add('is-weekend');
         if (isSelected) btn.classList.add('selected');
+        if (isPastDate) btn.classList.add('is-past');
 
-        var bg = isSelected ? '#17171c' : (isWeekend ? 'var(--surface-alt, #f8fafc)' : 'var(--surface, #ffffff)');
-        var color = isSelected ? '#ffffff' : (isWeekend ? 'var(--slate, #64748b)' : 'var(--ink, #1e293b)');
+        var bg = isSelected ? '#17171c' : (isPastDate ? 'var(--surface-alt, #f8fafc)' : (isWeekend ? 'var(--surface-alt, #f8fafc)' : 'var(--surface, #ffffff)'));
+        var color = isSelected ? '#ffffff' : (isPastDate ? '#cbd5e1' : (isWeekend ? 'var(--slate, #64748b)' : 'var(--ink, #1e293b)'));
         var border = isSelected ? '#17171c' : 'var(--line-soft, #e2e8f0)';
         var weight = isSelected ? '700' : '500';
+        var cursor = isPastDate ? 'not-allowed' : 'pointer';
 
-        btn.style.cssText = 'height:32px;border:1px solid ' + border + ';border-radius:6px;background:' + bg + ';color:' + color + ';cursor:pointer;font-size:12px;font-weight:' + weight + ';display:flex;align-items:center;justify-content:center;transition:all 0.12s ease;padding:0;';
+        btn.style.cssText = 'height:32px;border:1px solid ' + border + ';border-radius:6px;background:' + bg + ';color:' + color + ';cursor:' + cursor + ';font-size:12px;font-weight:' + weight + ';display:flex;align-items:center;justify-content:center;transition:all 0.12s ease;padding:0;';
+        if (isPastDate) {
+          btn.style.opacity = '0.4';
+          btn.disabled = true;
+        }
         btn.textContent = day;
         btn.setAttribute('data-date', iso);
 
-        btn.addEventListener('click', (function (dIso) {
-          return function () {
-            if (selectedDates.has(dIso)) {
-              selectedDates.delete(dIso);
-            } else {
-              selectedDates.add(dIso);
-            }
-            syncInput();
-            render();
-          };
-        })(iso));
+        if (!isPastDate) {
+          btn.addEventListener('click', (function (dIso) {
+            return function () {
+              if (selectedDates.has(dIso)) {
+                selectedDates.delete(dIso);
+              } else {
+                selectedDates.add(dIso);
+              }
+              syncInput();
+              render();
+            };
+          })(iso));
+        }
 
         grid.appendChild(btn);
       }
@@ -226,7 +236,10 @@
       for (var i = 0; i < 5; i++) { // Mon-Fri
         var cur = new Date(monday);
         cur.setUTCDate(monday.getUTCDate() + i);
-        selectedDates.add(cur.toISOString().slice(0, 10));
+        var curIso = cur.toISOString().slice(0, 10);
+        if (curIso >= todayIso) {
+          selectedDates.add(curIso);
+        }
       }
     }
 

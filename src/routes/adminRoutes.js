@@ -316,6 +316,12 @@ router.post('/slots', (req, res) => {
         const s_time = fmt(startMin);
         const e_time = fmt(endMin);
 
+        const isPastSlot = (targetDate < h.today() || (targetDate === h.today() && s_time <= h.nowTime()));
+        if (isPastSlot) {
+          skipped++;
+          continue;
+        }
+
         const overlap = db.prepare(`
           SELECT 1 FROM slots
            WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
@@ -349,7 +355,7 @@ router.post('/slots', (req, res) => {
     }
     logAudit(req, 'ADMIN_CREATE_SLOTS', { type, mentor_id: mentor.id, count: made, days: dates.length });
     flash(req, made ? 'ok' : 'err',
-      `${made} slot(s) created across ${dates.length} day(s)${skipped ? ` (${skipped} skipped due to existing overlap)` : ''}.`);
+      `${made} slot(s) created across ${dates.length} day(s)${skipped ? ` (${skipped} skipped due to past time or existing overlap)` : ''}.`);
   } catch (e) {
     flash(req, 'err', e.message);
   }
@@ -374,6 +380,9 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
     if (!cleanStart) throw new Error('Pick a valid start time.');
     if (!cleanEnd) throw new Error('Pick a valid end time.');
     if (cleanStart >= cleanEnd) throw new Error('Start time must be before end time.');
+    if (cleanDate < h.today() || (cleanDate === h.today() && cleanStart <= h.nowTime())) {
+      throw new Error('Cannot reschedule a slot to a time in the past.');
+    }
     if (location && /<[^>]+>/.test(location)) throw new Error('Location cannot contain HTML tags.');
 
     const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));

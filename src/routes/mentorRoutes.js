@@ -112,6 +112,12 @@ router.post('/slots', (req, res) => {
         const s_time = fmt(startMin);
         const e_time = fmt(endMin);
 
+        const isPastSlot = (targetDate < h.today() || (targetDate === h.today() && s_time <= h.nowTime()));
+        if (isPastSlot) {
+          skipped++;
+          continue;
+        }
+
         const overlap = db.prepare(`
           SELECT 1 FROM slots
            WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
