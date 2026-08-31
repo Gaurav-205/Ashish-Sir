@@ -88,13 +88,17 @@ function createRateLimiter(options = {}) {
   return middleware;
 }
 
+const mongoose = require('mongoose');
+
 /**
- * Safe positive integer validator for route parameters
+ * Safe ID validator for route parameters (supporting MongoDB ObjectIds and integers)
  */
 function validateId(paramName = 'id') {
   return function(req, res, next) {
-    const val = Number(req.params[paramName]);
-    if (!Number.isInteger(val) || val <= 0) {
+    const rawVal = req.params[paramName];
+    const isNum = Number.isInteger(Number(rawVal)) && Number(rawVal) > 0;
+    const isObjId = rawVal && mongoose.Types.ObjectId.isValid(rawVal);
+    if (!isNum && !isObjId) {
       return res.status(400).render('error', {
         title: 'Invalid ID',
         message: 'The requested resource ID is invalid.',

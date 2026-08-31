@@ -23,11 +23,13 @@
     "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
+    "connect-mongo": "^6.0.0",
     "connect-sqlite3": "^0.9.18",
     "dotenv": "^17.4.2",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "mongoose": "^9.9.4",
     "pg": "^8.23.0",
     "pg-protocol": "^1.16.0"
   },

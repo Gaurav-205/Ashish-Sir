@@ -1,5 +1,5 @@
 'use strict';
-const db = require('./db');
+const { User } = require('./models');
 const { clearAuthSession } = require('./middleware/sessionAuth');
 
 const HOME = { admin: '/admin', mentor: '/mentor', student: '/student', developer: '/admin' };
@@ -11,17 +11,12 @@ function homeFor(role) {
 
 function isUserDeveloper(user) {
   if (!user) return false;
-  // Authority is the DB only. Do NOT grant developer by email string: emails
-  // are guessable / registerable (Google sign-in auto-provisions accounts), so
-  // an email allow-list here is a privilege-escalation backdoor.
   return Boolean(user.is_developer || user.role === 'developer');
 }
 
 function isDualRoleUser(user) {
   if (!user) return false;
   if (isUserDeveloper(user)) return true;
-  // Dual-role = an admin who is also enabled as an evaluator (Technical/HR).
-  // Derived from DB state only — no email allow-list.
   const canEval = Boolean(user.can_technical || user.can_hr);
   return user.role === 'admin' && canEval;
 }
@@ -30,10 +25,8 @@ function isDualRoleUser(user) {
  * Re-reads the session user from the database on every request so that a
  * deactivated, deleted or role-changed account cannot keep using a session
  * that was minted before the change.
- *
- * Returns the fresh row, or null when the caller has already responded.
  */
-function resolveCurrentUser(req, res) {
+async function resolveCurrentUser(req, res) {
   if (!req.session || !req.session.user) {
     if (req.method === 'GET') req.session.redirectTo = req.originalUrl;
     respondUnauthenticated(req, res);
@@ -41,16 +34,18 @@ function resolveCurrentUser(req, res) {
   }
 
   let user = null;
-  if (req._resolvedUser && req._resolvedUser.id === req.session.user.id) {
+  const userId = req.session.user.id || req.session.user._id;
+
+  if (req._resolvedUser && String(req._resolvedUser._id || req._resolvedUser.id) === String(userId)) {
     user = req._resolvedUser;
-  } else if (process.env.NODE_ENV !== 'test' && req.session._cachedUser && req.session._cachedUserAt && (Date.now() - req.session._cachedUserAt < 3000) && req.session._cachedUser.id === req.session.user.id) {
+  } else if (process.env.NODE_ENV !== 'test' && req.session._cachedUser && req.session._cachedUserAt && (Date.now() - req.session._cachedUserAt < 3000) && String(req.session._cachedUser._id || req.session._cachedUser.id) === String(userId)) {
     user = req.session._cachedUser;
     req._resolvedUser = user;
   } else {
     try {
-      user = db.prepare('SELECT * FROM users WHERE id = ?')
-        .get(req.session.user.id);
+      user = await User.findById(userId).lean();
       if (user) {
+        user.id = user._id;
         req._resolvedUser = user;
         req.session._cachedUser = user;
         req.session._cachedUserAt = Date.now();
@@ -61,15 +56,10 @@ function resolveCurrentUser(req, res) {
   }
 
   if (!user || !user.active) {
-    // Tear down *both* halves of the session: the server-side record and the
-    // signed cookie that would otherwise rehydrate it on the next request.
     clearAuthSession(req, res, () => respondUnauthenticated(req, res));
     return null;
   }
 
-  // A password change/reset bumps `sessions_invalid_before`. Any session (or
-  // stateless cookie) issued before that instant is dead — this is what makes
-  // "log out my other devices" work even on the serverless MemoryStore.
   if (user.sessions_invalid_before && req.session.user) {
     if (!req.session.user.iat) {
       req.session.user.iat = Date.now();
@@ -82,6 +72,7 @@ function resolveCurrentUser(req, res) {
   const isDev = isUserDeveloper(user);
   const isDual = isDualRoleUser(user);
 
+  req.session.user.id = user._id;
   req.session.user.name = user.name;
   req.session.user.email = user.email;
   req.session.user.is_developer = isDev;
@@ -90,9 +81,6 @@ function resolveCurrentUser(req, res) {
   if (req.session.activeRole && (isDev || isDual)) {
     req.session.user.role = req.session.activeRole;
   } else {
-    // Not (or no longer) dev/dual: a stale activeRole from a past switch must
-    // NOT keep granting the switched role after a demotion. Drop it and fall
-    // back to the account's real role.
     if (req.session.activeRole) delete req.session.activeRole;
     req.session.user.role = isDev ? 'developer' : user.role;
   }
@@ -110,14 +98,15 @@ function respondUnauthenticated(req, res) {
   return res.status(401).json({ error: 'Authentication required.' });
 }
 
-function requireLogin(req, res, next) {
-  if (!resolveCurrentUser(req, res)) return;
+async function requireLogin(req, res, next) {
+  const user = await resolveCurrentUser(req, res);
+  if (!user) return;
   next();
 }
 
 function requireRole(...roles) {
-  return function (req, res, next) {
-    const user = resolveCurrentUser(req, res);
+  return async function (req, res, next) {
+    const user = await resolveCurrentUser(req, res);
     if (!user) return;
 
     const isDev = isUserDeveloper(user);
@@ -147,4 +136,12 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireLogin, requireRole, homeFor, isUserDeveloper, isDualRoleUser, HOME };
+module.exports = {
+  resolveCurrentUser,
+  requireLogin,
+  requireRole,
+  homeFor,
+  isUserDeveloper,
+  isDualRoleUser,
+  HOME,
+};

@@ -1,66 +1,136 @@
 'use strict';
-const db = require('./db');
+const mongoose = require('mongoose');
+const { User, Slot, Interview, Evaluation, StudentFeedback } = require('./models');
 const h = require('./helpers');
 const { RUBRIC, GRAND_TOTAL } = require('./rubric');
 
-const INTERVIEW_SELECT = `
-  SELECT i.*, s.slot_date, s.start_time, s.end_time, s.mode, s.location,
-         m.name AS mentor_name, m.email AS mentor_email,
-         st.name AS student_name, st.email AS student_email, st.roll_no, st.branch, st.squad, st.resume_url,
-         e.id AS eval_id, e.resume_marks, e.project_marks, e.dsa_marks,
-         e.behaviour_marks, e.hr_perf_marks, e.total AS score, e.feedback, e.submitted_at,
-         sf.id AS student_feedback_id, sf.satisfaction AS feedback_satisfaction,
-         sf.structured AS feedback_structured, sf.hr_relevant AS feedback_hr_relevant,
-         sf.feedback_text AS feedback_comments, sf.submitted_at AS feedback_submitted_at
-    FROM interviews i
-    JOIN slots s ON s.id = i.slot_id
-    JOIN users m ON m.id = i.mentor_id
-    JOIN users st ON st.id = i.student_id
-    LEFT JOIN evaluations e ON e.interview_id = i.id
-    LEFT JOIN student_feedbacks sf ON sf.interview_id = i.id
-`;
+async function interviewsForStudent(studentId) {
+  const ivs = await Interview.find({ student_id: studentId, status: { $ne: 'cancelled' } })
+    .populate('slot_id')
+    .populate('mentor_id', 'name email')
+    .populate('student_id', 'name email roll_no branch squad resume_url')
+    .lean();
 
-function interviewsForStudent(studentId) {
-  return db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
-                     ORDER BY s.slot_date, s.start_time`).all(studentId);
-}
-function interviewsForMentor(mentorId, status) {
-  const extra = status ? ' AND i.status = ?' : '';
-  const args = status ? [mentorId, status] : [mentorId];
-  return db.prepare(`${INTERVIEW_SELECT} WHERE i.mentor_id = ?${extra}
-                     ORDER BY s.slot_date, s.start_time`).all(...args);
-}
-function interviewById(id) {
-  return db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ?`).get(id);
-}
-function allInterviews(filters = {}) {
-  const where = [];
-  const args = [];
-  if (filters.status) {
-    where.push('i.status = ?');
-    args.push(filters.status);
-  } else {
-    where.push("i.status <> 'cancelled'");
+  const results = [];
+  for (const iv of ivs) {
+    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
+    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+    results.push(flattenInterview(iv, evalDoc, sfDoc));
   }
-  if (filters.type)       { where.push('i.type = ?');       args.push(filters.type); }
-  if (filters.attendance) { where.push('i.attendance = ?'); args.push(filters.attendance); }
-  if (filters.mentor)     { where.push('i.mentor_id = ?');  args.push(Number(filters.mentor)); }
-  return db.prepare(`${INTERVIEW_SELECT} WHERE ${where.join(' AND ')}
-                     ORDER BY s.slot_date DESC, s.start_time`).all(...args);
+
+  return results.sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
 }
 
-const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, squad, resume_url,
-                        can_technical, can_hr, active, google_id, google_calendar_enabled, created_at`;
+async function interviewsForMentor(mentorId, status = null) {
+  const query = { mentor_id: mentorId };
+  if (status) query.status = status;
+
+  const ivs = await Interview.find(query)
+    .populate('slot_id')
+    .populate('mentor_id', 'name email')
+    .populate('student_id', 'name email roll_no branch squad resume_url')
+    .lean();
+
+  const results = [];
+  for (const iv of ivs) {
+    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
+    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+    results.push(flattenInterview(iv, evalDoc, sfDoc));
+  }
+
+  return results.sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
+}
+
+async function interviewById(id) {
+  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  const iv = await Interview.findById(id)
+    .populate('slot_id')
+    .populate('mentor_id', 'name email')
+    .populate('student_id', 'name email roll_no branch squad resume_url')
+    .lean();
+  if (!iv) return null;
+
+  const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
+  const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+  return flattenInterview(iv, evalDoc, sfDoc);
+}
+
+async function allInterviews(filters = {}) {
+  const query = {};
+  if (filters.status) query.status = filters.status;
+  else query.status = { $ne: 'cancelled' };
+
+  if (filters.type) query.type = filters.type;
+  if (filters.attendance) query.attendance = filters.attendance;
+  if (filters.mentor) query.mentor_id = filters.mentor;
+
+  const ivs = await Interview.find(query)
+    .populate('slot_id')
+    .populate('mentor_id', 'name email')
+    .populate('student_id', 'name email roll_no branch squad resume_url')
+    .lean();
+
+  const results = [];
+  for (const iv of ivs) {
+    const evalDoc = await Evaluation.findOne({ interview_id: iv._id }).lean();
+    const sfDoc = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+    results.push(flattenInterview(iv, evalDoc, sfDoc));
+  }
+
+  return results.sort((a, b) => (b.slot_date + ' ' + b.start_time).localeCompare(a.slot_date + ' ' + a.start_time));
+}
+
+function flattenInterview(iv, evalDoc = null, sfDoc = null) {
+  const slot = iv.slot_id || {};
+  const mentor = iv.mentor_id || {};
+  const student = iv.student_id || {};
+
+  return {
+    ...iv,
+    id: iv._id,
+    slot_id: slot._id || iv.slot_id,
+    mentor_id: mentor._id || iv.mentor_id,
+    student_id: student._id || iv.student_id,
+    slot_date: slot.slot_date || '',
+    start_time: slot.start_time || '',
+    end_time: slot.end_time || '',
+    mode: slot.mode || 'Online',
+    location: slot.location || 'Google Meet',
+    mentor_name: mentor.name || '',
+    mentor_email: mentor.email || '',
+    student_name: student.name || '',
+    student_email: student.email || '',
+    roll_no: student.roll_no || '',
+    branch: student.branch || '',
+    squad: student.squad || '',
+    resume_url: student.resume_url || '',
+    eval_id: evalDoc ? evalDoc._id : null,
+    resume_marks: evalDoc ? evalDoc.resume_marks : null,
+    project_marks: evalDoc ? evalDoc.project_marks : null,
+    dsa_marks: evalDoc ? evalDoc.dsa_marks : null,
+    behaviour_marks: evalDoc ? evalDoc.behaviour_marks : null,
+    hr_perf_marks: evalDoc ? evalDoc.hr_perf_marks : null,
+    score: evalDoc ? evalDoc.total : null,
+    feedback: evalDoc ? evalDoc.feedback : null,
+    submitted_at: evalDoc ? evalDoc.submitted_at : null,
+    student_feedback_id: sfDoc ? sfDoc._id : null,
+    feedback_satisfaction: sfDoc ? sfDoc.satisfaction : null,
+    feedback_structured: sfDoc ? sfDoc.structured : null,
+    feedback_hr_relevant: sfDoc ? sfDoc.hr_relevant : null,
+    feedback_comments: sfDoc ? sfDoc.feedback_text : null,
+    feedback_submitted_at: sfDoc ? sfDoc.submitted_at : null,
+  };
+}
 
 /** Per-student roll-up used by student dashboard, admin reports and exports. */
-function studentSummary(studentId, existingStudent = null) {
-  const student = existingStudent || db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ?`).get(studentId);
+async function studentSummary(studentId, existingStudent = null) {
+  const student = existingStudent || await User.findById(studentId).lean();
   if (!student) return null;
-  const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
-                               ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);
+  student.id = student._id;
+
+  const history = await interviewsForStudent(student._id);
   const currentWeek = h.getWeekRange();
-  
-  // Prioritize active or completed interviews for the current weekly cycle
+
   const currentWeekIvs = history.filter((iv) => iv.slot_date >= currentWeek.start && iv.slot_date <= currentWeek.end);
   const byType = { technical: null, hr: null };
 
@@ -70,7 +140,6 @@ function studentSummary(studentId, existingStudent = null) {
     }
   }
 
-  // Fallback: If no interview in current weekly cycle, show most recent from history
   for (const t of ['technical', 'hr']) {
     if (!byType[t]) {
       const latest = history.find((iv) => iv.type === t);
@@ -99,36 +168,25 @@ function studentSummary(studentId, existingStudent = null) {
     evaluatedCount: history.filter((i) => i.eval_id != null).length,
     allBooked: !!(byType.technical && byType.hr),
     allEvaluated: done,
-    profileComplete: h.isStudentProfileComplete(student),
-    missingFields: h.getMissingStudentProfileFields(student),
   };
 }
 
-function allStudentSummaries() {
-  const students = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE role = 'student' ORDER BY name`).all();
-  
-  const allIvs = db.prepare(`${INTERVIEW_SELECT} WHERE i.status <> 'cancelled'`).all();
+async function allStudentSummaries() {
+  const students = await User.find({ role: 'student' }).sort({ name: 1 }).lean();
+  const allIvs = await allInterviews();
 
   const ivsByStudent = {};
   for (const iv of allIvs) {
-    if (!ivsByStudent[iv.student_id]) {
-      ivsByStudent[iv.student_id] = [];
-    }
-    ivsByStudent[iv.student_id].push(iv);
+    const sId = String(iv.student_id);
+    if (!ivsByStudent[sId]) ivsByStudent[sId] = [];
+    ivsByStudent[sId].push(iv);
   }
 
   return students.map((student) => {
-    const list = ivsByStudent[student.id] || [];
-    const sortedList = [...list].sort((a, b) => {
-      const da = a.slot_date + ' ' + a.start_time;
-      const dbStr = b.slot_date + ' ' + b.start_time;
-      return da.localeCompare(dbStr);
-    });
-    const history = [...list].sort((a, b) => {
-      const da = a.slot_date + ' ' + a.start_time;
-      const dbStr = b.slot_date + ' ' + b.start_time;
-      return dbStr.localeCompare(da);
-    });
+    student.id = student._id;
+    const list = ivsByStudent[String(student._id)] || [];
+    const sortedList = [...list].sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
+    const history = [...list].sort((a, b) => (b.slot_date + ' ' + b.start_time).localeCompare(a.slot_date + ' ' + a.start_time));
 
     const byType = { technical: null, hr: null };
     for (const iv of sortedList) {
@@ -167,61 +225,74 @@ function allStudentSummaries() {
   });
 }
 
-function adminStats() {
-  const row = db.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM users WHERE role='student') AS students,
-      (SELECT COUNT(*) FROM users WHERE role='mentor') AS mentors,
-      (SELECT COUNT(*) FROM slots WHERE status<>'cancelled') AS slots,
-      (SELECT COUNT(*) FROM slots WHERE status='open') AS open_slots,
-      (SELECT COUNT(*) FROM interviews WHERE status='booked') AS booked,
-      (SELECT COUNT(*) FROM interviews WHERE status='completed') AS completed,
-      (SELECT COUNT(*) FROM interviews WHERE attendance='attended') AS attended,
-      (SELECT COUNT(*) FROM interviews WHERE attendance='absent') AS absent,
-      (SELECT COUNT(*) FROM evaluations) AS evaluated,
-      (SELECT COUNT(*) FROM (
-        SELECT student_id FROM interviews WHERE status<>'cancelled'
-        GROUP BY student_id HAVING COUNT(DISTINCT type) = 2
-      ) AS fb) AS fully_booked
-  `).get();
+async function adminStats() {
+  const [students, mentors, slots, openSlots, booked, completed, attended, absent, evaluated, fullyBookedAgg] = await Promise.all([
+    User.countDocuments({ role: 'student' }),
+    User.countDocuments({ role: 'mentor' }),
+    Slot.countDocuments({ status: { $ne: 'cancelled' } }),
+    Slot.countDocuments({ status: 'open' }),
+    Interview.countDocuments({ status: 'booked' }),
+    Interview.countDocuments({ status: 'completed' }),
+    Interview.countDocuments({ attendance: 'attended' }),
+    Interview.countDocuments({ attendance: 'absent' }),
+    Evaluation.countDocuments(),
+    Interview.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$student_id', types: { $addToSet: '$type' } } },
+      { $match: { 'types.1': { $exists: true } } },
+      { $count: 'count' },
+    ]),
+  ]);
+
+  const fullyBooked = (fullyBookedAgg && fullyBookedAgg[0]) ? fullyBookedAgg[0].count : 0;
+
   return {
-    students: Number(row ? row.students : 0) || 0,
-    mentors:  Number(row ? row.mentors : 0) || 0,
-    slots:    Number(row ? row.slots : 0) || 0,
-    openSlots: Number(row ? row.open_slots : 0) || 0,
-    booked:   Number(row ? row.booked : 0) || 0,
-    completed: Number(row ? row.completed : 0) || 0,
-    attended:  Number(row ? row.attended : 0) || 0,
-    absent:    Number(row ? row.absent : 0) || 0,
-    evaluated: Number(row ? row.evaluated : 0) || 0,
-    fullyBooked: Number(row ? row.fully_booked : 0) || 0,
+    students,
+    mentors,
+    slots,
+    openSlots,
+    booked,
+    completed,
+    attended,
+    absent,
+    evaluated,
+    fullyBooked,
   };
 }
 
-function mentorsList(type) {
-  const col = type === 'hr' ? 'can_hr' : 'can_technical';
-  const extra = type ? ` AND ${col} = 1` : ' AND (can_technical=1 OR can_hr=1)';
-  return db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1${extra} ORDER BY name`).all();
+async function mentorsList(type) {
+  const query = {
+    $or: [{ role: 'mentor' }, { can_technical: 1 }, { can_hr: 1 }],
+    active: 1,
+  };
+  if (type === 'hr') query.can_hr = 1;
+  else if (type === 'technical') query.can_technical = 1;
+
+  const list = await User.find(query).sort({ name: 1 }).lean();
+  return list.map(m => ({ ...m, id: m._id }));
 }
 
-function mentorsWithOpenSlots() {
+async function mentorsWithOpenSlots() {
   const now = h.nowMinute();
-  return db.prepare(`
-    SELECT m.id, m.name, m.email, m.can_technical, m.can_hr, m.active,
-      COUNT(CASE WHEN s.status = 'open' AND s.type = 'technical' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS tech_open_slots,
-      COUNT(CASE WHEN s.status = 'open' AND s.type = 'hr' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS hr_open_slots,
-      COUNT(CASE WHEN s.status = 'open' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS total_open_slots
-    FROM users m
-    LEFT JOIN slots s ON s.mentor_id = m.id
-    WHERE (m.role = 'mentor' OR m.can_technical = 1 OR m.can_hr = 1) AND m.active = 1
-    GROUP BY m.id, m.name, m.email, m.can_technical, m.can_hr, m.active
-    ORDER BY m.name
-  `).all(now, now, now).map((m) => ({
-    ...m,
-    tech_open_slots: Number(m.tech_open_slots) || 0,
-    hr_open_slots: Number(m.hr_open_slots) || 0,
-    total_open_slots: Number(m.total_open_slots) || 0,
-  }));
+  const mentors = await mentorsList();
+  const openSlots = await Slot.find({
+    status: 'open',
+  }).lean();
+
+  const upcomingOpen = openSlots.filter(s => (s.slot_date + ' ' + s.start_time) > now);
+
+  return mentors.map((m) => {
+    const mSlots = upcomingOpen.filter(s => String(s.mentor_id) === String(m._id));
+    const techSlots = mSlots.filter(s => s.type === 'technical');
+    const hrSlots = mSlots.filter(s => s.type === 'hr');
+    return {
+      ...m,
+      id: m._id,
+      tech_open_slots: techSlots.length,
+      hr_open_slots: hrSlots.length,
+      total_open_slots: mSlots.length,
+    };
+  });
 }
 
 function computeTotal(type, body) {
@@ -237,6 +308,14 @@ function computeTotal(type, body) {
 }
 
 module.exports = {
-  interviewsForStudent, interviewsForMentor, interviewById, allInterviews,
-  studentSummary, allStudentSummaries, adminStats, mentorsList, mentorsWithOpenSlots, computeTotal,
+  interviewsForStudent,
+  interviewsForMentor,
+  interviewById,
+  allInterviews,
+  studentSummary,
+  allStudentSummaries,
+  adminStats,
+  mentorsList,
+  mentorsWithOpenSlots,
+  computeTotal,
 };

@@ -1,51 +1,32 @@
 'use strict';
-const crypto = require('crypto');
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const db = require('../db');
+const { User, PasswordReset } = require('../models');
 const h = require('../helpers');
 const { requireLogin, homeFor, isUserDeveloper, isDualRoleUser } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
+const { setAuthSession, clearAuthSession } = require('../middleware/sessionAuth');
 const { logAudit } = require('../middleware/auditLog');
-const { setAuthSession, clearAuthSession, invalidateUserSessions } = require('../middleware/sessionAuth');
 
 const router = express.Router();
+const authLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 15, message: 'Too many login attempts. Please try again in 15 minutes.' });
+const forgotLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5, message: 'Too many password reset requests. Please try again in 15 minutes.' });
 
-// A real bcrypt digest of a random secret — used to spend the same CPU on a
-// login attempt for an unknown email as for a known one (anti-enumeration).
-const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
-
-// The OAuth `state` backup cookie is signed so a forged one cannot pass the
-// callback's CSRF check when the server-side session is unavailable.
-const oauthSecret = () => process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret';
-function packOauthState(obj) {
-  const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
-  const sig = crypto.createHmac('sha256', oauthSecret()).update(body).digest('base64url');
-  return `${body}.${sig}`;
-}
-function unpackOauthState(str) {
-  if (!str || typeof str !== 'string' || str.indexOf('.') < 0) return null;
-  const [body, sig] = str.split('.');
-  const expected = crypto.createHmac('sha256', oauthSecret()).update(body).digest('base64url');
-  const a = Buffer.from(sig || ''); const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try { return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (_) { return null; }
-}
-
-const authLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  message: 'Too many login attempts. Please wait 15 minutes before trying again.',
-});
+const DUMMY_HASH = bcrypt.hashSync('timing-defence-dummy-secret', 10);
 
 router.get('/', (req, res) => {
-  if (req.session.user) return res.redirect(homeFor(req.session.user.role));
+  if (req.session && req.session.user) {
+    return res.redirect(homeFor(req.session.user.role));
+  }
   res.redirect('/login');
 });
 
 router.get('/login', (req, res) => {
-  if (req.session.user) return res.redirect(homeFor(req.session.user.role));
+  if (req.session && req.session.user) {
+    return res.redirect(homeFor(req.session.user.role));
+  }
   res.render('login', {
     title: 'Sign in',
     error: null,
@@ -54,14 +35,17 @@ router.get('/login', (req, res) => {
   });
 });
 
-router.post('/login', authLimiter, (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
-  const row = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
+  
+  let row = null;
+  try {
+    row = await User.findOne({ email }).lean();
+  } catch (err) {
+    console.error('DB error during login:', err);
+  }
 
-  // Always run one bcrypt comparison so the response time does not reveal
-  // whether the email is registered. DUMMY_HASH is a valid bcrypt digest of a
-  // random string that nothing can match.
   const hashToCheck = (row && row.password_hash) ? row.password_hash : DUMMY_HASH;
   const passwordOk = bcrypt.compareSync(password, hashToCheck);
 
@@ -76,8 +60,6 @@ router.post('/login', authLimiter, (req, res) => {
   }
   if (!row.active) {
     logAudit(req, 'AUTH_LOGIN_DEACTIVATED', { email });
-    // Same wording as a bad password so a probe cannot enumerate which
-    // addresses correspond to real (but disabled) accounts.
     return res.status(401).render('login', {
       title: 'Sign in',
       error: 'Invalid email or password.',
@@ -96,8 +78,7 @@ router.post('/login', authLimiter, (req, res) => {
     }
   }
 
-  // Session fixation protection
-  const userData = { id: row.id, name: row.name, email: row.email, role: row.role };
+  row.id = row._id;
   const redirectTo = to || homeFor(row.role);
   delete req.session.redirectTo;
 
@@ -111,7 +92,7 @@ router.post('/login', authLimiter, (req, res) => {
     }
     authLimiter.reset(req);
     setAuthSession(req, res, row);
-    logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row.id);
+    logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row._id);
     res.redirect(redirectTo);
   });
 });
@@ -126,357 +107,262 @@ router.get('/auth/google', (req, res) => {
       googleConfigured: false,
     });
   }
-  const stateToken = crypto.randomBytes(32).toString('hex');
-  const action = req.query.link === '1' && req.session.user ? 'link' : 'auth';
-  const userId = req.session.user ? req.session.user.id : null;
+  const state = crypto.randomBytes(32).toString('base64url');
+  req.session.oauth_state = state;
   const redirectUri = google.getRedirectUri(req);
-  const oauthData = { token: stateToken, action, userId, redirectUri };
-  req.session.oauthState = oauthData;
-
-  // Signed stateless backup cookie for serverless (Vercel Lambda) instances.
-  const cookieVal = encodeURIComponent(packOauthState(oauthData));
-  const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  res.setHeader('Set-Cookie', `oauth_state=${cookieVal}; Path=/; HttpOnly; Max-Age=600; SameSite=Lax${isSecure ? '; Secure' : ''}`);
-
-  req.session.save((err) => {
-    if (err) console.error('OAuth state session save error:', err);
-    res.redirect(google.getAuthUrl(stateToken, redirectUri));
-  });
+  res.redirect(google.getAuthUrl(state, redirectUri));
 });
 
-router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/callback'], async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error || !code) {
+router.get(['/auth/google/callback', '/api/auth/callback/google'], async (req, res) => {
+  const { code, state, error: oauthError } = req.query;
+
+  if (oauthError) {
+    console.error('OAuth authorization error:', oauthError);
     return res.render('login', {
       title: 'Sign in',
-      error: error ? `Google authentication failed: ${error}` : 'Authorization code was not provided.',
+      error: 'Google authentication was cancelled or failed.',
       email: '',
       googleConfigured: google.isConfigured(),
     });
   }
 
-  // OAuth state comes from the server-side session and/or the signed backup
-  // cookie (serverless instances lose the session between the two hops).
-  const sessState = req.session.oauthState || null;
-  let cookieState = null;
-  if (req.headers.cookie) {
-    try {
-      const cookies = {};
-      req.headers.cookie.split(';').forEach(c => {
-        const [k, ...v] = c.split('=');
-        if (k) cookies[k.trim()] = decodeURIComponent(v.join('='));
-      });
-      if (cookies.oauth_state) cookieState = unpackOauthState(cookies.oauth_state);
-    } catch (_) {}
+  if (!code || !state || !req.session.oauth_state || state !== req.session.oauth_state) {
+    delete req.session.oauth_state;
+    return res.status(400).render('login', {
+      title: 'Sign in',
+      error: 'Invalid or expired authentication state. Please try signing in again.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
+  }
+  delete req.session.oauth_state;
+
+  const redirectUri = google.getRedirectUri(req);
+  const tokenData = await google.exchangeCode(code, redirectUri);
+  if (!tokenData || !tokenData.tokens) {
+    return res.render('login', {
+      title: 'Sign in',
+      error: 'Could not verify Google authentication. Please try again.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
   }
 
-  // CSRF: `state` must equal a token we actually issued (session or signed
-  // cookie). Reject when neither is present or neither matches.
-  if (process.env.NODE_ENV !== 'test') {
-    const issued = [sessState && sessState.token, cookieState && cookieState.token].filter(Boolean);
-    if (!issued.length || !state || !issued.includes(state)) {
-      return res.status(403).render('login', {
+  const { tokens, profile } = tokenData;
+  if (!profile || !profile.email) {
+    return res.render('login', {
+      title: 'Sign in',
+      error: 'No email address received from Google account.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
+  }
+
+  const email = profile.email.toLowerCase().trim();
+  const tokenExpiry = Date.now() + ((tokens.expires_in || 3600) * 1000);
+
+  // Link to existing user or auto-provision
+  let user = await User.findOne({
+    $or: [{ google_id: profile.id }, { email }],
+  }).lean();
+
+  if (user) {
+    if (!user.active) {
+      logAudit(req, 'AUTH_OAUTH_LOGIN_DEACTIVATED', { email });
+      return res.status(401).render('login', {
         title: 'Sign in',
-        error: 'Invalid or expired sign-in request. Please try again.',
+        error: 'Your account has been deactivated. Please contact an administrator.',
         email: '',
         googleConfigured: google.isConfigured(),
       });
     }
-  }
 
-  let action = (sessState && sessState.action) || (cookieState && cookieState.action) || 'auth';
-  let userId = (sessState && sessState.userId) || (cookieState && cookieState.userId) || null;
-  let redirectUri = (sessState && sessState.redirectUri) || (cookieState && cookieState.redirectUri) || null;
-
-  // Fallback to current request path if redirectUri was not preserved in state
-  if (!redirectUri) {
-    redirectUri = google.getRedirectUri(req, req.baseUrl ? `${req.baseUrl}${req.path}` : req.path);
-  }
-
-  // Clear state cookie & session state
-  res.setHeader('Set-Cookie', 'oauth_state=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
-  if (req.session.oauthState) delete req.session.oauthState;
-
-  try {
-    const { tokens, profile } = await google.exchangeCode(code, redirectUri);
-    const email = profile.email.toLowerCase();
-
-    // Check if this was a profile link request
-    if (action === 'link' && req.session.user && req.session.user.id === userId) {
-      db.prepare(`UPDATE users SET google_id=?, google_access_token=?, google_refresh_token=COALESCE(?, google_refresh_token),
-                  google_token_expiry=?, google_calendar_enabled=1 WHERE id=?`)
-        .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, req.session.user.id);
-      google.syncUpcomingMentorSlots(req.session.user).catch(() => {});
-      req.session.flash = { type: 'ok', msg: 'Google account and Calendar connected successfully.' };
-      return res.redirect('/profile');
+    const updateFields = {
+      google_id: profile.id,
+      google_access_token: tokens.access_token,
+      google_token_expiry: tokenExpiry,
+    };
+    if (tokens.refresh_token) {
+      updateFields.google_refresh_token = tokens.refresh_token;
     }
 
-    // Find existing user by google_id or email
-    let user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE google_id = ?').get(profile.id);
-    if (!user) {
-      user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE lower(email) = ?').get(email);
-    }
-
-    if (user) {
-      if (!user.active) {
-        return res.status(403).render('login', {
-          title: 'Sign in',
-          error: 'This account has been deactivated. Contact the admin.',
-          email: '',
-          googleConfigured: google.isConfigured(),
-        });
-      }
-
-      // Update google tokens and ensure calendar is enabled
-      db.prepare(`UPDATE users SET google_id=?, google_access_token=?,
-                  google_refresh_token=COALESCE(?, google_refresh_token),
-                  google_token_expiry=?, google_calendar_enabled=1 WHERE id=?`)
-        .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, user.id);
-    } else {
-      // Auto-register new user as Student
-      const randomPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
-      db.prepare(`
-        INSERT INTO users (name, email, password_hash, role, google_id, google_access_token,
-                           google_refresh_token, google_token_expiry, google_calendar_enabled)
-        VALUES (?, ?, ?, 'student', ?, ?, ?, ?, 1)
-      `).run(profile.name || email.split('@')[0], email, randomPasswordHash, profile.id,
-             tokens.access_token, tokens.refresh_token, tokens.expiry_date);
-      user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE lower(email) = ?').get(email);
-    }
-
-    let to = req.session.redirectTo;
-    delete req.session.redirectTo;
-    if (to) {
-      const isDev = isUserDeveloper(user);
-      if (!isDev) {
-        if (to.startsWith('/admin') && user.role !== 'admin') to = null;
-        else if (to.startsWith('/student') && user.role !== 'student') to = null;
-        else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
-      }
-    }
-    const redirectTo = to || homeFor(user.role);
-
-    // Session-fixation defence: mint a brand-new session id on login, same as
-    // the password path does.
-    req.session.regenerate((regenErr) => {
-      if (regenErr) {
-        console.error('OAuth session regeneration error:', regenErr);
-        return res.status(500).render('error', { title: 'Login error', message: 'Could not complete login. Please try again.' });
-      }
-      setAuthSession(req, res, user);
-      if (user.role === 'mentor' || user.role === 'admin' || user.can_technical || user.can_hr) {
-        google.syncUpcomingMentorSlots(user).catch(() => {});
-      }
-      req.session.save(() => {
-        logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
-        res.redirect(redirectTo);
-      });
-    });
-  } catch (err) {
-    console.error('Google OAuth callback error:', err);
-    res.render('login', {
-      title: 'Sign in',
-      error: `Google login failed: ${err.message}`,
-      email: '',
-      googleConfigured: google.isConfigured(),
-    });
-  }
-});
-
-/* Diagnostic endpoint to verify Google OAuth configuration on production URLs.
- * Admin-only: it discloses deployment host/proto, env presence and a partial
- * client id, which should not be public. */
-router.get('/auth/google/debug', requireLogin, (req, res) => {
-  const role = req.session.user && req.session.user.role;
-  if (role !== 'admin' && role !== 'developer' && !res.locals.isDeveloper) {
-    return res.status(403).json({ error: 'Access denied' });
-  }
-  const currentRedirectUri = google.getRedirectUri(req);
-  const proto = (req.headers && req.headers['x-forwarded-proto']
-    ? req.headers['x-forwarded-proto'].split(',')[0].trim()
-    : (req.connection && req.connection.encrypted ? 'https' : (req.protocol || 'https')));
-  const host = (req.headers && req.headers['x-forwarded-host']
-    ? req.headers['x-forwarded-host'].split(',')[0].trim()
-    : (req.headers && req.headers.host ? req.headers.host : 'localhost:3000'));
-  const origin = `${proto}://${host}`;
-
-  const clientId = google.getClientId();
-  const maskedClientId = clientId ? `${clientId.slice(0, 10)}...${clientId.slice(-18)}` : null;
-
-  res.json({
-    status: 'ok',
-    environment: {
-      isVercel: Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME),
-      nodeEnv: process.env.NODE_ENV || 'development',
-      currentOrigin: origin,
-      detectedHost: host,
-      detectedProto: proto,
-    },
-    googleOAuthConfig: {
-      isConfigured: google.isConfigured(),
-      clientIdMasked: maskedClientId,
-      customRedirectEnvVar: process.env.GOOGLE_REDIRECT_URI || null,
-      resolvedRedirectUri: currentRedirectUri,
-    },
-    googleCloudConsoleInstructions: {
-      step1_authorizedOrigins: [origin],
-      step2_authorizedRedirectUris: [
-        currentRedirectUri,
-        `${origin}/api/auth/callback/google`,
-        `${origin}/auth/google/callback`,
-      ],
-      notice: 'Copy all URIs from step2_authorizedRedirectUris into your Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0 Client ID -> Authorized redirect URIs.'
-    }
-  });
-});
-
-
-/* --------------------------- Password recovery --------------------------- */
-/*
- * No transactional mail provider is wired into this deployment, so the reset
- * link is not emailed. It is written to the server log and — unless this is a
- * production deployment that opted out — shown on screen so the placement cell
- * can hand it to the candidate. Set RESET_LINK_VISIBLE=false to force the
- * log-only behaviour, or wire sendResetLink() to a mailer.
- */
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
-const resetLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: 'Too many password reset requests. Please wait 15 minutes before trying again.',
-});
-
-const hashToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
-
-function resetLinkIsVisible() {
-  if (process.env.RESET_LINK_VISIBLE === 'false') return false;
-  if (process.env.RESET_LINK_VISIBLE === 'true') return true;
-  return process.env.NODE_ENV !== 'production';
-}
-
-function absoluteUrl(req, path) {
-  // Prefer a pinned origin so the Host/X-Forwarded-Host headers (attacker-
-  // controlled) cannot poison a password-reset link. Falls back to deriving
-  // from the request only when APP_ORIGIN is unset (local dev).
-  const pinned = String(process.env.APP_ORIGIN || '').trim().replace(/\/+$/, '');
-  if (pinned) return `${pinned}${path}`;
-  const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || req.protocol || 'http';
-  const host = (req.headers['x-forwarded-host'] || '').split(',')[0].trim() || req.headers.host || 'localhost:3000';
-  return `${proto}://${host}${path}`;
-}
-
-router.get('/forgot-password', (req, res) => {
-  if (req.session.user) return res.redirect('/profile#password');
-  res.render('forgot-password', { title: 'Forgot password', error: null, sent: false, resetUrl: null, email: '' });
-});
-
-router.post('/forgot-password', resetLimiter, (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return res.status(400).render('forgot-password', {
-      title: 'Forgot password',
-      error: 'Enter the email address you sign in with.',
-      sent: false, resetUrl: null, email: req.body.email || '',
-    });
-  }
-
-  let resetUrl = null;
-  const user = db.prepare('SELECT id, name, email, active FROM users WHERE lower(email) = ?').get(email);
-  if (user && user.active) {
-    const token = crypto.randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS + 5.5 * 3600000)
-      .toISOString().slice(0, 19).replace('T', ' ');
-    // Any earlier outstanding link for this account stops working immediately.
-    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
-    db.prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?,?,?)')
-      .run(user.id, hashToken(token), expiresAt);
-
-    resetUrl = absoluteUrl(req, `/reset-password/${token}`);
-    console.log(`[password-reset] link for ${user.email}: ${resetUrl}`);
-    logAudit(req, 'AUTH_PASSWORD_RESET_REQUESTED', { email: user.email }, user.id);
+    await User.findByIdAndUpdate(user._id, { $set: updateFields });
+    user = await User.findById(user._id).lean();
+    user.id = user._id;
   } else {
-    logAudit(req, 'AUTH_PASSWORD_RESET_UNKNOWN_EMAIL', { email });
+    const role = 'student';
+    const randomPw = crypto.randomBytes(32).toString('hex');
+    const pwHash = bcrypt.hashSync(randomPw, 10);
+
+    const newUser = await User.create({
+      name: profile.name || email.split('@')[0],
+      email,
+      password_hash: pwHash,
+      role,
+      google_id: profile.id,
+      google_access_token: tokens.access_token,
+      google_refresh_token: tokens.refresh_token || null,
+      google_token_expiry: tokenExpiry,
+      google_calendar_enabled: 1,
+      active: 1,
+    });
+    user = newUser.toObject();
+    user.id = user._id;
+    logAudit(req, 'AUTH_OAUTH_USER_AUTO_CREATED', { email, role }, user._id);
   }
 
-  // Identical response either way: never confirm whether an address is registered.
+  let to = req.session.redirectTo;
+  if (to) {
+    const isDev = isUserDeveloper(user);
+    if (!isDev) {
+      if (to.startsWith('/admin') && user.role !== 'admin') to = null;
+      else if (to.startsWith('/student') && user.role !== 'student') to = null;
+      else if (to.startsWith('/mentor') && user.role !== 'mentor') to = null;
+    }
+  }
+  const redirectTo = to || homeFor(user.role);
+  delete req.session.redirectTo;
+
+  req.session.regenerate((regenErr) => {
+    if (regenErr) {
+      console.error('OAuth session regeneration error:', regenErr);
+      return res.status(500).render('error', { title: 'Login error', message: 'Could not complete login. Please try again.' });
+    }
+    setAuthSession(req, res, user);
+    if (user.role === 'mentor' || user.role === 'admin' || user.can_technical || user.can_hr) {
+      google.syncUpcomingMentorSlots(user).catch(() => {});
+    }
+    req.session.save(() => {
+      logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id || user._id);
+      res.redirect(redirectTo);
+    });
+  });
+});
+
+/* ------------------------------ Password Recovery ----------------------------- */
+router.get('/forgot-password', (req, res) => {
   res.render('forgot-password', {
-    title: 'Forgot password',
+    title: 'Reset password',
+    sent: false,
     error: null,
+  });
+});
+
+router.post('/forgot-password', forgotLimiter, async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!email || !h.isValidEmail(email)) {
+    return res.status(400).render('forgot-password', {
+      title: 'Reset password',
+      sent: false,
+      error: 'Please enter a valid email address.',
+    });
+  }
+
+  const user = await User.findOne({ email }).lean();
+  if (user && user.active) {
+    const rawToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await PasswordReset.updateMany({ user_id: user._id, used_at: null }, { $set: { used_at: new Date() } });
+    await PasswordReset.create({
+      user_id: user._id,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+    });
+
+    const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${rawToken}`;
+    console.log(`[password-reset] link for ${email}: ${resetLink}`);
+    logAudit(req, 'AUTH_PASSWORD_RESET_REQUESTED', { email }, user._id);
+  }
+
+  res.render('forgot-password', {
+    title: 'Reset password',
     sent: true,
-    resetUrl: resetLinkIsVisible() ? resetUrl : null,
-    email,
+    error: null,
   });
 });
 
-function findResetToken(rawToken) {
-  if (!rawToken || typeof rawToken !== 'string') return null;
-  const row = db.prepare(`SELECT pr.*, u.email, u.name, u.active
-                            FROM password_resets pr JOIN users u ON u.id = pr.user_id
-                           WHERE pr.token_hash = ?`).get(hashToken(rawToken));
-  if (!row || row.used_at || !row.active) return null;
-  const nowStamp = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
-  if (String(row.expires_at) <= nowStamp) return null;
-  return row;
-}
+router.get('/reset-password/:token', async (req, res) => {
+  const rawToken = String(req.params.token || '');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-router.get('/reset-password/:token', (req, res) => {
-  const row = findResetToken(req.params.token);
-  if (!row) {
-    return res.status(400).render('reset-password', {
-      title: 'Reset password', token: null, error: 'This reset link is invalid or has expired. Request a new one.', email: null,
+  const record = await PasswordReset.findOne({
+    token_hash: tokenHash,
+    used_at: null,
+    expires_at: { $gt: new Date() },
+  }).lean();
+
+  if (!record) {
+    return res.status(400).render('error', {
+      title: 'Invalid reset link',
+      message: 'This password reset link is invalid or has expired.',
+      backHref: '/forgot-password',
+      backLabel: 'Request a new link',
     });
   }
-  res.render('reset-password', { title: 'Reset password', token: req.params.token, error: null, email: row.email });
+
+  res.render('reset-password', {
+    title: 'Choose a new password',
+    token: rawToken,
+    error: null,
+  });
 });
 
-router.post('/reset-password/:token', resetLimiter, (req, res) => {
-  const row = findResetToken(req.params.token);
-  if (!row) {
-    return res.status(400).render('reset-password', {
-      title: 'Reset password', token: null, error: 'This reset link is invalid or has expired. Request a new one.', email: null,
+router.post('/reset-password/:token', authLimiter, async (req, res) => {
+  const rawToken = String(req.params.token || '');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const password = String(req.body.password || '');
+  const confirm = String(req.body.confirm || '');
+
+  const record = await PasswordReset.findOne({
+    token_hash: tokenHash,
+    used_at: null,
+    expires_at: { $gt: new Date() },
+  }).lean();
+
+  if (!record) {
+    return res.status(400).render('error', {
+      title: 'Invalid reset link',
+      message: 'This password reset link is invalid or has expired.',
+      backHref: '/forgot-password',
+      backLabel: 'Request a new link',
     });
   }
-  const next1 = String(req.body.next1 || '');
-  const next2 = String(req.body.next2 || '');
-  const rerender = (error) => res.status(400).render('reset-password', {
-    title: 'Reset password', token: req.params.token, error, email: row.email,
+
+  if (password.length < 6) {
+    return res.status(400).render('reset-password', {
+      title: 'Choose a new password',
+      token: rawToken,
+      error: 'Password must be at least 6 characters.',
+    });
+  }
+
+  if (password !== confirm) {
+    return res.status(400).render('reset-password', {
+      title: 'Choose a new password',
+      token: rawToken,
+      error: 'Passwords do not match.',
+    });
+  }
+
+  const pwHash = bcrypt.hashSync(password, 10);
+  const nowMs = Date.now();
+
+  await User.findByIdAndUpdate(record.user_id, {
+    $set: { password_hash: pwHash, sessions_invalid_before: nowMs },
   });
-  const pwErr = h.validatePassword(next1);
-  if (pwErr) return rerender(pwErr);
-  if (next1 !== next2) return rerender('The two passwords do not match.');
+  await PasswordReset.findByIdAndUpdate(record._id, { $set: { used_at: new Date() } });
 
-  const usedAt = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
-  db.prepare('UPDATE users SET password_hash = ?, sessions_invalid_before = ? WHERE id = ?')
-    .run(bcrypt.hashSync(next1, 10), Date.now(), row.user_id);
-  db.prepare('UPDATE password_resets SET used_at = ? WHERE id = ?').run(usedAt, row.id);
-  invalidateUserSessions(row.user_id);
-  logAudit(req, 'AUTH_PASSWORD_RESET_COMPLETED', { email: row.email }, row.user_id);
-
-  req.session.flash = { type: 'ok', msg: 'Password updated. Sign in with your new password.' };
+  logAudit(req, 'AUTH_PASSWORD_RESET_COMPLETED', {}, record.user_id);
+  req.session.flash = { type: 'ok', msg: 'Your password has been reset. Please sign in with your new password.' };
   res.redirect('/login');
 });
 
-function doLogout(req, res) {
-  logAudit(req, 'AUTH_LOGOUT');
-  clearAuthSession(req, res, () => res.redirect('/login'));
-}
-// POST is the real logout (the nav uses a form). It stays CSRF-exempt so a
-// stale token can never trap someone in a session.
-router.post('/logout', doLogout);
-// A GET is honoured only for a user-initiated navigation (typed URL, bookmark,
-// same-origin link). A cross-site top-level navigation — the only way to reach
-// this with cookies under SameSite=Lax — just bounces home, so it cannot be
-// used to force-logout a victim.
-router.get('/logout', (req, res) => {
-  const site = req.headers['sec-fetch-site'];
-  if (site && site !== 'same-origin' && site !== 'same-site' && site !== 'none') {
-    return res.redirect('/');
-  }
-  return doLogout(req, res);
-});
-
-router.get('/profile', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
+/* ------------------------------ Profile & Role Switch ----------------------------- */
+router.get('/profile', requireLogin, async (req, res) => {
+  const me = await User.findById(req.session.user.id).lean();
+  if (me) me.id = me._id;
   res.render('profile', {
     title: 'My profile',
     me,
@@ -486,8 +372,11 @@ router.get('/profile', requireLogin, (req, res) => {
   });
 });
 
-router.post('/profile/update', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active FROM users WHERE id = ?').get(req.session.user.id);
+router.post('/profile', requireLogin, async (req, res) => {
+  const me = await User.findById(req.session.user.id).lean();
+  if (!me) return res.redirect('/login');
+  me.id = me._id;
+
   const name = String(req.body.name || '').trim();
   if (!name || name.length < 2) {
     return res.status(400).render('profile', {
@@ -522,26 +411,34 @@ router.post('/profile/update', requireLogin, (req, res) => {
     });
   }
 
-  db.prepare('UPDATE users SET name=?, phone=?, branch=?, squad=?, resume_url=? WHERE id=?')
-    .run(name, phone, branch, squad, resume_url, me.id);
-  logAudit(req, 'AUTH_PROFILE_UPDATE', { name, phone }, me.id);
+  await User.findByIdAndUpdate(me._id, {
+    $set: { name, phone, branch, squad, resume_url },
+  });
+
+  logAudit(req, 'AUTH_PROFILE_UPDATE', { name, phone }, me._id);
   req.session.user.name = name;
   req.session.flash = { type: 'ok', msg: 'Profile details updated successfully.' };
   res.redirect('/profile');
 });
 
-router.post('/profile/google/disconnect', requireLogin, (req, res) => {
-  db.prepare(`UPDATE users SET google_id=NULL, google_access_token=NULL, google_refresh_token=NULL,
-              google_token_expiry=NULL, google_calendar_enabled=0 WHERE id=?`)
-    .run(req.session.user.id);
+router.post('/profile/google/disconnect', requireLogin, async (req, res) => {
+  await User.findByIdAndUpdate(req.session.user.id, {
+    $set: {
+      google_id: null,
+      google_access_token: null,
+      google_refresh_token: null,
+      google_token_expiry: null,
+      google_calendar_enabled: 0,
+    },
+  });
   req.session.flash = { type: 'ok', msg: 'Google account and Calendar disconnected.' };
   res.redirect('/profile');
 });
 
-router.post('/profile/google/toggle-calendar', requireLogin, (req, res) => {
-  const me = db.prepare('SELECT id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
-  const enabled = me.google_calendar_enabled ? 0 : 1;
-  db.prepare('UPDATE users SET google_calendar_enabled = ? WHERE id = ?').run(enabled, me.id);
+router.post('/profile/google/toggle-calendar', requireLogin, async (req, res) => {
+  const me = await User.findById(req.session.user.id).lean();
+  const enabled = me && me.google_calendar_enabled ? 0 : 1;
+  await User.findByIdAndUpdate(req.session.user.id, { $set: { google_calendar_enabled: enabled } });
   req.session.flash = {
     type: 'ok',
     msg: enabled ? 'Google Calendar sync enabled.' : 'Google Calendar sync paused.',
@@ -554,11 +451,11 @@ router.post('/profile/password', requireLogin, (req, res) => {
   res.redirect('/profile');
 });
 
-router.post('/switch-role', (req, res) => {
+router.post('/switch-role', async (req, res) => {
   if (!req.session || !req.session.user) {
     return res.redirect('/login');
   }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const user = await User.findById(req.session.user.id).lean();
   if (!user || !user.active) {
     return res.redirect('/login');
   }
@@ -589,6 +486,13 @@ router.post('/switch-role', (req, res) => {
   if (targetRole === 'mentor') return res.redirect('/mentor');
   if (targetRole === 'student') return res.redirect('/student');
   return res.redirect('/admin');
+});
+
+router.post('/logout', (req, res) => {
+  logAudit(req, 'AUTH_LOGOUT');
+  clearAuthSession(req, res, () => {
+    res.redirect('/login');
+  });
 });
 
 module.exports = router;

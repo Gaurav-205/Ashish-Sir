@@ -1,34 +1,41 @@
 'use strict';
 const express = require('express');
-const db = require('../db');
+const { Slot, Interview, User, Evaluation, StudentFeedback } = require('../models');
 const q = require('../queries');
 const h = require('../helpers');
 const { requireRole, isUserDeveloper, isDualRoleUser } = require('../auth');
 const { RUBRIC } = require('../rubric');
 const { validateId } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
-
-const router = express.Router();
 const google = require('../services/googleService');
 const emailService = require('../services/emailService');
+
+const router = express.Router();
 router.use(requireRole('mentor'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const id = req.session.user.id;
-  const mentor = req._resolvedUser || db.prepare('SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=?').get(id);
-  const all = q.interviewsForMentor(id);
+  const mentor = req._resolvedUser || await User.findById(id).lean();
+  if (mentor) mentor.id = mentor._id;
+
+  const all = await q.interviewsForMentor(id);
   const upcoming = all.filter((i) => i.status === 'booked');
   const completed = all.filter((i) => i.status === 'completed');
   const pending = completed.filter((i) => i.eval_id == null);
-  const slots = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND status='open'
-                            AND (slot_date || ' ' || start_time) > ?
-                            ORDER BY slot_date, start_time`).all(id, h.nowMinute());
+
+  const now = h.nowMinute();
+  const rawSlots = await Slot.find({ mentor_id: id, status: 'open' }).lean();
+  const slots = rawSlots
+    .filter(sl => (sl.slot_date + ' ' + sl.start_time) > now)
+    .map(sl => ({ ...sl, id: sl._id }))
+    .sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
 
   if (mentor && (mentor.google_access_token || mentor.google_calendar_enabled)) {
     google.syncUpcomingMentorSlots(mentor).catch(() => {});
   }
+
   res.render('mentor/dashboard', {
     title: 'My interviews',
     upcoming,
@@ -41,12 +48,14 @@ router.get('/', (req, res) => {
   });
 });
 
-router.post('/slots', (req, res) => {
+router.post('/slots', async (req, res) => {
   const mentorId = req.session.user.id;
   try {
     const { type, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
-    const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active, is_developer, google_calendar_enabled FROM users WHERE id=?`).get(mentorId);
+    const mentor = await User.findById(mentorId).lean();
     if (!mentor) throw new Error('Mentor account not found.');
+    mentor.id = mentor._id;
+
     const isDev = Boolean(res.locals.isDeveloper || isUserDeveloper(mentor));
     const isDual = isDualRoleUser(mentor);
     if (!isDev && mentor.role !== 'mentor' && !isDual) throw new Error('Mentor account not found.');
@@ -98,261 +107,145 @@ router.post('/slots', (req, res) => {
     if (!dates.length) throw new Error('No valid dates selected after filtering weekends.');
 
     if (duration !== undefined && duration !== null && String(duration).trim() !== '') {
-      const minsVal = Number(duration);
-      if (isNaN(minsVal) || minsVal <= 0) throw new Error('Duration must be a positive number.');
+      const dur = parseInt(duration, 10);
+      if (Number.isNaN(dur) || dur < 15 || dur > 180) throw new Error('Duration must be between 15 and 180 minutes.');
     }
-    const mins = Number(duration) || 30;
-    const n = Math.min(Math.max(Number(count) || 1, 1), 30);
-    const [sh, sm] = cleanStart.split(':').map(Number);
-    let made = 0, skipped = 0;
-    const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
-                            VALUES (?,?,?,?,?,?,?)`);
-    const existingSlots = db.prepare(`
-      SELECT slot_date, start_time, end_time FROM slots
-       WHERE mentor_id = ? AND status <> 'cancelled' AND slot_date IN (${dates.map(() => '?').join(',')})
-    `).all(mentorId, ...dates);
+    const durMin = parseInt(duration || 45, 10);
+    const numSlots = parseInt(count || 1, 10);
+    if (Number.isNaN(numSlots) || numSlots < 1 || numSlots > 16) throw new Error('Count must be between 1 and 16 slots per day.');
 
-    const hasOverlap = (tDate, sTime, eTime) => {
-      return existingSlots.some(s => s.slot_date === tDate && s.start_time < eTime && s.end_time > sTime);
-    };
+    const cleanMode = mode === 'Offline' ? 'Offline' : 'Online';
+    let cleanLoc = String(location || '').trim();
+    if (!cleanLoc) {
+      cleanLoc = cleanMode === 'Online' ? h.generateMeetingLink(cleanStart) : 'Room 101';
+    }
 
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+
+    const existingSlots = await Slot.find({
+      mentor_id: mentorId,
+      status: { $ne: 'cancelled' },
+      slot_date: { $gte: minDate, $lte: maxDate },
+    }).lean();
+
+    let createdTotal = 0;
     const slotsToInsert = [];
-    for (const targetDate of dates) {
-      for (let k = 0; k < n; k++) {
-        const startMin = sh * 60 + sm + k * mins;
-        const endMin = startMin + mins;
-        if (endMin > 24 * 60) break;
-        const fmt = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-        const s_time = fmt(startMin);
-        const e_time = fmt(endMin);
 
-        const isPastSlot = (targetDate < h.today() || (targetDate === h.today() && s_time <= h.nowTime()));
-        if (isPastSlot) {
-          skipped++;
-          continue;
+    for (const d of dates) {
+      let [hPart, mPart] = cleanStart.split(':').map(Number);
+      for (let i = 0; i < numSlots; i++) {
+        const startH = String(hPart).padStart(2, '0');
+        const startM = String(mPart).padStart(2, '0');
+        const curStart = `${startH}:${startM}`;
+        
+        let totalEndMin = hPart * 60 + mPart + durMin;
+        if (totalEndMin > 24 * 60) totalEndMin = 24 * 60 - 1;
+        const endH = String(Math.floor(totalEndMin / 60)).padStart(2, '0');
+        const endM = String(totalEndMin % 60).padStart(2, '0');
+        const curEnd = `${endH}:${endM}`;
+
+        const isOverlap = existingSlots.some(s => s.slot_date === d && curStart < s.end_time && curEnd > s.start_time) ||
+                          slotsToInsert.some(s => s.slot_date === d && curStart < s.end_time && curEnd > s.start_time);
+
+        if (!isOverlap) {
+          slotsToInsert.push({
+            mentor_id: mentorId,
+            type,
+            slot_date: d,
+            start_time: curStart,
+            end_time: curEnd,
+            mode: cleanMode,
+            location: cleanLoc,
+            status: 'open',
+          });
         }
 
-        if (hasOverlap(targetDate, s_time, e_time)) {
-          skipped++;
-          continue;
-        }
-
-        const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
-        existingSlots.push({ slot_date: targetDate, start_time: s_time, end_time: e_time });
-        slotsToInsert.push({ targetDate, s_time, e_time, loc });
+        let nextStartMin = hPart * 60 + mPart + durMin;
+        hPart = Math.floor(nextStartMin / 60);
+        mPart = nextStartMin % 60;
+        if (hPart >= 24) break;
       }
     }
 
     if (slotsToInsert.length > 0) {
-      try {
-        db.exec('BEGIN IMMEDIATE');
-        for (const s of slotsToInsert) {
-          try {
-            const resIns = ins.run(mentorId, type, s.targetDate, s.s_time, s.e_time, mode || 'Online', s.loc);
-            made++;
-            const newSlot = {
-              id: resIns.lastInsertRowid,
-              mentor_id: mentorId,
-              type,
-              slot_date: s.targetDate,
-              start_time: s.s_time,
-              end_time: s.e_time,
-              mode: mode || 'Online',
-              location: s.loc,
-            };
-            google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
-          } catch (e) {
-            if (h.isUniqueViolation(e)) skipped++; else throw e;
-          }
-        }
-        db.exec('COMMIT');
-      } catch (errTx) {
-        try { db.exec('ROLLBACK'); } catch (_) {}
-        throw errTx;
+      const inserted = await Slot.insertMany(slotsToInsert);
+      createdTotal = inserted.length;
+
+      for (const sl of inserted) {
+        google.createSlotCalendarEvent({
+          mentor,
+          slot: {
+            id: sl._id,
+            type: sl.type,
+            slot_date: sl.slot_date,
+            start_time: sl.start_time,
+            end_time: sl.end_time,
+            mode: sl.mode,
+            location: sl.location,
+          },
+        }).catch((err) => console.error('Background slot calendar creation failed:', err));
       }
     }
-    logAudit(req, 'MENTOR_CREATE_SLOTS', { type, count: made, days: dates.length });
-    flash(req, made ? 'ok' : 'err',
-      `${made} slot(s) published across ${dates.length} day(s)${skipped ? ` (${skipped} skipped due to existing overlap)` : ''}.`);
+
+    logAudit(req, 'MENTOR_CREATE_SLOTS', { type, dates_count: dates.length, created_slots: createdTotal }, mentorId);
+    flash(req, 'ok', `Published ${createdTotal} slot(s) across ${dates.length} day(s).`);
   } catch (e) {
     flash(req, 'err', e.message);
   }
   res.redirect('/mentor');
 });
 
-router.get('/interview/:id', validateId('id'), (req, res) => {
-  const iv = q.interviewById(Number(req.params.id));
-  if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
-    return res.status(403).render('error', {
-      title: 'Not your interview',
-      message: 'You can only view interviews that the admin assigned to you.',
-    });
-  }
-  res.render('mentor/interview', { title: `${h.titleCase(iv.type)} — ${iv.student_name}`, iv, error: null, form: {} });
-});
-
-router.post('/interview/:id/attendance', validateId('id'), (req, res) => {
-  const iv = q.interviewById(Number(req.params.id));
-  if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
-    return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
-  }
-  if (iv.status === 'cancelled') {
-    flash(req, 'err', 'Cannot alter attendance for a cancelled interview.');
-    return res.redirect('/mentor/interview/' + iv.id);
-  }
-  if (iv.eval_id) {
-    flash(req, 'err', 'Cannot alter attendance after an evaluation has already been submitted.');
-    return res.redirect('/mentor/interview/' + iv.id);
-  }
-  const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
-
-  if (attendance === 'attended') {
-    const now = h.nowStamp();
-    db.prepare(`UPDATE interviews SET attendance='attended', status='completed',
-                completed_at=COALESCE(completed_at, ?),
-                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
-    logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'attended' });
-    flash(req, 'ok', 'Candidate marked as Attended. You can now score the interview.');
-  } else {
-    const now = h.nowStamp();
-    db.prepare(`UPDATE interviews SET attendance='absent', status='completed',
-                completed_at=COALESCE(completed_at, ?),
-                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
-    logAudit(req, 'MENTOR_MARK_ATTENDANCE', { interview_id: iv.id, attendance: 'absent' });
-    flash(req, 'err', 'Candidate marked as Absent / No-Show.');
-  }
-  res.redirect('/mentor/interview/' + iv.id);
-});
-
-router.post('/interview/:id/complete', validateId('id'), (req, res) => {
-  const iv = q.interviewById(Number(req.params.id));
-  if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
-    return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
-  }
-  if (iv.status === 'cancelled') {
-    flash(req, 'err', 'Cannot complete a cancelled interview.');
-    return res.redirect('/mentor/interview/' + iv.id);
-  }
-  if (iv.eval_id) {
-    flash(req, 'err', 'Interview has already been completed and evaluated.');
-    return res.redirect('/mentor/interview/' + iv.id);
-  }
-  if (iv.status !== 'booked') flash(req, 'err', 'Only booked interviews can be marked as completed.');
-  else {
-    const now = h.nowStamp();
-    db.prepare(`UPDATE interviews SET attendance='attended', status='completed', completed_at=?,
-                attendance_marked_at=? WHERE id=?`).run(now, now, iv.id);
-    logAudit(req, 'MENTOR_COMPLETE_INTERVIEW', { interview_id: iv.id });
-    flash(req, 'ok', 'Marked as completed and attended. You can now submit the evaluation.');
-  }
-  res.redirect('/mentor/interview/' + iv.id);
-});
-
-router.post('/interview/:id/evaluate', validateId('id'), (req, res) => {
-  const iv = q.interviewById(Number(req.params.id));
-  if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
-    return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
-  }
-  const rerender = (error) => res.status(400).render('mentor/interview', {
-    title: 'Evaluate', iv, error, form: req.body,
-  });
-
-  if (iv.status === 'cancelled') return rerender('Cannot submit scores for a cancelled interview.');
-  if (iv.attendance === 'absent') return rerender('Cannot submit scores for an absent candidate. Mark attendance as attended first.');
-  if (iv.status !== 'completed') return rerender('Mark candidate as attended and completed before submitting scores.');
-  if (iv.eval_id) return rerender('An evaluation has already been submitted for this interview.');
-
-  let total;
-  try { total = q.computeTotal(iv.type, req.body); }
-  catch (e) { return rerender(e.message); }
-
-  const keys = RUBRIC[iv.type].criteria.map((c) => c.key);
-  const val = (k) => (keys.includes(k) ? Number(req.body[k]) : null);
+router.post('/slots/:id/edit', validateId('id'), async (req, res) => {
+  const mentorId = req.session.user.id;
+  const slotId = req.params.id;
   try {
-    db.prepare(`INSERT INTO evaluations
-        (interview_id, mentor_id, resume_marks, project_marks, dsa_marks,
-         behaviour_marks, hr_perf_marks, total, feedback)
-        VALUES (?,?,?,?,?,?,?,?,?)`)
-      .run(iv.id, req.session.user.id, val('resume_marks'), val('project_marks'), val('dsa_marks'),
-           val('behaviour_marks'), val('hr_perf_marks'), total, String(req.body.feedback || '').trim() || null);
-  } catch (e) {
-    if (h.isUniqueViolation(e)) {
-      return rerender('An evaluation has already been submitted for this interview.');
-    }
-    return rerender('Could not save evaluation: ' + e.message);
-  }
+    const slot = await Slot.findOne({ _id: slotId, mentor_id: mentorId }).lean();
+    if (!slot) throw new Error('Slot not found.');
+    if (slot.status !== 'open') throw new Error('Only open slots can be edited.');
 
-  logAudit(req, 'MENTOR_SUBMIT_EVALUATION', { interview_id: iv.id, score: total });
-  flash(req, 'ok', `Evaluation submitted — ${total}/${RUBRIC[iv.type].total}. The student can now see the result.`);
-  res.redirect('/mentor');
-});
-
-/* ------------------------------ slots management ----------------------- */
-router.post(['/slots/:id/edit', '/slots/:id/reschedule'], validateId('id'), async (req, res) => {
-  const slotId = Number(req.params.id);
-  const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(slotId);
-  if (!slot) {
-    flash(req, 'err', 'Slot not found.');
-    return res.redirect('/mentor');
-  }
-  if (slot.mentor_id !== req.session.user.id && !res.locals.isDeveloper) {
-    flash(req, 'err', 'Access denied.');
-    return res.redirect('/mentor');
-  }
-  if (slot.status === 'cancelled') {
-    flash(req, 'err', 'Cancelled slots cannot be edited.');
-    return res.redirect('/mentor');
-  }
-
-  const iv = db.prepare("SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'").get(slotId);
-  if (iv && iv.status === 'completed') {
-    flash(req, 'err', 'This session is already completed — it cannot be rescheduled.');
-    return res.redirect('/mentor');
-  }
-
-  const { slot_date, start_time, end_time, mode, location } = req.body;
-  try {
+    const { slot_date, start_time, duration, mode, location } = req.body;
     const cleanDate = String(slot_date || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid date.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Invalid date.');
     const cleanStart = h.normalizeTime(start_time);
-    const cleanEnd = h.normalizeTime(end_time);
-    if (!cleanStart) throw new Error('Pick a valid start time.');
-    if (!cleanEnd) throw new Error('Pick a valid end time.');
-    if (cleanStart >= cleanEnd) throw new Error('Start time must be before end time.');
+    if (!cleanStart) throw new Error('Invalid start time.');
 
-    const overlap = db.prepare(`
-      SELECT 1 FROM slots
-       WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled' AND id <> ?
-         AND start_time < ? AND end_time > ?
-    `).get(slot.mentor_id, cleanDate, slotId, cleanEnd, cleanStart);
-    if (overlap) throw new Error('You already have another slot at that time.');
+    const durMin = parseInt(duration || 45, 10);
+    if (Number.isNaN(durMin) || durMin < 15 || durMin > 180) throw new Error('Duration must be between 15 and 180 minutes.');
 
-    const loc = (location && location.trim()) ? location.trim() : (slot.location || h.generateMeetingLink(slot.type));
+    let [hPart, mPart] = cleanStart.split(':').map(Number);
+    let totalEndMin = hPart * 60 + mPart + durMin;
+    if (totalEndMin > 24 * 60) totalEndMin = 24 * 60 - 1;
+    const endH = String(Math.floor(totalEndMin / 60)).padStart(2, '0');
+    const endM = String(totalEndMin % 60).padStart(2, '0');
+    const cleanEnd = `${endH}:${endM}`;
 
-    db.prepare(`UPDATE slots SET slot_date=?, start_time=?, end_time=?, mode=?, location=? WHERE id=?`)
-      .run(cleanDate, cleanStart, cleanEnd, mode || 'Online', loc, slotId);
+    const overlap = await Slot.findOne({
+      _id: { $ne: slot._id },
+      mentor_id: mentorId,
+      slot_date: cleanDate,
+      status: { $ne: 'cancelled' },
+      start_time: { $lt: cleanEnd },
+      end_time: { $gt: cleanStart },
+    }).lean();
 
-    if (iv) {
-      const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
-      const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
-      if (iv.google_event_id) {
-        google.syncCalendarEvent({
-          eventId: iv.google_event_id,
-          student,
-          mentor,
-          slot: { slot_date, start_time, end_time, mode: mode || 'Online', location: loc, type: slot.type }
-        }).catch(() => {});
-      }
-      emailService.sendBookingConfirmation({
-        student,
-        mentor,
-        slot: { slot_date, start_time, end_time, mode: mode || 'Online', location: loc, type: slot.type },
-        meetingLink: loc
-      }).catch(() => {});
-    }
+    if (overlap) throw new Error(`Overlaps with an existing slot (${overlap.start_time} - ${overlap.end_time}).`);
 
-    logAudit(req, 'MENTOR_EDIT_SLOT', { slot_id: slotId, slot_date, start_time, end_time });
-    flash(req, 'ok', iv ? 'Interview session rescheduled and candidate notified.' : 'Slot updated successfully.');
+    const cleanMode = mode === 'Offline' ? 'Offline' : 'Online';
+    const cleanLoc = String(location || slot.location || (cleanMode === 'Online' ? h.generateMeetingLink(cleanStart) : 'Room 101')).trim();
+
+    await Slot.findByIdAndUpdate(slot._id, {
+      $set: {
+        slot_date: cleanDate,
+        start_time: cleanStart,
+        end_time: cleanEnd,
+        mode: cleanMode,
+        location: cleanLoc,
+      },
+    });
+
+    logAudit(req, 'MENTOR_EDIT_SLOT', { slot_id: slot._id, slot_date: cleanDate, start_time: cleanStart }, mentorId);
+    flash(req, 'ok', 'Slot updated successfully.');
   } catch (e) {
     flash(req, 'err', e.message);
   }
@@ -360,101 +253,122 @@ router.post(['/slots/:id/edit', '/slots/:id/reschedule'], validateId('id'), asyn
 });
 
 router.post('/slots/:id/cancel', validateId('id'), async (req, res) => {
-  const slotId = Number(req.params.id);
-  const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(slotId);
-  if (!slot) {
-    flash(req, 'err', 'Slot not found.');
-    return res.redirect('/mentor');
-  }
-  if (slot.mentor_id !== req.session.user.id && !res.locals.isDeveloper) {
-    flash(req, 'err', 'Access denied.');
-    return res.redirect('/mentor');
-  }
-  if (slot.status === 'cancelled') {
-    flash(req, 'err', 'Slot is already cancelled.');
-    return res.redirect('/mentor');
-  }
-
-  const iv = db.prepare("SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'").get(slotId);
-  if (iv && iv.status === 'completed') {
-    flash(req, 'err', 'This session is already completed — it cannot be cancelled.');
-    return res.redirect('/mentor');
-  }
-  if (iv && iv.attendance !== 'pending') {
-    flash(req, 'err', 'Cannot cancel an interview once attendance has been recorded.');
-    return res.redirect('/mentor');
-  }
-
+  const mentorId = req.session.user.id;
+  const slotId = req.params.id;
   try {
-    db.exec('BEGIN IMMEDIATE');
-    if (iv) db.prepare("UPDATE interviews SET status='cancelled' WHERE id=?").run(iv.id);
-    db.prepare("UPDATE slots SET status='cancelled' WHERE id=?").run(slotId);
-    db.exec('COMMIT');
+    const slot = await Slot.findOne({ _id: slotId, mentor_id: mentorId }).lean();
+    if (!slot) throw new Error('Slot not found.');
 
-    const calEventId = (iv && iv.google_event_id) || slot.google_event_id;
-    if (calEventId) {
-      const student = iv ? db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id) : null;
-      const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
-      google.removeCalendarEvent({ eventId: calEventId, student, mentor }).catch(() => {});
-    }
+    await Slot.findByIdAndUpdate(slot._id, { $set: { status: 'cancelled' } });
+    await Interview.updateMany({ slot_id: slot._id, status: 'booked' }, { $set: { status: 'cancelled' } });
 
-    if (iv) {
-      const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
-      const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(slot.mentor_id);
-      emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot }).catch(() => {});
-    }
-
-    logAudit(req, 'MENTOR_CANCEL_SLOT', { slot_id: slotId, interview_id: iv ? iv.id : null });
-    flash(req, 'ok', iv ? 'Interview session cancelled and candidate notified.' : 'Slot cancelled successfully.');
+    logAudit(req, 'MENTOR_CANCEL_SLOT', { slot_id: slot._id }, mentorId);
+    flash(req, 'ok', 'Slot cancelled.');
   } catch (e) {
-    try { db.exec('ROLLBACK'); } catch (_) {}
-    flash(req, 'err', 'Could not cancel slot: ' + e.message);
+    flash(req, 'err', e.message);
   }
   res.redirect('/mentor');
 });
 
 router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
-  const slotId = Number(req.params.id);
   const mentorId = req.session.user.id;
-  const isDev = Boolean(res.locals.isDeveloper);
+  const slotId = req.params.id;
+  try {
+    const slot = await Slot.findOne({ _id: slotId, mentor_id: mentorId }).lean();
+    if (!slot) throw new Error('Slot not found.');
+    if (slot.status === 'booked') throw new Error('Cannot permanently delete a booked slot. Cancel it instead.');
 
-  const slot = db.prepare('SELECT * FROM slots WHERE id=?').get(slotId);
-  if (!slot || (slot.mentor_id !== mentorId && !isDev)) {
-    flash(req, 'err', 'Slot not found or access denied.');
+    await Slot.findByIdAndDelete(slot._id);
+    logAudit(req, 'MENTOR_DELETE_SLOT', { slot_id: slotId }, mentorId);
+    flash(req, 'ok', 'Slot permanently removed.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/mentor');
+});
+
+router.get('/interview/:id', validateId('id'), async (req, res) => {
+  const iv = await q.interviewById(req.params.id);
+  if (!iv || (String(iv.mentor_id) !== String(req.session.user.id) && !res.locals.isDeveloper)) {
+    flash(req, 'err', 'Interview not found.');
     return res.redirect('/mentor');
   }
 
-  const iv = db.prepare("SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'").get(slotId);
-  if (iv && (iv.status === 'completed' || iv.eval_id)) {
-    flash(req, 'err', 'Completed interviews with evaluations cannot be deleted.');
+  const mentor = await User.findById(iv.mentor_id).lean();
+  if (mentor) mentor.id = mentor._id;
+
+  const rubric = RUBRIC[iv.type];
+  res.render('mentor/interview', {
+    title: `${h.titleCase(iv.type)} interview · ${iv.student_name}`,
+    iv,
+    rubric,
+    mentor,
+  });
+});
+
+router.post('/interview/:id/attendance', validateId('id'), async (req, res) => {
+  const ivId = req.params.id;
+  const mentorId = req.session.user.id;
+
+  const iv = await Interview.findById(ivId).populate('slot_id').lean();
+  if (!iv || (String(iv.mentor_id) !== String(mentorId) && !res.locals.isDeveloper)) {
+    flash(req, 'err', 'Interview not found.');
+    return res.redirect('/mentor');
+  }
+
+  const attendance = req.body.attendance === 'absent' ? 'absent' : 'attended';
+  await Interview.findByIdAndUpdate(iv._id, { $set: { attendance } });
+
+  logAudit(req, 'MENTOR_UPDATE_ATTENDANCE', { interview_id: iv._id, attendance }, mentorId);
+  flash(req, 'ok', `Attendance updated to ${attendance}.`);
+  res.redirect(`/mentor/interview/${iv._id}`);
+});
+
+router.post('/interview/:id/evaluate', validateId('id'), async (req, res) => {
+  const ivId = req.params.id;
+  const mentorId = req.session.user.id;
+
+  const iv = await Interview.findById(ivId).lean();
+  if (!iv || (String(iv.mentor_id) !== String(mentorId) && !res.locals.isDeveloper)) {
+    flash(req, 'err', 'Interview not found.');
     return res.redirect('/mentor');
   }
 
   try {
-    db.exec('BEGIN IMMEDIATE');
-    if (iv) {
-      const calEventId = iv.google_event_id || slot.google_event_id;
-      if (calEventId) {
-        const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
-        const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
-        google.removeCalendarEvent({ eventId: calEventId, student, mentor }).catch(() => {});
-      }
-      const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
-      const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(slot.mentor_id);
-      emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot }).catch(() => {});
+    const total = q.computeTotal(iv.type, req.body);
+    const feedback = String(req.body.feedback || '').trim();
+
+    const evalData = {
+      interview_id: iv._id,
+      mentor_id: mentorId,
+      resume_marks: iv.type === 'technical' ? Number(req.body.resume || 0) : 0,
+      project_marks: iv.type === 'technical' ? Number(req.body.project || 0) : 0,
+      dsa_marks: iv.type === 'technical' ? Number(req.body.dsa || 0) : 0,
+      behaviour_marks: Number(req.body.behaviour || 0),
+      hr_perf_marks: iv.type === 'hr' ? Number(req.body.hr_perf || 0) : 0,
+      total,
+      feedback,
+      submitted_at: new Date(),
+    };
+
+    const existingEval = await Evaluation.findOne({ interview_id: iv._id });
+    if (existingEval) {
+      await Evaluation.findByIdAndUpdate(existingEval._id, { $set: evalData });
+    } else {
+      await Evaluation.create(evalData);
     }
 
-    db.prepare('DELETE FROM interviews WHERE slot_id=?').run(slotId);
-    db.prepare('DELETE FROM slots WHERE id=?').run(slotId);
-    db.exec('COMMIT');
+    await Interview.findByIdAndUpdate(iv._id, {
+      $set: { status: 'completed', attendance: 'attended' },
+    });
 
-    logAudit(req, 'MENTOR_DELETE_SLOT', { slot_id: slotId });
-    flash(req, 'ok', 'Slot permanently deleted.');
+    logAudit(req, 'MENTOR_SUBMIT_EVALUATION', { interview_id: iv._id, total }, mentorId);
+    flash(req, 'ok', 'Evaluation submitted successfully.');
+    res.redirect(`/mentor/interview/${iv._id}`);
   } catch (e) {
-    try { db.exec('ROLLBACK'); } catch (_) {}
-    flash(req, 'err', 'Could not delete slot: ' + e.message);
+    flash(req, 'err', e.message);
+    res.redirect(`/mentor/interview/${iv._id}`);
   }
-  res.redirect('/mentor');
 });
 
 module.exports = router;

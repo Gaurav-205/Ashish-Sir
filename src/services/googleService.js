@@ -160,7 +160,8 @@ async function exchangeCode(code, redirectUri = null) {
 }
 
 async function getValidAccessToken(userId) {
-  const user = db.prepare('SELECT id, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(userId);
+  const { User } = require('../models');
+  const user = await User.findById(userId).lean();
   if (!user || !user.google_access_token) return null;
 
   // Check if token is still valid (buffer of 60 seconds)
@@ -189,8 +190,10 @@ async function getValidAccessToken(userId) {
     if (!res.ok || data.error) return null;
 
     const newExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
-    db.prepare('UPDATE users SET google_access_token=?, google_token_expiry=? WHERE id=?')
-      .run(data.access_token, newExpiry, user.id);
+    await User.findByIdAndUpdate(user._id, {
+      google_access_token: data.access_token,
+      google_token_expiry: newExpiry,
+    });
 
     return data.access_token;
   } catch (e) {
@@ -201,6 +204,7 @@ async function getValidAccessToken(userId) {
 
 async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   if (!student || !mentor || !slot) return null;
+  const { Slot, Interview } = require('../models');
 
   const summary = `Konfident 2025: ${h.titleCase(slot.type)} Mock Interview`;
   const description = `Mock Interview Session\nStudent: ${student.name} (${student.email})\nMentor: ${mentor.name} (${mentor.email})\nType: ${h.titleCase(slot.type)}\nMode: ${slot.mode}${slot.location ? `\nLocation/Meeting Link: ${slot.location}` : ''}`;
@@ -220,19 +224,18 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
     ],
     conferenceData: {
       createRequest: {
-        requestId: `konfident-${slot.id || interviewId || 'iv'}-${Date.now()}`,
+        requestId: `konfident-${slot.id || slot._id || interviewId || 'iv'}-${Date.now()}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     },
   };
 
-  // Attempt sync for student and mentor
   let createdEventId = null;
   let meetUrl = null;
 
   for (const person of [student, mentor]) {
     if (!person.google_calendar_enabled) continue;
-    const token = await getValidAccessToken(person.id);
+    const token = await getValidAccessToken(person.id || person._id);
     if (!token) continue;
 
     try {
@@ -250,15 +253,15 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
         meetUrl = data.hangoutLink || (data.conferenceData && data.conferenceData.entryPoints && data.conferenceData.entryPoints[0] ? data.conferenceData.entryPoints[0].uri : null);
       }
     } catch (err) {
-      console.error(`Error adding calendar event for user ${person.id}:`, err);
+      console.error(`Error adding calendar event for user ${person.id || person._id}:`, err);
     }
   }
 
   if (createdEventId && interviewId) {
     try {
-      db.prepare('UPDATE interviews SET google_event_id=? WHERE id=?').run(createdEventId, interviewId);
-      if (meetUrl && slot.id) {
-        db.prepare("UPDATE slots SET location=? WHERE id=?").run(meetUrl, slot.id);
+      await Interview.findByIdAndUpdate(interviewId, { google_event_id: createdEventId });
+      if (meetUrl && (slot.id || slot._id)) {
+        await Slot.findByIdAndUpdate(slot.id || slot._id, { location: meetUrl });
       }
     } catch (_) {}
   }
@@ -268,9 +271,9 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
 
 async function createSlotCalendarEvent({ mentor, slot }) {
   if (!mentor || !slot) return null;
-  if (!mentor.google_calendar_enabled) return null;
+  const { Slot } = require('../models');
 
-  const token = await getValidAccessToken(mentor.id);
+  const token = await getValidAccessToken(mentor.id || mentor._id);
   if (!token) return null;
 
   const summary = `Konfident: Available ${h.titleCase(slot.type)} Slot`;
@@ -286,7 +289,7 @@ async function createSlotCalendarEvent({ mentor, slot }) {
     end: { dateTime: new Date(endIso).toISOString(), timeZone: 'Asia/Kolkata' },
     conferenceData: {
       createRequest: {
-        requestId: `konfident-slot-${slot.id}-${Date.now()}`,
+        requestId: `konfident-slot-${slot.id || slot._id}-${Date.now()}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     },
@@ -304,15 +307,13 @@ async function createSlotCalendarEvent({ mentor, slot }) {
     const data = await res.json();
     if (res.ok && data.id) {
       const meetUrl = data.hangoutLink || (data.conferenceData && data.conferenceData.entryPoints && data.conferenceData.entryPoints[0] ? data.conferenceData.entryPoints[0].uri : null);
-      if (meetUrl) {
-        db.prepare('UPDATE slots SET google_event_id=?, location=? WHERE id=?').run(data.id, meetUrl, slot.id);
-      } else {
-        db.prepare('UPDATE slots SET google_event_id=? WHERE id=?').run(data.id, slot.id);
-      }
+      const updateData = { google_event_id: data.id };
+      if (meetUrl) updateData.location = meetUrl;
+      await Slot.findByIdAndUpdate(slot.id || slot._id, updateData);
       return { eventId: data.id, meetUrl };
     }
   } catch (err) {
-    console.error(`Error creating calendar event for slot ${slot.id}:`, err);
+    console.error(`Error creating calendar event for slot ${slot.id || slot._id}:`, err);
   }
   return null;
 }
@@ -331,7 +332,7 @@ async function updateCalendarEvent({ eventId, student, mentor, slot }) {
   };
 
   for (const person of [student, mentor].filter(Boolean)) {
-    const token = await getValidAccessToken(person.id);
+    const token = await getValidAccessToken(person.id || person._id);
     if (!token) continue;
 
     try {
@@ -353,7 +354,7 @@ async function removeCalendarEvent({ eventId, student, mentor }) {
   if (!eventId) return;
 
   for (const person of [student, mentor].filter(Boolean)) {
-    const token = await getValidAccessToken(person.id);
+    const token = await getValidAccessToken(person.id || person._id);
     if (!token) continue;
 
     try {
@@ -368,48 +369,30 @@ async function removeCalendarEvent({ eventId, student, mentor }) {
 }
 
 async function syncUpcomingMentorSlots(mentor) {
-  if (!mentor || !mentor.id) return;
-  const token = await getValidAccessToken(mentor.id);
+  if (!mentor || (!mentor.id && !mentor._id)) return;
+  const { Slot, Interview, User } = require('../models');
+  const mentorId = mentor.id || mentor._id;
+  const token = await getValidAccessToken(mentorId);
   if (!token) return;
 
   const now = h.nowMinute();
 
-  // 1. Sync upcoming booked interviews where Google Meet is pending
   try {
-    const bookedInterviews = db.prepare(`
-      SELECT i.id AS interview_id, i.google_event_id AS interview_google_event_id,
-             s.id AS slot_id, s.slot_date, s.start_time, s.end_time, s.type, s.mode, s.location, s.google_event_id AS slot_google_event_id,
-             st.id AS student_id, st.name AS student_name, st.email AS student_email,
-             st.google_calendar_enabled AS student_cal_enabled
-        FROM interviews i
-        JOIN slots s ON s.id = i.slot_id
-        JOIN users st ON st.id = i.student_id
-       WHERE i.mentor_id = ? AND i.status = 'booked'
-         AND (s.slot_date || ' ' || s.start_time) > ?
-    `).all(mentor.id, now);
+    const bookedInterviews = await Interview.find({
+      mentor_id: mentorId,
+      status: 'booked',
+      google_event_id: null,
+    }).populate('slot_id').populate('student_id').lean();
 
     for (const iv of bookedInterviews) {
-      if (!iv.interview_google_event_id) {
-        const studentObj = {
-          id: iv.student_id,
-          name: iv.student_name,
-          email: iv.student_email,
-          google_calendar_enabled: iv.student_cal_enabled,
-        };
-        const slotObj = {
-          id: iv.slot_id,
-          slot_date: iv.slot_date,
-          start_time: iv.start_time,
-          end_time: iv.end_time,
-          type: iv.type,
-          mode: iv.mode,
-          location: iv.location,
-        };
+      const slot = iv.slot_id;
+      const student = iv.student_id;
+      if (slot && (slot.slot_date + ' ' + slot.start_time) > now) {
         await syncCalendarEvent({
-          student: studentObj,
+          student,
           mentor,
-          slot: slotObj,
-          interviewId: iv.interview_id,
+          slot,
+          interviewId: iv._id,
         }).catch(() => {});
       }
     }
@@ -417,16 +400,17 @@ async function syncUpcomingMentorSlots(mentor) {
     console.error('Error syncing booked interviews for mentor:', err && err.message);
   }
 
-  // 2. Sync upcoming open slots created on mentor's behalf that don't have real Google Meet links yet
   try {
-    const openSlots = db.prepare(`
-      SELECT * FROM slots
-       WHERE mentor_id = ? AND status = 'open' AND google_event_id IS NULL
-         AND (slot_date || ' ' || start_time) > ?
-    `).all(mentor.id, now);
+    const openSlots = await Slot.find({
+      mentor_id: mentorId,
+      status: 'open',
+      google_event_id: null,
+    }).lean();
 
     for (const slot of openSlots) {
-      await createSlotCalendarEvent({ mentor, slot }).catch(() => {});
+      if ((slot.slot_date + ' ' + slot.start_time) > now) {
+        await createSlotCalendarEvent({ mentor, slot }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error('Error syncing open slots for mentor:', err && err.message);

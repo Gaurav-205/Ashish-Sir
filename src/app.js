@@ -56,18 +56,19 @@ if (!sessionSecret) {
   console.warn('[security] SESSION_SECRET is not set — using the built-in development secret. Never do this outside local dev.');
 }
 
-const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const MongoStore = require('connect-mongo');
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 
 let sessionStore;
-if (isVercel) {
+try {
+  sessionStore = MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60, // 14 days
+    autoRemove: 'native',
+  });
+} catch (_) {
   sessionStore = new session.MemoryStore();
-} else {
-  try {
-    const SQLiteStore = require('connect-sqlite3')(session);
-    sessionStore = new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, '..', 'data') });
-  } catch (_) {
-    sessionStore = new session.MemoryStore();
-  }
 }
 
 app.use(session({

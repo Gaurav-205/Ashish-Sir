@@ -1,20 +1,20 @@
 'use strict';
 const express = require('express');
-const db = require('../db');
+const { Slot, Interview, User, StudentFeedback } = require('../models');
 const q = require('../queries');
 const h = require('../helpers');
 const { requireRole } = require('../auth');
-
-const router = express.Router();
 const google = require('../services/googleService');
 const emailService = require('../services/emailService');
 const { validateId, createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
+
+const router = express.Router();
 router.use(requireRole('student'));
 
 const actionLimiter = createRateLimiter({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 30, // limit each IP/user to 30 requests per windowMs
+  max: 30,
   message: 'Too many requests. Please wait a moment before trying again.',
 });
 
@@ -24,9 +24,7 @@ function safeRedirectTarget(req, fallback = '/student') {
   const ref = req.headers.referer || req.headers.referrer;
   if (!ref) return fallback;
   try {
-    if (h.isSafeLocalPath(ref)) {
-      return ref;
-    }
+    if (h.isSafeLocalPath(ref)) return ref;
     const parsed = new URL(ref);
     const host = req.get('host');
     if (parsed.host === host) {
@@ -37,58 +35,63 @@ function safeRedirectTarget(req, fallback = '/student') {
   return fallback;
 }
 
-router.get('/', (req, res) => {
-  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
+router.get('/', async (req, res) => {
+  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
-  const openCounts = db.prepare(`
-    SELECT type, COUNT(*) c FROM slots
-     WHERE status='open' AND (slot_date || ' ' || start_time) > ?
-     GROUP BY type`).all(h.nowMinute());
-  const open = { technical: 0, hr: 0 };
-  for (const r of openCounts) open[r.type] = Number(r.c) || 0;
+
+  const now = h.nowMinute();
+  const openSlots = await Slot.find({ status: 'open' }).lean();
+  const upcomingOpen = openSlots.filter(sl => (sl.slot_date + ' ' + sl.start_time) > now);
+
+  const open = {
+    technical: upcomingOpen.filter(sl => sl.type === 'technical').length,
+    hr: upcomingOpen.filter(sl => sl.type === 'hr').length,
+  };
+
   res.render('student/dashboard', { title: 'My interviews', s, open });
 });
 
-router.get('/mentors', (req, res) => {
-  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
+router.get('/mentors', async (req, res) => {
+  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
-  const mentors = q.mentorsWithOpenSlots();
+  const mentors = await q.mentorsWithOpenSlots();
   res.render('student/mentors', { title: 'Mentors directory', mentors, s });
 });
 
-router.get('/slots', (req, res) => {
+router.get('/slots', async (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
-  const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
-  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
+  const mentorId = req.query.mentor ? req.query.mentor : null;
+  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
   const already = type === 'hr' ? s.hr : s.technical;
 
-  const where = [
-    's.type = ?',
-    "s.status = 'open'",
-    'm.active = 1',
-    "(s.slot_date || ' ' || s.start_time) > ?",
-    's.mentor_id != ?'
-  ];
-  const args = [type, h.nowMinute(), req.session.user.id];
+  const now = h.nowMinute();
+  const query = {
+    type,
+    status: 'open',
+    mentor_id: { $ne: req.session.user.id },
+  };
   if (mentorId) {
-    where.push('s.mentor_id = ?');
-    args.push(mentorId);
+    query.mentor_id = mentorId;
   }
 
-  const slots = db.prepare(`
-    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email
-      FROM slots s JOIN users m ON m.id = s.mentor_id
-     WHERE ${where.join(' AND ')}
-     ORDER BY s.slot_date, s.start_time`).all(...args);
+  const rawSlots = await Slot.find(query).populate('mentor_id', 'name email active').lean();
+  const slots = rawSlots
+    .filter(sl => sl.mentor_id && sl.mentor_id.active && (sl.slot_date + ' ' + sl.start_time) > now)
+    .map(sl => ({
+      ...sl,
+      id: sl._id,
+      mentor_name: sl.mentor_id.name,
+      mentor_email: sl.mentor_id.email,
+    }))
+    .sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
 
-  // Group by date for scannability
   const byDate = [];
   for (const slot of slots) {
     let g = byDate.find((x) => x.date === slot.slot_date);
@@ -96,263 +99,191 @@ router.get('/slots', (req, res) => {
     g.slots.push(slot);
   }
 
-  const limitCheck = h.checkWeeklyInterviewLimit(db, req.session.user.id, type, h.today());
+  const limitCheck = await h.checkWeeklyInterviewLimit(null, req.session.user.id, type, h.today());
 
-  const mentors = q.mentorsList(type);
   res.render('student/slots', {
-    title: `Book ${h.titleCase(type)} interview`,
+    title: `Book ${h.titleCase(type)} mock interview`,
     type,
     byDate,
     already,
-    limitReached: limitCheck.reached,
-    weeklyCount: limitCheck.count,
-    maxAllowed: limitCheck.maxAllowed,
-    slotWeek: limitCheck.week,
     s,
-    mentors,
-    selectedMentor: mentorId,
-  });
-});
-
-router.get('/api/slots/available', (req, res) => {
-  const type = req.query.type === 'hr' ? 'hr' : 'technical';
-  const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
-  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
-  if (!s || !s.student) {
-    return res.status(401).json({ ok: false, error: 'Your session is no longer valid. Please sign in again.' });
-  }
-  const already = type === 'hr' ? s.hr : s.technical;
-  const limitCheck = h.checkWeeklyInterviewLimit(db, req.session.user.id, type, h.today());
-
-  const where = [
-    's.type = ?',
-    "s.status = 'open'",
-    'm.active = 1',
-    "(s.slot_date || ' ' || s.start_time) > ?",
-    's.mentor_id != ?'
-  ];
-  const args = [type, h.nowMinute(), req.session.user.id];
-  if (mentorId) {
-    where.push('s.mentor_id = ?');
-    args.push(mentorId);
-  }
-
-  const slots = db.prepare(`
-    SELECT s.*, m.name AS mentor_name, m.email AS mentor_email
-      FROM slots s JOIN users m ON m.id = s.mentor_id
-     WHERE ${where.join(' AND ')}
-     ORDER BY s.slot_date, s.start_time`).all(...args);
-
-  const formattedSlots = slots.map(sl => ({
-    id: sl.id,
-    type: sl.type,
-    slot_date: sl.slot_date,
-    start_time: sl.start_time,
-    end_time: sl.end_time,
-    mode: sl.mode,
-    mentor_name: sl.mentor_name,
-    dateFormatted: h.fmtDate(sl.slot_date),
-    timeFormatted: `${h.fmtTime(sl.start_time)} – ${h.fmtTime(sl.end_time)}`,
-    slotFormatted: h.fmtSlot(sl),
-  }));
-
-  const byDate = [];
-  for (const slot of formattedSlots) {
-    let g = byDate.find((x) => x.date === slot.slot_date);
-    if (!g) { g = { date: slot.slot_date, dateFormatted: slot.dateFormatted, slots: [] }; byDate.push(g); }
-    g.slots.push(slot);
-  }
-
-  res.json({
-    ok: true,
-    type,
-    already: already ? { id: already.id, status: already.status, mentor_name: already.mentor_name, slotFormatted: h.fmtSlot(already) } : null,
-    limitReached: limitCheck.reached,
-    weeklyCount: limitCheck.count,
-    maxAllowed: limitCheck.maxAllowed,
-    count: slots.length,
-    earliest: formattedSlots[0] || null,
-    profileComplete: s ? s.profileComplete : false,
-    missingFields: s ? s.missingFields : [],
-    byDate,
-    slots: formattedSlots,
-    fetchedAt: new Date().toISOString(),
+    mentorFilter: mentorId,
+    limitCheck,
+    isComplete: h.isStudentProfileComplete(s.student),
+    missingFields: h.getMissingStudentProfileFields(s.student),
   });
 });
 
 router.post('/book', actionLimiter, async (req, res) => {
-  const slotId = Number(req.body.slot_id);
+  const slotId = req.body.slot_id;
   const studentId = req.session.user.id;
-  const studentUser = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url FROM users WHERE id = ?').get(studentId);
+  const student = await User.findById(studentId).lean();
 
-  if (!h.isStudentProfileComplete(studentUser)) {
-    const missing = h.getMissingStudentProfileFields(studentUser);
-    flash(req, 'err', `Profile Incomplete: Please complete all profile details (${missing.join(', ')}) before booking an interview slot.`);
+  if (!student) return res.redirect('/login');
+
+  if (!h.isStudentProfileComplete(student)) {
+    const missing = h.getMissingStudentProfileFields(student);
+    flash(req, 'err', `Profile Incomplete: Please fill out your ${missing.join(', ')} before booking.`);
     return res.redirect('/profile');
   }
 
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    const slot = db.prepare(`SELECT s.*, m.active AS mentor_active FROM slots s
-                             JOIN users m ON m.id = s.mentor_id WHERE s.id = ?`).get(slotId);
-    if (!slot) throw new Error('That slot no longer exists.');
-    if (slot.status !== 'open') throw new Error('Sorry — someone just booked that slot. Please pick another.');
-    if (!slot.mentor_active) throw new Error('That mentor is no longer available. Please pick another slot.');
-    if (h.isPast(slot)) throw new Error('That slot is in the past.');
-    if (slot.mentor_id === studentId) throw new Error('You cannot book your own slot.');
-
-    const slotWeek = h.getWeekRange(slot.slot_date);
-    const maxAllowed = slot.type === 'technical' ? 3 : 1;
-    const existingCount = db.prepare(`
-      SELECT COUNT(*) AS c FROM interviews i
-      JOIN slots s2 ON s2.id = i.slot_id
-      WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
-        AND s2.slot_date >= ? AND s2.slot_date <= ?
-    `).get(studentId, slot.type, slotWeek.start, slotWeek.end).c;
-
-    if (existingCount >= maxAllowed) {
-      throw new Error(`You have reached the maximum limit of ${maxAllowed} ${h.titleCase(slot.type)} interview${maxAllowed > 1 ? 's' : ''} for this weekly cycle (${slotWeek.label}).`);
-    }
-
-    // no clashing booking at the same date/time for this student
-    const clash = db.prepare(`
-      SELECT 1 FROM interviews i JOIN slots s2 ON s2.id = i.slot_id
-       WHERE i.student_id = ? AND i.status <> 'cancelled'
-         AND s2.slot_date = ? AND s2.start_time < ? AND s2.end_time > ?`)
-      .get(studentId, slot.slot_date, slot.end_time, slot.start_time);
-    if (clash) throw new Error('You already have another interview at that time.');
-
-    const updateRes = db.prepare(`UPDATE slots SET status='booked' WHERE id=? AND status='open'`).run(slot.id);
-    if (updateRes.changes === 0) {
-      throw new Error('Sorry — someone just booked that slot. Please pick another.');
-    }
-
-    const insert = db.prepare(`INSERT INTO interviews (student_id, mentor_id, slot_id, type)
-                               VALUES (?,?,?,?)`).run(studentId, slot.mentor_id, slot.id, slot.type);
-    db.exec('COMMIT');
-
-    // Asynchronously sync to Google Calendar and dispatch confirmation email
-    const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(studentId);
-    const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(slot.mentor_id);
-    google.syncCalendarEvent({ student, mentor, slot, interviewId: insert.lastInsertRowid }).catch(() => {});
-    emailService.sendBookingConfirmation({ student, mentor, slot, meetingLink: slot.location }).catch(() => {});
-
-    logAudit(req, 'STUDENT_BOOK_SLOT', { slot_id: slot.id, type: slot.type });
-
-    flash(req, 'ok', `${h.titleCase(slot.type)} interview booked for ${h.fmtSlot(slot)}.`);
+  const slot = await Slot.findById(slotId).lean();
+  if (!slot) {
+    flash(req, 'err', 'Selected slot was not found.');
     return res.redirect('/student');
-  } catch (e) {
-    try { db.exec('ROLLBACK'); } catch (_) {}
-    flash(req, 'err', e.message);
-    const redirectType = req.body.type === 'hr' ? 'hr' : 'technical';
-    return res.redirect('/student/slots?type=' + redirectType);
   }
-});
 
-router.post('/cancel/:id', validateId('id'), actionLimiter, async (req, res) => {
-  const iv = db.prepare(`SELECT * FROM interviews WHERE id=? AND student_id=?`)
-    .get(Number(req.params.id), req.session.user.id);
-  if (!iv) {
-    flash(req, 'err', 'Booking not found.');
-  } else if (iv.status !== 'booked') {
-    flash(req, 'err', 'Only upcoming interviews can be cancelled.');
-  } else if (iv.attendance !== 'pending') {
-    flash(req, 'err', 'Cannot cancel an interview once attendance has been recorded.');
-  } else {
-    const slot = db.prepare(`SELECT * FROM slots WHERE id=?`).get(iv.slot_id);
-    if (slot && h.isPast(slot)) {
-      flash(req, 'err', 'Past slots cannot be cancelled.');
-    } else {
-      try {
-        db.exec('BEGIN IMMEDIATE');
-        db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
-        db.prepare(`UPDATE slots SET status='open' WHERE id=? AND status='booked'`).run(iv.slot_id);
-        db.exec('COMMIT');
-
-        // Remove Google Calendar event if synced and notify
-        if (iv.google_event_id) {
-          const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
-          const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
-          google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
-        }
-        const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
-        const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.mentor_id);
-        emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot }).catch(() => {});
-
-        logAudit(req, 'STUDENT_CANCEL_SLOT', { interview_id: iv.id, slot_id: iv.slot_id });
-
-        flash(req, 'ok', 'Booking cancelled. You can book another slot.');
-      } catch (e) {
-        try { db.exec('ROLLBACK'); } catch (_) {}
-        flash(req, 'err', 'Could not cancel booking: ' + e.message);
-      }
-    }
+  if (slot.status !== 'open') {
+    flash(req, 'err', 'That slot was just taken by another student. Please pick another.');
+    return res.redirect(`/student/slots?type=${slot.type}`);
   }
+
+  if ((slot.slot_date + ' ' + slot.start_time) <= h.nowMinute()) {
+    flash(req, 'err', 'Cannot book a slot in the past.');
+    return res.redirect(`/student/slots?type=${slot.type}`);
+  }
+
+  const limitCheck = await h.checkWeeklyInterviewLimit(null, studentId, slot.type, slot.slot_date);
+  if (limitCheck.reached) {
+    flash(req, 'err', `Weekly limit reached: You have already booked ${limitCheck.count} of ${limitCheck.maxAllowed} allowed ${slot.type} interview(s) for this week.`);
+    return res.redirect('/student');
+  }
+
+  const updatedSlot = await Slot.findOneAndUpdate(
+    { _id: slot._id, status: 'open' },
+    { $set: { status: 'booked' } },
+    { new: true }
+  );
+
+  if (!updatedSlot) {
+    flash(req, 'err', 'That slot was just taken by another student. Please pick another.');
+    return res.redirect(`/student/slots?type=${slot.type}`);
+  }
+
+  const newIv = await Interview.create({
+    slot_id: slot._id,
+    student_id: student._id,
+    mentor_id: slot.mentor_id,
+    type: slot.type,
+    status: 'booked',
+    attendance: 'pending',
+  });
+
+  const mentor = await User.findById(slot.mentor_id).lean();
+
+  // Trigger Google Meet / Calendar Sync
+  google.syncCalendarEvent({
+    student,
+    mentor,
+    slot,
+    interviewId: newIv._id,
+  }).catch((err) => console.error('Background Google calendar sync failed:', err));
+
+  emailService.sendBookingConfirmation({
+    student,
+    mentor,
+    slot,
+    interview: newIv,
+  }).catch((err) => console.error('Booking notification email failed:', err));
+
+  logAudit(req, 'STUDENT_BOOK_SLOT', { slot_id: slot._id, interview_id: newIv._id, type: slot.type }, student._id);
+  flash(req, 'ok', `Booked ${h.titleCase(slot.type)} interview with ${mentor ? mentor.name : 'Mentor'} on ${h.fmtDate(slot.slot_date)} at ${h.fmtTime(slot.start_time)}.`);
   res.redirect('/student');
 });
 
-router.get('/results', (req, res) => {
-  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
-  if (!s || !s.student) {
-    return req.session.destroy(() => res.redirect('/login'));
+router.post('/cancel', actionLimiter, async (req, res) => {
+  const ivId = req.body.interview_id;
+  const studentId = req.session.user.id;
+
+  const iv = await Interview.findOne({ _id: ivId, student_id: studentId, status: 'booked' }).populate('slot_id').populate('mentor_id').lean();
+  if (!iv) {
+    flash(req, 'err', 'Active booking not found.');
+    return res.redirect('/student');
   }
-  res.render('student/results', { title: 'My results', s });
+
+  const slot = iv.slot_id;
+  if (!slot) {
+    flash(req, 'err', 'Associated slot not found.');
+    return res.redirect('/student');
+  }
+
+  if ((slot.slot_date + ' ' + slot.start_time) <= h.nowMinute()) {
+    flash(req, 'err', 'Cannot cancel a slot that has already started or passed.');
+    return res.redirect('/student');
+  }
+
+  await Interview.findByIdAndUpdate(iv._id, { $set: { status: 'cancelled' } });
+  await Slot.findByIdAndUpdate(slot._id, { $set: { status: 'open' } });
+
+  const student = await User.findById(studentId).lean();
+  const mentor = iv.mentor_id;
+
+  if (iv.google_event_id) {
+    google.removeCalendarEvent({
+      eventId: iv.google_event_id,
+      student,
+      mentor,
+    }).catch((err) => console.error('Background calendar event removal failed:', err));
+  }
+
+  emailService.sendCancellationNotice({
+    student,
+    mentor,
+    slot,
+    interview: iv,
+    cancelledBy: 'student',
+  }).catch((err) => console.error('Cancellation notice email failed:', err));
+
+  logAudit(req, 'STUDENT_CANCEL_BOOKING', { interview_id: iv._id, slot_id: slot._id }, studentId);
+  flash(req, 'ok', 'Booking cancelled. The slot has been released back for other students.');
+  res.redirect('/student');
 });
 
-router.post(['/feedback/:interviewId', '/interview/:interviewId/feedback'], validateId('interviewId'), actionLimiter, (req, res) => {
-  const interviewId = Number(req.params.interviewId);
+router.post('/interview/:id/feedback', actionLimiter, validateId('id'), async (req, res) => {
+  const ivId = req.params.id;
   const studentId = req.session.user.id;
-  const iv = db.prepare(`SELECT i.*, s.type FROM interviews i JOIN slots s ON s.id = i.slot_id WHERE i.id = ? AND i.student_id = ?`).get(interviewId, studentId);
+
+  const iv = await Interview.findOne({ _id: ivId, student_id: studentId }).lean();
   if (!iv) {
     flash(req, 'err', 'Interview not found.');
     return res.redirect('/student');
   }
-  if (iv.attendance === 'absent' || (iv.status !== 'completed' && iv.attendance !== 'attended')) {
-    flash(req, 'err', 'Feedback can only be submitted for attended interviews.');
-    return res.redirect(safeRedirectTarget(req, '/student'));
-  }
 
   const satisfaction = Number(req.body.satisfaction);
-  if (!Number.isInteger(satisfaction) || satisfaction < 1 || satisfaction > 5) {
-    flash(req, 'err', 'Please select an overall satisfaction rating from 1 to 5.');
-    return res.redirect(safeRedirectTarget(req, '/student/results'));
-  }
-
   const structured = Number(req.body.structured);
+  const hr_relevant = req.body.hr_relevant ? Number(req.body.hr_relevant) : null;
+  const feedback_text = String(req.body.feedback_text || '').trim() || null;
+
+  if (!Number.isInteger(satisfaction) || satisfaction < 1 || satisfaction > 5) {
+    flash(req, 'err', 'Please provide a valid satisfaction rating (1 to 5 stars).');
+    return res.redirect('/student');
+  }
+
   if (structured !== 0 && structured !== 1) {
-    flash(req, 'err', 'Please answer whether the interview felt structured and well organized.');
-    return res.redirect(safeRedirectTarget(req, '/student/results'));
+    flash(req, 'err', 'Please answer whether the interview was structured.');
+    return res.redirect('/student');
   }
 
-  let hr_relevant = null;
-  if (iv.type === 'hr') {
-    hr_relevant = Number(req.body.hr_relevant);
-    if (hr_relevant !== 0 && hr_relevant !== 1) {
-      flash(req, 'err', 'Please answer whether the HR questions were relevant to placement/job preparation.');
-      return res.redirect(safeRedirectTarget(req, '/student/results'));
-    }
+  const existing = await StudentFeedback.findOne({ interview_id: iv._id }).lean();
+  if (existing) {
+    await StudentFeedback.findByIdAndUpdate(existing._id, {
+      $set: { satisfaction, structured, hr_relevant, feedback_text, submitted_at: new Date() },
+    });
+  } else {
+    await StudentFeedback.create({
+      interview_id: iv._id,
+      student_id: studentId,
+      mentor_id: iv.mentor_id,
+      satisfaction,
+      structured,
+      hr_relevant,
+      feedback_text,
+    });
   }
 
-  const feedbackText = String(req.body.feedback_text || '').trim() || null;
-
-  try {
-    const existing = db.prepare('SELECT id FROM student_feedbacks WHERE interview_id = ?').get(interviewId);
-    if (existing) {
-      db.prepare(`UPDATE student_feedbacks SET satisfaction=?, structured=?, hr_relevant=?, feedback_text=?, submitted_at=? WHERE interview_id=?`)
-        .run(satisfaction, structured, hr_relevant, feedbackText, h.nowStamp(), interviewId);
-    } else {
-      db.prepare(`INSERT INTO student_feedbacks (interview_id, student_id, mentor_id, satisfaction, structured, hr_relevant, feedback_text) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(interviewId, studentId, iv.mentor_id, satisfaction, structured, hr_relevant, feedbackText);
-    }
-    logAudit(req, 'STUDENT_SUBMIT_FEEDBACK', { interview_id: interviewId, mentor_id: iv.mentor_id });
-    flash(req, 'ok', 'Thank you! Your feedback for the mentor has been submitted.');
-  } catch (err) {
-    console.error('Error saving student feedback:', err);
-    flash(req, 'err', 'Could not save feedback: ' + err.message);
-  }
-
-  return res.redirect(safeRedirectTarget(req, '/student/results'));
+  logAudit(req, 'STUDENT_SUBMIT_FEEDBACK', { interview_id: iv._id, satisfaction }, studentId);
+  flash(req, 'ok', 'Thank you for submitting your feedback!');
+  res.redirect('/student');
 });
 
 module.exports = router;
-

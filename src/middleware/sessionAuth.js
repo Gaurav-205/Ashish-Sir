@@ -99,7 +99,7 @@ function clearAuthSession(req, res, callback) {
  * Middleware to rehydrate req.session.user from the signed backup cookie
  * across serverless Lambda instances where in-memory sessions are not shared.
  */
-function sessionRehydrateMiddleware(req, res, next) {
+async function sessionRehydrateMiddleware(req, res, next) {
   if (req.session && req.session.user) {
     return next();
   }
@@ -109,15 +109,16 @@ function sessionRehydrateMiddleware(req, res, next) {
   if (!token) return next();
 
   const payload = verifyToken(token);
-  if (!payload) return next();
+  if (!payload || !payload.id) return next();
 
   try {
-    const row = db.prepare('SELECT id, name, email, role, active, sessions_invalid_before FROM users WHERE id = ?').get(payload.id);
+    const { User } = require('../models');
+    const row = await User.findById(payload.id).lean();
     const tokenTs = Number(payload.ts) || 0;
     const staleAfterPwChange = row && row.sessions_invalid_before && tokenTs < Number(row.sessions_invalid_before);
     if (row && row.active && !staleAfterPwChange) {
       if (!req.session) req.session = {};
-      req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role, iat: tokenTs || Date.now() };
+      req.session.user = { id: row._id, name: row.name, email: row.email, role: row.role, iat: tokenTs || Date.now() };
       res.locals.user = req.session.user;
       if (typeof req.session.save === 'function') {
         req.session.save((err) => {

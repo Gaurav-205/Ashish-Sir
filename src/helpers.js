@@ -271,15 +271,18 @@ function isValidTime(timeStr) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr.trim());
 }
 
-function checkWeeklyInterviewLimit(db, studentId, type, slotDate) {
+async function checkWeeklyInterviewLimit(dbOrModels, studentId, type, slotDate) {
   const week = getWeekRange(slotDate || today());
   const maxAllowed = type === 'technical' ? 3 : 1;
-  const count = db.prepare(`
-    SELECT COUNT(*) AS c FROM interviews i
-    JOIN slots s2 ON s2.id = i.slot_id
-    WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
-      AND s2.slot_date >= ? AND s2.slot_date <= ?
-  `).get(studentId, type, week.start, week.end).c;
+  const { Interview } = require('./models');
+
+  const ivs = await Interview.find({
+    student_id: studentId,
+    type,
+    status: { $ne: 'cancelled' },
+  }).populate('slot_id').lean();
+
+  const count = ivs.filter(iv => iv.slot_id && iv.slot_id.slot_date >= week.start && iv.slot_id.slot_date <= week.end).length;
 
   return {
     reached: count >= maxAllowed,
