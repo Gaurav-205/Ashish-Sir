@@ -301,11 +301,21 @@ router.get('/slots', async (req, res) => {
   const rawStudents = await User.find({ role: 'student', active: 1 }).sort({ name: 1 }).lean();
   const students = rawStudents.map(st => ({ ...st, id: st._id }));
 
+  const params = new URLSearchParams();
+  if (when) params.set('when', when);
+  if (filterDate) params.set('date', filterDate);
+  if (mentorFilter) params.set('mentor', mentorFilter);
+  if (typeFilter) params.set('type', typeFilter);
+  if (statusFilter) params.set('status', statusFilter);
+  const baseQuery = params.toString();
+
   res.render('admin/slots', {
     title: 'Slots management',
     slots,
     total: totalCount,
     totalCount,
+    pageCount: Math.ceil(totalCount / limit) || 1,
+    baseQuery,
     mentors: allMentors,
     techMentors: technicalMentors,
     hrMentors,
@@ -643,6 +653,80 @@ router.get('/audit', async (req, res) => {
     totalPages: Math.ceil(totalCount / limit) || 1,
     totalCount,
   });
+});
+
+/* ------------------------------- reports ------------------------------- */
+router.get('/reports', async (req, res) => {
+  const summaries = await q.allStudentSummaries();
+  const stats = await q.adminStats();
+
+  const evaluated = summaries.filter((s) => s.allEvaluated);
+  const doneCount = evaluated.length;
+
+  const totalScores = evaluated.map((s) => s.total);
+  const avg = totalScores.length ? totalScores.reduce((a, b) => a + b, 0) / totalScores.length : null;
+
+  const techScores = evaluated.map((s) => s.techScore).filter((v) => v != null);
+  const avgTech = techScores.length ? techScores.reduce((a, b) => a + b, 0) / techScores.length : null;
+
+  const hrScores = evaluated.map((s) => s.hrScore).filter((v) => v != null);
+  const avgHr = hrScores.length ? hrScores.reduce((a, b) => a + b, 0) / hrScores.length : null;
+
+  res.render('admin/reports', {
+    title: 'Cohort score sheet & reports',
+    summaries,
+    doneCount,
+    avg,
+    avgTech,
+    avgHr,
+    stats,
+    RUBRIC,
+    GRAND_TOTAL,
+  });
+});
+
+router.get('/reports.csv', async (req, res) => {
+  const summaries = await q.allStudentSummaries();
+  const rows = [];
+
+  const headers = [
+    'Roll No', 'Student Name', 'Email', 'Branch', 'Squad',
+    ...RUBRIC.technical.criteria.map(c => `Tech: ${c.label}`),
+    'Tech Total',
+    ...RUBRIC.hr.criteria.map(c => `HR: ${c.label}`),
+    'HR Total',
+    'Grand Total', 'Percentage', 'Status',
+  ];
+  rows.push(headers.join(','));
+
+  for (const s of summaries) {
+    const st = s.student;
+    const tech = s.technical || {};
+    const hr = s.hr || {};
+
+    const techMarks = RUBRIC.technical.criteria.map(c => tech[c.key] != null ? tech[c.key] : '');
+    const hrMarks = RUBRIC.hr.criteria.map(c => hr[c.key] != null ? hr[c.key] : '');
+
+    const row = [
+      `"${st.roll_no || ''}"`,
+      `"${st.name}"`,
+      `"${st.email}"`,
+      `"${st.branch || ''}"`,
+      `"${st.squad || ''}"`,
+      ...techMarks,
+      s.techScore != null ? s.techScore : '',
+      ...hrMarks,
+      s.hrScore != null ? s.hrScore : '',
+      s.total != null ? s.total : '',
+      s.percent != null ? `${s.percent}%` : '',
+      s.allEvaluated ? 'Completed' : 'Pending',
+    ];
+    rows.push(row.join(','));
+  }
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="cohort_reports.csv"');
+  res.send('\uFEFF' + rows.join('\n'));
 });
 
 module.exports = router;

@@ -286,4 +286,18 @@ router.post('/interview/:id/feedback', actionLimiter, validateId('id'), async (r
   res.redirect('/student');
 });
 
+router.get('/results', async (req, res) => {
+  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
+  const { RUBRIC, GRAND_TOTAL } = require('../rubric');
+  res.render('student/results', {
+    title: 'My performance & scorecard',
+    s,
+    RUBRIC,
+    GRAND_TOTAL,
+  });
+});
+
 module.exports = router;
