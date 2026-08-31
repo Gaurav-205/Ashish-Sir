@@ -174,6 +174,10 @@ router.post('/interview/:id/attendance', validateId('id'), (req, res) => {
   if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
+  if (iv.status === 'cancelled') {
+    flash(req, 'err', 'Cannot alter attendance for a cancelled interview.');
+    return res.redirect('/mentor/interview/' + iv.id);
+  }
   if (iv.eval_id) {
     flash(req, 'err', 'Cannot alter attendance after an evaluation has already been submitted.');
     return res.redirect('/mentor/interview/' + iv.id);
@@ -203,6 +207,10 @@ router.post('/interview/:id/complete', validateId('id'), (req, res) => {
   if (!iv || (iv.mentor_id !== req.session.user.id && !res.locals.isDeveloper)) {
     return res.status(403).render('error', { title: 'Not your interview', message: 'Access denied.' });
   }
+  if (iv.status === 'cancelled') {
+    flash(req, 'err', 'Cannot complete a cancelled interview.');
+    return res.redirect('/mentor/interview/' + iv.id);
+  }
   if (iv.eval_id) {
     flash(req, 'err', 'Interview has already been completed and evaluated.');
     return res.redirect('/mentor/interview/' + iv.id);
@@ -227,6 +235,7 @@ router.post('/interview/:id/evaluate', validateId('id'), (req, res) => {
     title: 'Evaluate', iv, error, form: req.body,
   });
 
+  if (iv.status === 'cancelled') return rerender('Cannot submit scores for a cancelled interview.');
   if (iv.attendance === 'absent') return rerender('Cannot submit scores for an absent candidate. Mark attendance as attended first.');
   if (iv.status !== 'completed') return rerender('Mark candidate as attended and completed before submitting scores.');
   if (iv.eval_id) return rerender('An evaluation has already been submitted for this interview.');

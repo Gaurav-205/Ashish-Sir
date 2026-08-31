@@ -20,6 +20,14 @@ function isUserDeveloper(user) {
   );
 }
 
+function isDualRoleUser(user) {
+  if (!user) return false;
+  if (isUserDeveloper(user)) return true;
+  const email = String(user.email || '').toLowerCase();
+  const canEval = Boolean(user.can_technical || user.can_hr);
+  return email === 'akshata.sanap@kalvium.com' || (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || email === 'akshata.sanap@kalvium.com'));
+}
+
 /**
  * Re-reads the session user from the database on every request so that a
  * deactivated, deleted or role-changed account cannot keep using a session
@@ -55,19 +63,24 @@ function resolveCurrentUser(req, res) {
   }
 
   const isDev = isUserDeveloper(user);
+  const isDual = isDualRoleUser(user);
 
   req.session.user.name = user.name;
   req.session.user.email = user.email;
   req.session.user.is_developer = isDev;
+  req.session.user.is_dual_role = isDual;
 
-  if (isDev && req.session.activeRole) {
+  if (req.session.activeRole && (isDev || isDual)) {
     req.session.user.role = req.session.activeRole;
   } else {
-    req.session.user.role = isDev ? (req.session.activeRole || user.role || 'developer') : user.role;
+    req.session.user.role = isDev ? 'developer' : (req.session.activeRole || user.role);
   }
+
+  console.log('[DEBUG auth.js]', { isDev, activeRole: req.session.user.role, userRole: user.role });
 
   res.locals.user = req.session.user;
   res.locals.isDeveloper = isDev;
+  res.locals.isDualRole = isDual;
   res.locals.activeRole = req.session.user.role;
   return user;
 }
@@ -89,12 +102,17 @@ function requireRole(...roles) {
     if (!user) return;
 
     const isDev = isUserDeveloper(user);
-    // Developer can access everything across all roles
     if (isDev) {
       return next();
     }
 
-    const currentRole = (req.session.user && req.session.user.role) || user.role;
+    const isDual = isDualRoleUser(user);
+    const currentRole = (req.session.user && req.session.user.role) || req.session.activeRole || user.role;
+
+    if (isDual && roles.includes(currentRole)) {
+      return next();
+    }
+
     if (!roles.includes(currentRole)) {
       if (!req.accepts('html')) {
         return res.status(403).json({ error: 'You do not have permission to perform this action.' });
@@ -110,4 +128,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireLogin, requireRole, homeFor, isUserDeveloper, HOME };
+module.exports = { requireLogin, requireRole, homeFor, isUserDeveloper, isDualRoleUser, HOME };

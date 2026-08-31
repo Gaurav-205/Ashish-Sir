@@ -48,10 +48,19 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
           <% if (isDev) { %>
             <span class="pill role-pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">DEV</span>
           <% } else { %>
-            <span class="pill role-pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>"><%= user.role %></span>
+            <span class="pill role-pill p-<%= activeRole === 'admin' ? 'brand' : (activeRole === 'mentor' ? 'hr' : 'technical') %>"><%= activeRole %></span>
           <% } %>
         </span>
       </a>
+      <% if (typeof isDualRole !== 'undefined' && isDualRole && !isDev) { %>
+        <form method="post" action="/switch-role" style="margin:0;display:inline">
+          <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+          <input type="hidden" name="targetRole" value="<%= activeRole === 'admin' ? 'mentor' : 'admin' %>">
+          <button type="submit" class="btn sm" style="background:var(--surface-alt);border:1px solid var(--line-medium);font-weight:600;font-size:12px;padding:5px 10px;cursor:pointer" title="Switch to <%= activeRole === 'admin' ? 'Mentor' : 'Admin' %> mode">
+            Switch to <%= activeRole === 'admin' ? 'Mentor' : 'Admin' %> →
+          </button>
+        </form>
+      <% } %>
       <form method="post" action="/logout" style="margin:0">
         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
         <button class="btn sm who-action">Sign out</button>

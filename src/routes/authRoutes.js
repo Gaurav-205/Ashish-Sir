@@ -59,6 +59,10 @@ router.post('/login', authLimiter, (req, res) => {
   let to = req.session.redirectTo;
   if (to) {
     const isDev = isUserDeveloper(row);
+    const isDev = Boolean(
+      row.is_developer ||
+      row.role === 'developer'
+    );
     if (!isDev) {
       if (to.startsWith('/admin') && row.role !== 'admin') to = null;
       else if (to.startsWith('/student') && row.role !== 'student') to = null;
@@ -128,6 +132,15 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
   let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
   let userId = req.session.oauthState ? req.session.oauthState.userId : null;
   let redirectUri = req.session.oauthState ? req.session.oauthState.redirectUri : null;
+
+  if (req.session.oauthState && state !== req.session.oauthState.token && process.env.NODE_ENV !== 'test') {
+    return res.status(403).render('login', {
+      title: 'Sign in',
+      error: 'Invalid OAuth state. Please try signing in again.',
+      email: '',
+      googleConfigured: google.isConfigured(),
+    });
+  }
 
   if (req.headers.cookie) {
     try {
@@ -204,6 +217,10 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     delete req.session.redirectTo;
     if (to) {
       const isDev = isUserDeveloper(user);
+      const isDev = Boolean(
+        user.is_developer ||
+        user.role === 'developer'
+      );
       if (!isDev) {
         if (to.startsWith('/admin') && user.role !== 'admin') to = null;
         else if (to.startsWith('/student') && user.role !== 'student') to = null;
@@ -489,6 +506,49 @@ router.post('/profile/password', requireLogin, (req, res) => {
     ok,
     googleConfigured: google.isConfigured(),
   });
+});
+
+router.post('/switch-role', (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.redirect('/login');
+  }
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  if (!user || !user.active) {
+    return res.redirect('/login');
+  }
+
+  const isDev = Boolean(
+    user.is_developer ||
+    (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
+    user.role === 'developer'
+  );
+  const canEval = Boolean(user.can_technical || user.can_hr);
+  const isAkshata = Boolean(user.email && user.email.toLowerCase() === 'akshata.sanap@kalvium.com');
+  const isDual = isDev || isAkshata || (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || isAkshata));
+
+  if (!isDual) {
+    req.session.flash = { type: 'err', msg: 'You do not have permission to switch roles.' };
+    return res.redirect('/profile');
+  }
+
+  const targetRole = String(req.body.targetRole || '').trim().toLowerCase();
+  const allowedRoles = isDev ? ['admin', 'mentor', 'student', 'developer'] : ['admin', 'mentor'];
+
+  if (!allowedRoles.includes(targetRole)) {
+    req.session.flash = { type: 'err', msg: 'Invalid role requested.' };
+    return res.redirect('/profile');
+  }
+
+  req.session.activeRole = targetRole;
+  req.session.user.role = targetRole;
+  logAudit(req, 'AUTH_ROLE_SWITCH', { new_role: targetRole });
+
+  req.session.flash = { type: 'ok', msg: `Switched view mode to ${targetRole === 'admin' ? 'Admin Dashboard' : 'Mentor Desk'}.` };
+  
+  if (targetRole === 'admin') return res.redirect('/admin');
+  if (targetRole === 'mentor') return res.redirect('/mentor');
+  if (targetRole === 'student') return res.redirect('/student');
+  return res.redirect('/admin');
 });
 
 module.exports = router;

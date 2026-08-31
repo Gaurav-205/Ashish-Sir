@@ -225,40 +225,6 @@ async function seedFullNeon() {
   `));
   console.log('✓ Kalvium Candidate accounts seeded (40)');
 
-  // 5. Open Slots
-  const mentors = await sql`SELECT * FROM users WHERE role='mentor' OR can_technical=1 OR can_hr=1;`;
-  const today = todayStr();
-  const tomorrow = addDays(today, 1);
-  const dayAfter = addDays(today, 2);
-
-  const slotPromises = [];
-  for (let idx = 0; idx < mentors.length; idx++) {
-    const m = mentors[idx];
-    const timeOffset = (idx % 4) * 30;
-    const sh = 10 + Math.floor(timeOffset / 60);
-    const sm = timeOffset % 60;
-    const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-    const sTime = fmt(sh * 60 + sm);
-    const eTime = fmt(sh * 60 + sm + 30);
-
-    if (m.can_technical) {
-      slotPromises.push(sql`
-        INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location)
-        VALUES (${m.id}, 'technical', ${tomorrow}, ${sTime}, ${eTime}, 'Online', 'https://meet.google.com/abc-defg-hij')
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-    if (m.can_hr) {
-      slotPromises.push(sql`
-        INSERT INTO slots (mentor_id, type, slot_date, start_time, end_time, mode, location)
-        VALUES (${m.id}, 'hr', ${dayAfter}, ${sTime}, ${eTime}, 'Online', 'https://meet.google.com/xyz-uvwx-rst')
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-  }
-  await Promise.all(slotPromises);
-  console.log('✓ Available upcoming slots seeded for mentors');
-
   // Summary
   const usersCount = await sql`SELECT COUNT(*) FROM users;`;
   const slotsCount = await sql`SELECT COUNT(*) FROM slots;`;

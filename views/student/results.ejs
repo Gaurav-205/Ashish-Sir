@@ -203,7 +203,7 @@
                           1. How satisfied are you with your overall interview experience with this mentor?
                         </label>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                          <% [5, 4, 3, 2, 1].forEach(function(val){ %>
+                          <% [1, 2, 3, 4, 5].forEach(function(val){ %>
                             <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer">
                               <input type="radio" name="satisfaction" value="<%= val %>" <%= (iv.student_feedback_id ? iv.feedback_satisfaction === val : val === 5) ? 'checked' : '' %> required>
                               <%= val === 5 ? '5 - Very Satisfied' : val === 4 ? '4 - Satisfied' : val === 3 ? '3 - Neutral' : val === 2 ? '2 - Dissatisfied' : '1 - Very Dissatisfied' %>
