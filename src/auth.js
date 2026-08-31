@@ -70,9 +70,10 @@ function resolveCurrentUser(req, res) {
   // A password change/reset bumps `sessions_invalid_before`. Any session (or
   // stateless cookie) issued before that instant is dead — this is what makes
   // "log out my other devices" work even on the serverless MemoryStore.
-  if (user.sessions_invalid_before) {
-    const iat = Number(req.session.user && req.session.user.iat) || 0;
-    if (iat < Number(user.sessions_invalid_before)) {
+  if (user.sessions_invalid_before && req.session.user) {
+    if (!req.session.user.iat) {
+      req.session.user.iat = Date.now();
+    } else if (Number(req.session.user.iat) < Number(user.sessions_invalid_before)) {
       clearAuthSession(req, res, () => respondUnauthenticated(req, res));
       return null;
     }
