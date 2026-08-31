@@ -19,14 +19,12 @@ function convertSql(sql) {
   let converted = sql.replace(/\?/g, () => `$${paramIndex++}`);
   
   // Convert comparisons of datetime(slot_date || ' ' || start_time) first to avoid type mismatch
-  converted = converted.replace(/datetime\(([^)]+)\)\s*(>=|<=|>|<|=|<>)\s*datetime\('now'(?:,'localtime')?\)/gi, 
+  converted = converted.replace(/datetime\(([^)]+)\)\s*(>=|<=|>|<|=|<>)\s*datetime\('now'[^)]*\)/gi, 
     '($1)::timestamp $2 (CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::timestamp');
   
   // Convert standard SQLite datetime/date functions to equivalent PostgreSQL IST expressions
-  converted = converted.replace(/datetime\('now','localtime'\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::timestamp)::text');
-  converted = converted.replace(/datetime\('now'\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::timestamp)::text');
-  converted = converted.replace(/date\('now','localtime'\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::date)::text');
-  converted = converted.replace(/date\('now'\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::date)::text');
+  converted = converted.replace(/datetime\('now'[^)]*\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::timestamp)::text');
+  converted = converted.replace(/date\('now'[^)]*\)/gi, '((CURRENT_TIMESTAMP AT TIME ZONE \'Asia/Kolkata\')::date)::text');
   
   converted = converted.replace(/datetime\(([^)]+)\)/gi, '($1)::timestamp');
   converted = converted.replace(/BEGIN\s+IMMEDIATE/gi, 'BEGIN');
