@@ -6,15 +6,10 @@ const { sab, databaseUrl } = workerData;
 const control = new Int32Array(sab, 0, 4); // [state, reqLen, resLen, errFlag]
 const dataBuf = Buffer.from(sab, 16);
 
-// State transitions:
-// 0: Idle / Waiting for request
-// 1: Request written by main thread -> Worker picks up
-// 2: Response written by worker -> Main thread picks up
-// 100: Worker initialized and ready
-// -1: Worker shutting down
+const cleanDbUrl = databaseUrl ? databaseUrl.replace(/([?&])sslmode=(require|prefer|verify-ca)/gi, '$1sslmode=verify-full') : databaseUrl;
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: cleanDbUrl,
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
