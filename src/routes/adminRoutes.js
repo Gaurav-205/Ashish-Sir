@@ -245,29 +245,31 @@ router.post('/mentors/:id/update', validateId('id'), async (req, res) => {
 
 /* -------------------------------- slots -------------------------------- */
 router.get('/slots', async (req, res) => {
-  const filter = req.query.filter || 'all';
-  const mentorFilter = req.query.mentor || null;
-  const typeFilter = req.query.type || null;
+  const when = req.query.when || 'upcoming';
+  const filterDate = req.query.date || '';
+  const mentorFilter = req.query.mentor || '';
+  const typeFilter = req.query.type || '';
+  const statusFilter = req.query.status || '';
   const page = Math.max(1, parseInt(req.query.page || 1, 10));
   const limit = 50;
 
   const now = h.nowMinute();
   const query = {};
 
-  if (filter === 'open') {
-    query.status = 'open';
+  if (when === 'upcoming') {
     query.slot_date = { $gte: h.today() };
-  } else if (filter === 'booked') {
-    query.status = 'booked';
-  } else if (filter === 'past') {
+    if (!statusFilter) query.status = { $ne: 'cancelled' };
+  } else if (when === 'past') {
     query.$or = [
       { slot_date: { $lt: h.today() } },
       { status: 'cancelled' },
     ];
   }
 
+  if (filterDate) query.slot_date = filterDate;
   if (mentorFilter) query.mentor_id = mentorFilter;
   if (typeFilter) query.type = typeFilter;
+  if (statusFilter) query.status = statusFilter;
 
   const totalCount = await Slot.countDocuments(query);
   const rawSlots = await Slot.find(query)
@@ -279,7 +281,7 @@ router.get('/slots', async (req, res) => {
 
   const slots = [];
   for (const sl of rawSlots) {
-    const iv = sl.status === 'booked' ? await Interview.findOne({ slot_id: sl._id }).populate('student_id', 'name email').lean() : null;
+    const iv = sl.status === 'booked' ? await Interview.findOne({ slot_id: sl._id, status: 'booked' }).populate('student_id', 'name email').lean() : null;
     slots.push({
       ...sl,
       id: sl._id,
@@ -287,6 +289,7 @@ router.get('/slots', async (req, res) => {
       mentor_email: sl.mentor_id ? sl.mentor_id.email : '',
       student_name: iv && iv.student_id ? iv.student_id.name : '',
       student_email: iv && iv.student_id ? iv.student_id.email : '',
+      student_id: iv && iv.student_id ? iv.student_id._id : null,
       interview_id: iv ? iv._id : null,
       attendance: iv ? iv.attendance : null,
     });
@@ -295,19 +298,30 @@ router.get('/slots', async (req, res) => {
   const allMentors = await q.mentorsList();
   const technicalMentors = allMentors.filter(m => m.can_technical);
   const hrMentors = allMentors.filter(m => m.can_hr);
+  const rawStudents = await User.find({ role: 'student', active: 1 }).sort({ name: 1 }).lean();
+  const students = rawStudents.map(st => ({ ...st, id: st._id }));
 
   res.render('admin/slots', {
     title: 'Slots management',
     slots,
+    total: totalCount,
+    totalCount,
     mentors: allMentors,
-    technicalMentors,
+    techMentors: technicalMentors,
     hrMentors,
-    filter,
+    technicalMentors,
+    students,
+    filter: {
+      when,
+      date: filterDate,
+      mentor: mentorFilter,
+      type: typeFilter,
+      status: statusFilter,
+    },
     mentorFilter,
     typeFilter,
     page,
     totalPages: Math.ceil(totalCount / limit) || 1,
-    totalCount,
     defaultDate: h.addDays(h.today(), 1),
     today: h.today(),
   });
@@ -448,6 +462,112 @@ router.post('/slots', actionLimiter, async (req, res) => {
   res.redirect('/admin/slots');
 });
 
+router.post('/slots/:id/allot', validateId('id'), async (req, res) => {
+  const slotId = req.params.id;
+  const studentId = req.body.student_id;
+  try {
+    const slot = await Slot.findById(slotId);
+    if (!slot || slot.status !== 'open') throw new Error('Slot is not available for allotment.');
+
+    const student = await User.findById(studentId);
+    if (!student || student.role !== 'student') throw new Error('Student account not found.');
+
+    slot.status = 'booked';
+    await slot.save();
+
+    const iv = await Interview.create({
+      slot_id: slot._id,
+      student_id: student._id,
+      mentor_id: slot.mentor_id,
+      type: slot.type,
+      status: 'booked',
+      attendance: 'pending',
+    });
+
+    const mentor = await User.findById(slot.mentor_id).lean();
+
+    google.syncCalendarEvent({
+      student,
+      mentor,
+      slot,
+      interviewId: iv._id,
+    }).catch(() => {});
+
+    emailService.sendBookingConfirmation({
+      student,
+      mentor,
+      slot,
+      interview: iv,
+    }).catch(() => {});
+
+    logAudit(req, 'ADMIN_ALLOT_SLOT', { slot_id: slot._id, student_id: student._id });
+    flash(req, 'ok', `Slot successfully allotted to ${student.name}.`);
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/:id/reschedule', validateId('id'), async (req, res) => {
+  const slotId = req.params.id;
+  try {
+    const slot = await Slot.findById(slotId);
+    if (!slot) throw new Error('Slot not found.');
+
+    const { slot_date, start_time, end_time, mentor_id, mode } = req.body;
+    slot.slot_date = slot_date;
+    slot.start_time = start_time;
+    slot.end_time = end_time;
+    if (mentor_id) slot.mentor_id = mentor_id;
+    if (mode) slot.mode = mode;
+
+    await slot.save();
+    logAudit(req, 'ADMIN_RESCHEDULE_SLOT', { slot_id: slot._id });
+    flash(req, 'ok', 'Slot rescheduled successfully.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/:id/release', validateId('id'), async (req, res) => {
+  const slotId = req.params.id;
+  try {
+    await Slot.findByIdAndUpdate(slotId, { $set: { status: 'open' } });
+    await Interview.updateMany({ slot_id: slotId, status: 'booked' }, { $set: { status: 'cancelled' } });
+    logAudit(req, 'ADMIN_RELEASE_SLOT', { slot_id: slotId });
+    flash(req, 'ok', 'Booking released. Slot is now open.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/:id/cancel', validateId('id'), async (req, res) => {
+  const slotId = req.params.id;
+  try {
+    await Slot.findByIdAndUpdate(slotId, { $set: { status: 'cancelled' } });
+    await Interview.updateMany({ slot_id: slotId, status: 'booked' }, { $set: { status: 'cancelled' } });
+    logAudit(req, 'ADMIN_CANCEL_SLOT', { slot_id: slotId });
+    flash(req, 'ok', 'Slot cancelled.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/:id/reopen', validateId('id'), async (req, res) => {
+  const slotId = req.params.id;
+  try {
+    await Slot.findByIdAndUpdate(slotId, { $set: { status: 'open' } });
+    logAudit(req, 'ADMIN_REOPEN_SLOT', { slot_id: slotId });
+    flash(req, 'ok', 'Slot reopened.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
 router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
   const slotId = req.params.id;
   try {
@@ -458,6 +578,18 @@ router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
     await Slot.findByIdAndDelete(slot._id);
     logAudit(req, 'ADMIN_DELETE_SLOT', { slot_id: slotId });
     flash(req, 'ok', 'Slot permanently removed.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
+router.post('/slots/delete-all', async (req, res) => {
+  try {
+    await Slot.deleteMany({});
+    await Interview.deleteMany({});
+    logAudit(req, 'ADMIN_DELETE_ALL_SLOTS');
+    flash(req, 'ok', 'All slots have been deleted.');
   } catch (e) {
     flash(req, 'err', e.message);
   }
@@ -478,6 +610,7 @@ router.get('/interviews', async (req, res) => {
   res.render('admin/interviews', {
     title: 'Interviews roster',
     interviews: list,
+    list,
     mentors,
     filters: req.query,
   });
