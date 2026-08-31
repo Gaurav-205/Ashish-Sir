@@ -297,6 +297,8 @@ if (usePostgres) {
 
     db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_mentor_status ON slots(mentor_id, status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_date_status ON slots(slot_date, status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_open_search ON slots(status, type, slot_date, start_time)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_slots_mentor_open ON slots(mentor_id, status, type, slot_date, start_time)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_interviews_student ON interviews(student_id, status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_interviews_mentor ON interviews(mentor_id, status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_interviews_slot ON interviews(slot_id)`);
@@ -481,6 +483,8 @@ if (usePostgres) {
         sqliteDb.exec(`
           CREATE INDEX IF NOT EXISTS idx_slots_mentor_status ON slots(mentor_id, status);
           CREATE INDEX IF NOT EXISTS idx_slots_date_status ON slots(slot_date, status);
+          CREATE INDEX IF NOT EXISTS idx_slots_open_search ON slots(status, type, slot_date, start_time);
+          CREATE INDEX IF NOT EXISTS idx_slots_mentor_open ON slots(mentor_id, status, type, slot_date, start_time);
           CREATE INDEX IF NOT EXISTS idx_interviews_student ON interviews(student_id, status);
           CREATE INDEX IF NOT EXISTS idx_interviews_mentor ON interviews(mentor_id, status);
           CREATE INDEX IF NOT EXISTS idx_interviews_slot ON interviews(slot_id);
