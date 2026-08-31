@@ -367,6 +367,72 @@ async function removeCalendarEvent({ eventId, student, mentor }) {
   }
 }
 
+async function syncUpcomingMentorSlots(mentor) {
+  if (!mentor || !mentor.id) return;
+  const token = await getValidAccessToken(mentor.id);
+  if (!token) return;
+
+  const now = h.nowMinute();
+
+  // 1. Sync upcoming booked interviews where Google Meet is pending
+  try {
+    const bookedInterviews = db.prepare(`
+      SELECT i.id AS interview_id, i.google_event_id AS interview_google_event_id,
+             s.id AS slot_id, s.slot_date, s.start_time, s.end_time, s.type, s.mode, s.location, s.google_event_id AS slot_google_event_id,
+             st.id AS student_id, st.name AS student_name, st.email AS student_email,
+             st.google_calendar_enabled AS student_cal_enabled
+        FROM interviews i
+        JOIN slots s ON s.id = i.slot_id
+        JOIN users st ON st.id = i.student_id
+       WHERE i.mentor_id = ? AND i.status = 'booked'
+         AND (s.slot_date || ' ' || s.start_time) > ?
+    `).all(mentor.id, now);
+
+    for (const iv of bookedInterviews) {
+      if (!iv.interview_google_event_id) {
+        const studentObj = {
+          id: iv.student_id,
+          name: iv.student_name,
+          email: iv.student_email,
+          google_calendar_enabled: iv.student_cal_enabled,
+        };
+        const slotObj = {
+          id: iv.slot_id,
+          slot_date: iv.slot_date,
+          start_time: iv.start_time,
+          end_time: iv.end_time,
+          type: iv.type,
+          mode: iv.mode,
+          location: iv.location,
+        };
+        await syncCalendarEvent({
+          student: studentObj,
+          mentor,
+          slot: slotObj,
+          interviewId: iv.interview_id,
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing booked interviews for mentor:', err && err.message);
+  }
+
+  // 2. Sync upcoming open slots created on mentor's behalf that don't have real Google Meet links yet
+  try {
+    const openSlots = db.prepare(`
+      SELECT * FROM slots
+       WHERE mentor_id = ? AND status = 'open' AND google_event_id IS NULL
+         AND (slot_date || ' ' || start_time) > ?
+    `).all(mentor.id, now);
+
+    for (const slot of openSlots) {
+      await createSlotCalendarEvent({ mentor, slot }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error syncing open slots for mentor:', err && err.message);
+  }
+}
+
 module.exports = {
   isConfigured,
   getAuthUrl,
@@ -374,6 +440,7 @@ module.exports = {
   getValidAccessToken,
   syncCalendarEvent,
   createSlotCalendarEvent,
+  syncUpcomingMentorSlots,
   updateCalendarEvent,
   removeCalendarEvent,
   getRedirectUri,

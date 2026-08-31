@@ -25,6 +25,10 @@ router.get('/', (req, res) => {
   const slots = db.prepare(`SELECT * FROM slots WHERE mentor_id=? AND status='open'
                             AND (slot_date || ' ' || start_time) > ?
                             ORDER BY slot_date, start_time`).all(id, h.nowMinute());
+
+  if (mentor && (mentor.google_access_token || mentor.google_calendar_enabled)) {
+    google.syncUpcomingMentorSlots(mentor).catch(() => {});
+  }
   res.render('mentor/dashboard', {
     title: 'My interviews',
     upcoming,

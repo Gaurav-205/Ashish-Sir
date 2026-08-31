@@ -206,14 +206,15 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
       db.prepare(`UPDATE users SET google_id=?, google_access_token=?, google_refresh_token=COALESCE(?, google_refresh_token),
                   google_token_expiry=?, google_calendar_enabled=1 WHERE id=?`)
         .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, req.session.user.id);
+      google.syncUpcomingMentorSlots(req.session.user).catch(() => {});
       req.session.flash = { type: 'ok', msg: 'Google account and Calendar connected successfully.' };
       return res.redirect('/profile');
     }
 
     // Find existing user by google_id or email
-    let user = db.prepare('SELECT id, name, email, role, active FROM users WHERE google_id = ?').get(profile.id);
+    let user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE google_id = ?').get(profile.id);
     if (!user) {
-      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE lower(email) = ?').get(email);
+      user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE lower(email) = ?').get(email);
     }
 
     if (user) {
@@ -226,10 +227,10 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         });
       }
 
-      // Update google tokens
+      // Update google tokens and ensure calendar is enabled
       db.prepare(`UPDATE users SET google_id=?, google_access_token=?,
                   google_refresh_token=COALESCE(?, google_refresh_token),
-                  google_token_expiry=? WHERE id=?`)
+                  google_token_expiry=?, google_calendar_enabled=1 WHERE id=?`)
         .run(profile.id, tokens.access_token, tokens.refresh_token, tokens.expiry_date, user.id);
     } else {
       // Auto-register new user as Student
@@ -240,7 +241,7 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         VALUES (?, ?, ?, 'student', ?, ?, ?, ?, 1)
       `).run(profile.name || email.split('@')[0], email, randomPasswordHash, profile.id,
              tokens.access_token, tokens.refresh_token, tokens.expiry_date);
-      user = db.prepare('SELECT id, name, email, role, active FROM users WHERE lower(email) = ?').get(email);
+      user = db.prepare('SELECT id, name, email, role, active, can_technical, can_hr FROM users WHERE lower(email) = ?').get(email);
     }
 
     let to = req.session.redirectTo;
@@ -263,6 +264,9 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         return res.status(500).render('error', { title: 'Login error', message: 'Could not complete login. Please try again.' });
       }
       setAuthSession(req, res, user);
+      if (user.role === 'mentor' || user.role === 'admin' || user.can_technical || user.can_hr) {
+        google.syncUpcomingMentorSlots(user).catch(() => {});
+      }
       req.session.save(() => {
         logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
         res.redirect(redirectTo);
