@@ -15,7 +15,7 @@
 </div>
 
 <% if (mentor && (mentor.can_technical || mentor.can_hr)) { %>
-<dialog id="createSlotModal" class="modal-dialog">
+<dialog id="createSlotModal" class="modal-dialog" style="max-width:540px">
   <div class="modal-head">
     <h2>Publish New Interview Slots</h2>
     <button type="button" class="modal-close-btn" onclick="document.getElementById('createSlotModal').close()" aria-label="Close">&times;</button>
@@ -30,39 +30,66 @@
           <% if (mentor.can_hr) { %><option value="hr">HR Mock Interview</option><% } %>
         </select>
       </div>
+
       <div class="row">
         <div class="field">
-          <label>Date *</label>
-          <input type="date" name="slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required>
+          <label>Start Date *</label>
+          <input type="date" name="slot_date" id="m_slot_date" value="<%= typeof defaultDate !== 'undefined' ? defaultDate : '' %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required onchange="updatePreview()">
         </div>
         <div class="field">
-          <label>Start Time *</label>
-          <input type="time" name="start_time" value="10:00" step="300" required>
+          <label>Schedule Duration</label>
+          <select name="repeat_days" id="m_repeat_days" onchange="updatePreview()">
+            <option value="1">1 Day (Single date)</option>
+            <option value="3">3 Days in a row</option>
+            <option value="5">5 Days (e.g. Mon–Fri)</option>
+            <option value="7">7 Days (Full week)</option>
+            <option value="10">10 Days</option>
+            <option value="14">14 Days (2 weeks)</option>
+            <option value="30">30 Days (1 month)</option>
+          </select>
         </div>
       </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer">
+          <input type="checkbox" name="exclude_weekends" value="1" id="m_exclude_weekends" checked style="width:auto;margin:0" onchange="updatePreview()">
+          Skip Saturdays &amp; Sundays (Weekdays only)
+        </label>
+      </div>
+
       <div class="row">
+        <div class="field">
+          <label>Daily Start Time *</label>
+          <input type="time" name="start_time" id="m_start_time" value="09:00" step="300" required onchange="updatePreview()">
+        </div>
         <div class="field">
           <label>Slot Length (minutes)</label>
-          <input type="number" name="duration" value="30" min="10" max="180">
+          <input type="number" name="duration" id="m_duration" value="30" min="10" max="180" onchange="updatePreview()" oninput="updatePreview()">
         </div>
         <div class="field">
-          <label>Number of Slots</label>
-          <input type="number" name="count" value="4" min="1" max="20">
+          <label>Slots per Day</label>
+          <input type="number" name="count" id="m_count" value="2" min="1" max="30" onchange="updatePreview()" oninput="updatePreview()">
         </div>
       </div>
+
       <div class="field">
         <label>Mode</label>
         <select name="mode">
-          <option>Online</option>
+          <option>Online (Auto Google Meet)</option>
           <option>Offline</option>
         </select>
       </div>
-      <div style="margin-top:12px">
-        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Quick Presets:</label>
+
+      <div style="margin-top:12px;background:var(--surface-alt, #f8fafc);padding:12px 14px;border-radius:8px;border:1px solid var(--line, #e2e8f0)">
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;color:var(--slate, #64748b);text-transform:uppercase;letter-spacing:0.04em">Time Presets:</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00, 4 slots)</button>
-          <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00, 6 slots)</button>
-          <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">Evening (18:00, 4 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('09:00', 30, 2)">9:00 – 10:00 (2 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">10:00 – 12:00 (4 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">14:00 – 17:00 (6 slots)</button>
+          <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">18:00 – 20:00 (4 slots)</button>
+        </div>
+        <div id="m_preview_text" style="margin-top:10px;font-size:13px;font-weight:600;color:var(--action-blue, #2563eb)">
+          ⚡ Generating: 2 slots/day × 1 day = 2 total slot(s)
         </div>
       </div>
     </div>
@@ -256,7 +283,38 @@ window.applyPreset = function (start, duration, count) {
   if (s) s.value = start;
   if (d) d.value = duration;
   if (c) c.value = count;
+  updatePreview();
 };
+
+window.updatePreview = function () {
+  var repEl = document.getElementById('m_repeat_days');
+  var countEl = document.getElementById('m_count');
+  var prevEl = document.getElementById('m_preview_text');
+  var exEl = document.getElementById('m_exclude_weekends');
+  var dateEl = document.getElementById('m_slot_date');
+  if (!repEl || !countEl || !prevEl) return;
+
+  var days = parseInt(repEl.value, 10) || 1;
+  var count = parseInt(countEl.value, 10) || 1;
+  var ex = exEl && exEl.checked;
+  var startDate = dateEl ? dateEl.value : '';
+
+  var actualDays = days;
+  if (ex && startDate && days > 1) {
+    var valid = 0;
+    for (var i = 0; i < days; i++) {
+      var d = new Date(startDate + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + i);
+      var day = d.getUTCDay();
+      if (day !== 0 && day !== 6) valid++;
+    }
+    actualDays = valid;
+  }
+
+  var total = count * actualDays;
+  prevEl.textContent = '⚡ Generating: ' + count + ' slots/day × ' + actualDays + ' day(s) = ' + total + ' total slot(s)';
+};
+
 var mentorModal = document.getElementById('createSlotModal');
 if (mentorModal) {
   mentorModal.addEventListener('click', function (e) {

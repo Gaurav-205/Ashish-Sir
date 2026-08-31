@@ -247,7 +247,7 @@ router.get('/slots', (req, res) => {
 });
 
 router.post('/slots', (req, res) => {
-  const { type, mentor_id, slot_date, start_time, duration, count, mode, location } = req.body;
+  const { type, mentor_id, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
   try {
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview type. Must be technical or hr.');
     const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
@@ -256,63 +256,95 @@ router.post('/slots', (req, res) => {
     if (type === 'hr' && !mentor.can_hr) throw new Error(`${mentor.name} is not enabled for HR interviews.`);
     
     const cleanDate = String(slot_date || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid date.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid starting date.');
     const cleanStart = h.normalizeTime(start_time);
     if (!cleanStart) throw new Error('Pick a valid start time.');
+
+    // Build target dates array
+    let dates = [];
+    const cleanEndDate = String(end_date || '').trim();
+    const repDays = parseInt(repeat_days || 1, 10);
+
+    if (cleanEndDate && /^\d{4}-\d{2}-\d{2}$/.test(cleanEndDate)) {
+      if (cleanEndDate < cleanDate) throw new Error('End date must be on or after start date.');
+      let cur = cleanDate;
+      let safety = 0;
+      while (cur <= cleanEndDate && safety < 60) {
+        dates.push(cur);
+        cur = h.addDays(cur, 1);
+        safety++;
+      }
+    } else if (repDays > 1) {
+      const countDays = Math.min(Math.max(repDays, 1), 60);
+      for (let d = 0; d < countDays; d++) {
+        dates.push(h.addDays(cleanDate, d));
+      }
+    } else {
+      dates.push(cleanDate);
+    }
+
+    if (exclude_weekends === '1' || exclude_weekends === 'true' || exclude_weekends === 'on') {
+      dates = dates.filter((d) => {
+        const dayOfWeek = new Date(d + 'T00:00:00Z').getUTCDay();
+        return dayOfWeek !== 0 && dayOfWeek !== 6;
+      });
+    }
+    if (!dates.length) throw new Error('No valid dates selected after filtering weekends.');
 
     if (duration !== undefined && duration !== null && String(duration).trim() !== '') {
       const minsVal = Number(duration);
       if (isNaN(minsVal) || minsVal <= 0) throw new Error('Duration must be a positive number.');
     }
     const mins = Number(duration) || 30;
-    const n = Math.min(Math.max(Number(count) || 1, 1), 20);
+    const n = Math.min(Math.max(Number(count) || 1, 1), 30);
     const [sh, sm] = cleanStart.split(':').map(Number);
     let made = 0, skipped = 0;
     const ins = db.prepare(`INSERT INTO slots (mentor_id,type,slot_date,start_time,end_time,mode,location)
                             VALUES (?,?,?,?,?,?,?)`);
-    const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
-    if (/<[^>]+>/.test(loc)) throw new Error('Location cannot contain HTML tags.');
 
-    for (let k = 0; k < n; k++) {
-      const startMin = sh * 60 + sm + k * mins;
-      const endMin = startMin + mins;
-      if (endMin > 24 * 60) break;
-      const fmt = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-      const s_time = fmt(startMin);
-      const e_time = fmt(endMin);
+    for (const targetDate of dates) {
+      for (let k = 0; k < n; k++) {
+        const startMin = sh * 60 + sm + k * mins;
+        const endMin = startMin + mins;
+        if (endMin > 24 * 60) break;
+        const fmt = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+        const s_time = fmt(startMin);
+        const e_time = fmt(endMin);
 
-      const overlap = db.prepare(`
-        SELECT 1 FROM slots
-         WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
-           AND start_time < ? AND end_time > ?
-      `).get(mentor.id, slot_date, e_time, s_time);
+        const overlap = db.prepare(`
+          SELECT 1 FROM slots
+           WHERE mentor_id = ? AND slot_date = ? AND status <> 'cancelled'
+             AND start_time < ? AND end_time > ?
+        `).get(mentor.id, targetDate, e_time, s_time);
 
-      if (overlap) {
-        skipped++;
-        continue;
-      }
+        if (overlap) {
+          skipped++;
+          continue;
+        }
 
-      try {
-        const resIns = ins.run(mentor.id, type, slot_date, s_time, e_time, mode || 'Online', loc);
-        made++;
-        const newSlot = {
-          id: resIns.lastInsertRowid,
-          mentor_id: mentor.id,
-          type,
-          slot_date,
-          start_time: s_time,
-          end_time: e_time,
-          mode: mode || 'Online',
-          location: loc,
-        };
-        google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
-      } catch (e) {
-        if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
+        const loc = (location && location.trim()) ? location.trim() : h.generateMeetingLink(type);
+        try {
+          const resIns = ins.run(mentor.id, type, targetDate, s_time, e_time, mode || 'Online', loc);
+          made++;
+          const newSlot = {
+            id: resIns.lastInsertRowid,
+            mentor_id: mentor.id,
+            type,
+            slot_date: targetDate,
+            start_time: s_time,
+            end_time: e_time,
+            mode: mode || 'Online',
+            location: loc,
+          };
+          google.createSlotCalendarEvent({ mentor, slot: newSlot }).catch(() => {});
+        } catch (e) {
+          if (String(e.message).includes('UNIQUE')) skipped++; else throw e;
+        }
       }
     }
-    logAudit(req, 'ADMIN_CREATE_SLOTS', { type, mentor_id: mentor.id, count: made });
+    logAudit(req, 'ADMIN_CREATE_SLOTS', { type, mentor_id: mentor.id, count: made, days: dates.length });
     flash(req, made ? 'ok' : 'err',
-      `${made} slot(s) created${skipped ? `, ${skipped} skipped (mentor already has an overlapping slot at that time)` : ''}.`);
+      `${made} slot(s) created across ${dates.length} day(s)${skipped ? ` (${skipped} skipped due to existing overlap)` : ''}.`);
   } catch (e) {
     flash(req, 'err', e.message);
   }

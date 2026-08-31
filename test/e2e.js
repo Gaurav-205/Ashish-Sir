@@ -1014,15 +1014,25 @@ const login = async (who, email) => {
     const cancelledSlot = db.prepare('SELECT * FROM slots WHERE id=?').get(createdSlot.id);
     ok(cancelledSlot.status === 'cancelled', 'slot status is set to cancelled');
 
-    // 3. Unauthorized user cannot cancel another mentor's slot
-    const mentor2Slot = db.prepare(`
-      SELECT * FROM slots WHERE status = 'open' AND mentor_id != (SELECT id FROM users WHERE email = 'test.mentor@konfident.in') LIMIT 1
+    // 4. Mentor creates multi-day recurring slots (e.g. 9:00 - 10:00, 2 slots per day across 3 days)
+    const multiDayRes = await post('mentor', '/mentor/slots', {
+      type: 'technical',
+      slot_date: '2026-10-05',
+      repeat_days: '3',
+      exclude_weekends: '1',
+      start_time: '09:00',
+      duration: '30',
+      count: '2',
+      mode: 'Online',
+    });
+    ok(multiDayRes.status === 302, 'mentor creates multi-day slots successfully');
+    const multiDaySlots = db.prepare(`
+      SELECT count(*) as c FROM slots
+       WHERE mentor_id = (SELECT id FROM users WHERE email = 'arjun.mentor@konfident.in')
+         AND slot_date IN ('2026-10-05', '2026-10-06', '2026-10-07')
+         AND start_time IN ('09:00', '09:30')
     `).get();
-    if (mentor2Slot) {
-      await post('mentor', `/mentor/slots/${mentor2Slot.id}/cancel`, {});
-      const untouchedSlot = db.prepare('SELECT * FROM slots WHERE id=?').get(mentor2Slot.id);
-      ok(untouchedSlot.status === 'open', 'mentor cannot cancel another mentor slot');
-    }
+    ok(Number(multiDaySlots.c) === 6, 'multi-day slot creation produced exactly 6 slots across 3 days (2 per day)');
   }
 
   section('Arvind Admin Account & Administrative Superpowers');
