@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../db');
 const q = require('../queries');
 const h = require('../helpers');
-const { requireRole, isUserDeveloper } = require('../auth');
+const { requireRole, isUserDeveloper, isDualRoleUser } = require('../auth');
 const { RUBRIC } = require('../rubric');
 const { validateId } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
@@ -44,7 +44,8 @@ router.post('/slots', (req, res) => {
     const mentor = db.prepare(`SELECT id, name, email, role, phone, can_technical, can_hr, active, is_developer FROM users WHERE id=?`).get(mentorId);
     if (!mentor) throw new Error('Mentor account not found.');
     const isDev = Boolean(res.locals.isDeveloper || isUserDeveloper(mentor));
-    if (!isDev && mentor.role !== 'mentor') throw new Error('Mentor account not found.');
+    const isDual = isDualRoleUser(mentor);
+    if (!isDev && mentor.role !== 'mentor' && !isDual) throw new Error('Mentor account not found.');
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview domain. Must be technical or hr.');
     const canTech = Boolean(mentor.can_technical && mentor.can_technical !== '0' && mentor.can_technical !== 0);
     const canHr = Boolean(mentor.can_hr && mentor.can_hr !== '0' && mentor.can_hr !== 0);

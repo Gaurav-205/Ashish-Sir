@@ -4,7 +4,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const h = require('../helpers');
-const { requireLogin, homeFor, isUserDeveloper } = require('../auth');
+const { requireLogin, homeFor, isUserDeveloper, isDualRoleUser } = require('../auth');
 const google = require('../services/googleService');
 const { createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
@@ -509,14 +509,8 @@ router.post('/switch-role', (req, res) => {
     return res.redirect('/login');
   }
 
-  const isDev = Boolean(
-    user.is_developer ||
-    (user.email && user.email.toLowerCase() === 'gauravkhandelwal205@gmail.com') ||
-    user.role === 'developer'
-  );
-  const canEval = Boolean(user.can_technical || user.can_hr);
-  const isAkshata = Boolean(user.email && user.email.toLowerCase() === 'akshata.sanap@kalvium.com');
-  const isDual = isDev || isAkshata || (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || isAkshata));
+  const isDev = isUserDeveloper(user);
+  const isDual = isDualRoleUser(user);
 
   if (!isDual) {
     req.session.flash = { type: 'err', msg: 'You do not have permission to switch roles.' };

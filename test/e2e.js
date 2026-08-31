@@ -1287,6 +1287,68 @@ const login = async (who, email) => {
     ok(adminIvsAttended.body.includes('Attended (Present)'), 'admin interviews table shows Attended (Present)');
   }
 
+  section('Dual-Role Evaluator Slot Publishing, Switching & Admin Superpowers');
+  {
+    const bcrypt = require('bcryptjs');
+    const akshataEmail = 'akshata.sanap@kalvium.com';
+    let akshata = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(akshataEmail);
+    if (!akshata) {
+      db.prepare(`
+        INSERT INTO users (name, email, password_hash, role, can_technical, can_hr, active)
+        VALUES ('Akshata Sanap', ?, ?, 'admin', 0, 1, 1)
+      `).run(akshataEmail, bcrypt.hashSync('Akshata@123', 10));
+    } else {
+      db.prepare(`UPDATE users SET password_hash = ?, can_hr = 1, active = 1 WHERE lower(email) = ?`)
+        .run(bcrypt.hashSync('Akshata@123', 10), akshataEmail);
+    }
+    akshata = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(akshataEmail);
+    ok(akshata && akshata.id, 'Akshata Sanap account provisioned in database');
+
+    const akshataLogin = await post('akshata', '/login', { email: akshataEmail, password: 'Akshata@123' });
+    ok(akshataLogin.status === 302, 'Akshata logs in successfully');
+
+    // Akshata switches role to mentor
+    const switchRes = await post('akshata', '/switch-role', { targetRole: 'mentor' });
+    ok(switchRes.status === 302 && switchRes.location === '/mentor', 'Akshata switches to mentor view');
+
+    const mentorDash = await get('akshata', '/mentor');
+    ok(mentorDash.status === 200, 'Akshata accesses mentor dashboard in mentor role');
+
+    // Akshata publishes HR slot as evaluator
+    const futureDate = h.addDays(h.today(), 5);
+    const publishRes = await post('akshata', '/mentor/slots', {
+      type: 'hr',
+      slot_date: futureDate,
+      start_time: '14:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+    });
+    ok(publishRes.status === 302, 'Dual-role evaluator publishes HR slot from mentor desk');
+
+    const akshataSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id = ? AND slot_date = ? AND start_time = '14:00'`).get(akshata.id, futureDate);
+    ok(akshataSlot && akshataSlot.status === 'open', 'Dual-role evaluator slot is active and open');
+
+    // Admin creates slot on behalf of Akshata
+    const adminSlotRes = await post('admin', '/admin/slots', {
+      type: 'hr',
+      mentor_id: akshata.id,
+      slot_date: futureDate,
+      start_time: '15:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+    });
+    ok(adminSlotRes.status === 302, 'Admin creates slot for dual-role evaluator');
+
+    const adminCreatedSlot = db.prepare(`SELECT * FROM slots WHERE mentor_id = ? AND slot_date = ? AND start_time = '15:00'`).get(akshata.id, futureDate);
+    ok(adminCreatedSlot && adminCreatedSlot.status === 'open', 'Admin-created slot for evaluator is active');
+
+    // Admin view mentors includes Akshata
+    const adminMentorsPage = await get('admin', '/admin/mentors');
+    ok(adminMentorsPage.body.includes('Akshata Sanap'), 'Admin mentors page lists dual-role evaluator');
+  }
+
   section('Performance & Consolidated Query Verification');
   {
     const q = require('../src/queries');

@@ -39,9 +39,7 @@
     var timeVal = timeEl && timeEl.value ? timeEl.value : '09:00';
     var parts = timeVal.split(':').map(Number);
     var endM = (parts[0] || 0) * 60 + (parts[1] || 0) + duration;
-    var endVal = String(Math.floor(endM / 60) % 24).padStart(2, '0') + ':' + String(endM % 60).padStart(2, '0');
-
-    prevEl.textContent = '⚡ Generating 1 slot (' + timeVal + ' – ' + endVal + ', ' + duration + ' mins) across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
+    prevEl.textContent = '⚡ Generating ' + (count > 1 ? count + ' slots per day' : '1 slot') + ' (' + timeVal + ' – ' + endVal + ', ' + duration + ' mins) across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
   };
 
   // Initialize multi-date calendar picker

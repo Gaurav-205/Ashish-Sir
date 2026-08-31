@@ -76,8 +76,6 @@ function resolveCurrentUser(req, res) {
     req.session.user.role = isDev ? 'developer' : (req.session.activeRole || user.role);
   }
 
-  console.log('[DEBUG auth.js]', { isDev, activeRole: req.session.user.role, userRole: user.role });
-
   res.locals.user = req.session.user;
   res.locals.isDeveloper = isDev;
   res.locals.isDualRole = isDual;
