@@ -26,16 +26,22 @@
     var selInput = document.getElementById('adm_selected_dates');
     var countEl = document.getElementById('adm_count');
     var prevEl = document.getElementById('adm_preview_text');
+    var durEl = document.getElementById('adm_duration');
     if (!prevEl) return;
 
     var count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
+    var duration = durEl ? (parseInt(durEl.value, 10) || 30) : 30;
     var dates = selInput && selInput.value ? selInput.value.split(',').filter(Boolean) : [];
     var days = Math.max(dates.length, 1);
-
     var total = count * days;
+
     var timeEl = document.getElementById('adm_start_time');
-    var timeVal = timeEl && timeEl.value ? (' at ' + timeEl.value) : '';
-    prevEl.textContent = '⚡ Generating 1 slot' + timeVal + ' across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
+    var timeVal = timeEl && timeEl.value ? timeEl.value : '09:00';
+    var parts = timeVal.split(':').map(Number);
+    var endM = (parts[0] || 0) * 60 + (parts[1] || 0) + duration;
+    var endVal = String(Math.floor(endM / 60) % 24).padStart(2, '0') + ':' + String(endM % 60).padStart(2, '0');
+
+    prevEl.textContent = '⚡ Generating 1 slot (' + timeVal + ' – ' + endVal + ', ' + duration + ' mins) across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
   };
 
   // Initialize multi-date calendar picker
