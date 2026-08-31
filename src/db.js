@@ -284,7 +284,14 @@ if (usePostgres) {
     )`);
     db.exec(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS google_event_id TEXT`);
     db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_developer INTEGER NOT NULL DEFAULT 0`);
-    db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com', 'test@user.com')`);
+    // Epoch-ms watermark: any auth token / session issued before this instant is
+    // rejected. Bumped on password change/reset so a stateless `konfident_auth`
+    // cookie cannot outlive the credential it was minted against.
+    db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_invalid_before BIGINT`);
+    // Named operator accounts only. 'test@user.com' was removed: it is guessable,
+    // has a committed default password, and Google sign-in can auto-provision it —
+    // promoting it on boot was a privilege-escalation backdoor.
+    db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com')`);
     db.exec(`UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com'`);
     db.exec(`UPDATE users SET role = 'admin', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com'`);
 
@@ -295,6 +302,20 @@ if (usePostgres) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_interviews_slot ON interviews(slot_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_evaluations_interview ON evaluations(interview_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, active)`);
+  } catch (_) {}
+
+  // Structural guard against a slot ever holding two live interviews. Runs in
+  // its own try/catch: if legacy rows already violate it the app must still
+  // boot (surface it in logs instead of crash-looping).
+  try {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_interviews_active_slot ON interviews(slot_id) WHERE status <> 'cancelled'`);
+  } catch (e) {
+    console.warn('[db] could not create uq_interviews_active_slot (existing duplicates?):', e.message);
+  }
+
+  // Audit-log retention: failed-login rows accumulate without bound otherwise.
+  try {
+    db.exec(`DELETE FROM audit_logs WHERE created_at < ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') - INTERVAL '180 days')::timestamp(0)::text`);
   } catch (_) {}
 } else {
   // --- SQLite Mode (Local / Fallback) ---
@@ -442,7 +463,10 @@ if (usePostgres) {
         sqliteDb.exec("ALTER TABLE users ADD COLUMN is_developer INTEGER NOT NULL DEFAULT 0;");
       } catch (_) {}
       try {
-        sqliteDb.exec("UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com', 'test@user.com');");
+        sqliteDb.exec("ALTER TABLE users ADD COLUMN sessions_invalid_before INTEGER;");
+      } catch (_) {}
+      try {
+        sqliteDb.exec("UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com');");
       } catch (_) {}
       try {
         sqliteDb.exec("UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com';");
@@ -460,6 +484,14 @@ if (usePostgres) {
           CREATE INDEX IF NOT EXISTS idx_evaluations_interview ON evaluations(interview_id);
           CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, active);
         `);
+      } catch (_) {}
+      try {
+        sqliteDb.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_interviews_active_slot ON interviews(slot_id) WHERE status <> 'cancelled';");
+      } catch (e) {
+        console.warn('[db] could not create uq_interviews_active_slot (existing duplicates?):', e.message);
+      }
+      try {
+        sqliteDb.exec("DELETE FROM audit_logs WHERE created_at < datetime('now','+5 hours','+30 minutes','-180 days');");
       } catch (_) {}
 
       db = sqliteDb;

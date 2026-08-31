@@ -210,6 +210,21 @@ function isStudentProfileComplete(user) {
   );
 }
 
+// Single source of truth for the password floor (was duplicated across 6 call
+// sites with three different messages). Raising this is a one-line change here —
+// note it also requires updating the fixtures in test/e2e.js and the
+// `minlength` attributes in the password form templates.
+const MIN_PASSWORD_LENGTH = 6;
+
+/** Returns null when the password is acceptable, or an error string. */
+function validatePassword(pw) {
+  const s = String(pw == null ? '' : pw);
+  if (s.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  return null;
+}
+
 /** Returns a list of missing profile field names for a student. */
 function getMissingStudentProfileFields(user) {
   if (!user || user.role !== 'student') return [];
@@ -277,7 +292,7 @@ function checkWeeklyInterviewLimit(db, studentId, type, slotDate) {
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
   normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, isUniqueViolation,
-  safeRedirectTarget, isSafeLocalPath,
+  safeRedirectTarget, isSafeLocalPath, MIN_PASSWORD_LENGTH, validatePassword,
   getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
   isValidEmail, isValidUrl, isValidPhone, isValidDate, isValidTime,
   checkWeeklyInterviewLimit,

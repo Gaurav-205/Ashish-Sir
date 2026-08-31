@@ -50,6 +50,17 @@ if (mode === 'test') {
 const adminName = process.env.ADMIN_NAME || 'Utkarsha Kasar';
 const PW = bcrypt.hashSync(adminPassword, 10);
 
+// Guard rail: this script DROPs every row in every table. Running it against a
+// shared Postgres database (Neon / production) by accident wipes real data and
+// re-plants seed accounts with known passwords. Require an explicit opt-in.
+if (db.isPostgres && process.env.SEED_ALLOW_POSTGRES !== '1') {
+  console.error(
+    'Refusing to seed: the active driver is Postgres.\n' +
+    'This truncates ALL tables. If you really mean to, re-run with SEED_ALLOW_POSTGRES=1.'
+  );
+  process.exit(1);
+}
+
 // Clear existing tables. student_feedbacks and password_resets cascade from
 // interviews/users, but are named explicitly so the intent is not implicit.
 db.exec(`DELETE FROM student_feedbacks; DELETE FROM evaluations; DELETE FROM interviews; DELETE FROM slots;
@@ -88,7 +99,6 @@ if (mode === 'dev' || mode === 'test') {
     { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0, is_dev: 1 },
     { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 },
     { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
-    { name: 'Test User', email: 'test@user.com', password: 'test@1501', can_t: 1, can_hr: 1, is_dev: 1 },
     { name: 'Heramb Inamke', email: 'heramb15012006@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
   ];
 

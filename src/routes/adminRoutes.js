@@ -68,7 +68,7 @@ router.post('/students', actionLimiter, (req, res) => {
 
     if (!cleanName || cleanName.length < 2) throw new Error('Candidate name must be at least 2 characters.');
     if (!h.isValidEmail(cleanEmail)) throw new Error('Please enter a valid email address.');
-    if (cleanPw.length < 6) throw new Error('Initial password must be at least 6 characters.');
+    if (h.validatePassword(cleanPw)) throw new Error('Initial ' + h.validatePassword(cleanPw).toLowerCase());
 
     const cleanPhone = (phone && phone.trim()) ? phone.trim() : null;
     if (cleanPhone && !h.isValidPhone(cleanPhone)) {
@@ -140,10 +140,11 @@ router.post('/students/:id/reset-password', validateId('id'), (req, res) => {
     return res.redirect('/admin/students/' + req.params.id);
   }
   const pw = String(req.body.password || '');
-  if (pw.length < 6) flash(req, 'err', 'Password must be at least 6 characters.');
+  const pwErr = h.validatePassword(pw);
+  if (pwErr) flash(req, 'err', pwErr);
   else {
-    db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND role='student'`)
-      .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
+    db.prepare(`UPDATE users SET password_hash=?, sessions_invalid_before=? WHERE id=? AND role='student'`)
+      .run(bcrypt.hashSync(pw, 10), Date.now(), Number(req.params.id));
     invalidateUserSessions(req.params.id);
     logAudit(req, 'ADMIN_RESET_STUDENT_PASSWORD', { target_user_id: req.params.id });
     flash(req, 'ok', 'Password reset successfully.');
@@ -184,7 +185,7 @@ router.post('/mentors', actionLimiter, (req, res) => {
 
     if (!cleanName || cleanName.length < 2) throw new Error('Mentor name must be at least 2 characters.');
     if (!h.isValidEmail(cleanEmail)) throw new Error('Please enter a valid email address.');
-    if (cleanPw.length < 6) throw new Error('Initial password must be at least 6 characters.');
+    if (h.validatePassword(cleanPw)) throw new Error('Initial ' + h.validatePassword(cleanPw).toLowerCase());
 
     const cleanPhone = (phone && phone.trim()) ? phone.trim() : null;
     if (cleanPhone && !h.isValidPhone(cleanPhone)) {
@@ -244,10 +245,11 @@ router.post('/mentors/:id/reset-password', validateId('id'), (req, res) => {
     return res.redirect('/admin/mentors');
   }
   const pw = String(req.body.password || '');
-  if (pw.length < 6) flash(req, 'err', 'Password must be at least 6 characters.');
+  const pwErr = h.validatePassword(pw);
+  if (pwErr) flash(req, 'err', pwErr);
   else {
-    db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1)`)
-      .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
+    db.prepare(`UPDATE users SET password_hash=?, sessions_invalid_before=? WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1)`)
+      .run(bcrypt.hashSync(pw, 10), Date.now(), Number(req.params.id));
     invalidateUserSessions(req.params.id);
     logAudit(req, 'ADMIN_RESET_MENTOR_PASSWORD', { target_user_id: req.params.id });
     flash(req, 'ok', 'Password reset.');

@@ -11,6 +11,28 @@ const { logAudit } = require('../middleware/auditLog');
 const { setAuthSession, clearAuthSession, invalidateUserSessions } = require('../middleware/sessionAuth');
 
 const router = express.Router();
+
+// A real bcrypt digest of a random secret — used to spend the same CPU on a
+// login attempt for an unknown email as for a known one (anti-enumeration).
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
+
+// The OAuth `state` backup cookie is signed so a forged one cannot pass the
+// callback's CSRF check when the server-side session is unavailable.
+const oauthSecret = () => process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret';
+function packOauthState(obj) {
+  const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const sig = crypto.createHmac('sha256', oauthSecret()).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+function unpackOauthState(str) {
+  if (!str || typeof str !== 'string' || str.indexOf('.') < 0) return null;
+  const [body, sig] = str.split('.');
+  const expected = crypto.createHmac('sha256', oauthSecret()).update(body).digest('base64url');
+  const a = Buffer.from(sig || ''); const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try { return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (_) { return null; }
+}
+
 const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -37,7 +59,13 @@ router.post('/login', authLimiter, (req, res) => {
   const password = String(req.body.password || '');
   const row = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
 
-  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+  // Always run one bcrypt comparison so the response time does not reveal
+  // whether the email is registered. DUMMY_HASH is a valid bcrypt digest of a
+  // random string that nothing can match.
+  const hashToCheck = (row && row.password_hash) ? row.password_hash : DUMMY_HASH;
+  const passwordOk = bcrypt.compareSync(password, hashToCheck);
+
+  if (!row || !passwordOk) {
     logAudit(req, 'AUTH_LOGIN_FAILED', { email });
     return res.status(401).render('login', {
       title: 'Sign in',
@@ -105,8 +133,8 @@ router.get('/auth/google', (req, res) => {
   const oauthData = { token: stateToken, action, userId, redirectUri };
   req.session.oauthState = oauthData;
 
-  // Set stateless backup cookie for serverless (Vercel Lambda) instances
-  const cookieVal = encodeURIComponent(JSON.stringify(oauthData));
+  // Signed stateless backup cookie for serverless (Vercel Lambda) instances.
+  const cookieVal = encodeURIComponent(packOauthState(oauthData));
   const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   res.setHeader('Set-Cookie', `oauth_state=${cookieVal}; Path=/; HttpOnly; Max-Age=600; SameSite=Lax${isSecure ? '; Secure' : ''}`);
 
@@ -127,20 +155,10 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     });
   }
 
-  // Retrieve OAuth state metadata (for linking profile and exact redirect URI matching)
-  let action = req.session.oauthState ? req.session.oauthState.action : 'auth';
-  let userId = req.session.oauthState ? req.session.oauthState.userId : null;
-  let redirectUri = req.session.oauthState ? req.session.oauthState.redirectUri : null;
-
-  if (req.session.oauthState && state !== req.session.oauthState.token && process.env.NODE_ENV !== 'test') {
-    return res.status(403).render('login', {
-      title: 'Sign in',
-      error: 'Invalid OAuth state. Please try signing in again.',
-      email: '',
-      googleConfigured: google.isConfigured(),
-    });
-  }
-
+  // OAuth state comes from the server-side session and/or the signed backup
+  // cookie (serverless instances lose the session between the two hops).
+  const sessState = req.session.oauthState || null;
+  let cookieState = null;
   if (req.headers.cookie) {
     try {
       const cookies = {};
@@ -148,14 +166,27 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
         const [k, ...v] = c.split('=');
         if (k) cookies[k.trim()] = decodeURIComponent(v.join('='));
       });
-      if (cookies.oauth_state) {
-        const parsed = JSON.parse(cookies.oauth_state);
-        action = parsed.action || action;
-        userId = parsed.userId || userId;
-        redirectUri = parsed.redirectUri || redirectUri;
-      }
+      if (cookies.oauth_state) cookieState = unpackOauthState(cookies.oauth_state);
     } catch (_) {}
   }
+
+  // CSRF: `state` must equal a token we actually issued (session or signed
+  // cookie). Reject when neither is present or neither matches.
+  if (process.env.NODE_ENV !== 'test') {
+    const issued = [sessState && sessState.token, cookieState && cookieState.token].filter(Boolean);
+    if (!issued.length || !state || !issued.includes(state)) {
+      return res.status(403).render('login', {
+        title: 'Sign in',
+        error: 'Invalid or expired sign-in request. Please try again.',
+        email: '',
+        googleConfigured: google.isConfigured(),
+      });
+    }
+  }
+
+  let action = (sessState && sessState.action) || (cookieState && cookieState.action) || 'auth';
+  let userId = (sessState && sessState.userId) || (cookieState && cookieState.userId) || null;
+  let redirectUri = (sessState && sessState.redirectUri) || (cookieState && cookieState.redirectUri) || null;
 
   // Fallback to current request path if redirectUri was not preserved in state
   if (!redirectUri) {
@@ -224,10 +255,18 @@ router.get(['/auth/google/callback', '/api/auth/callback/google', '/api/auth/cal
     }
     const redirectTo = to || homeFor(user.role);
 
-    setAuthSession(req, res, user);
-    req.session.save(() => {
-      logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
-      res.redirect(redirectTo);
+    // Session-fixation defence: mint a brand-new session id on login, same as
+    // the password path does.
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        console.error('OAuth session regeneration error:', regenErr);
+        return res.status(500).render('error', { title: 'Login error', message: 'Could not complete login. Please try again.' });
+      }
+      setAuthSession(req, res, user);
+      req.session.save(() => {
+        logAudit(req, 'AUTH_OAUTH_LOGIN_SUCCESS', { email: user.email, role: user.role }, user.id);
+        res.redirect(redirectTo);
+      });
     });
   } catch (err) {
     console.error('Google OAuth callback error:', err);
@@ -393,11 +432,13 @@ router.post('/reset-password/:token', resetLimiter, (req, res) => {
   const rerender = (error) => res.status(400).render('reset-password', {
     title: 'Reset password', token: req.params.token, error, email: row.email,
   });
-  if (next1.length < 6) return rerender('New password must be at least 6 characters.');
+  const pwErr = h.validatePassword(next1);
+  if (pwErr) return rerender(pwErr);
   if (next1 !== next2) return rerender('The two passwords do not match.');
 
   const usedAt = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(next1, 10), row.user_id);
+  db.prepare('UPDATE users SET password_hash = ?, sessions_invalid_before = ? WHERE id = ?')
+    .run(bcrypt.hashSync(next1, 10), Date.now(), row.user_id);
   db.prepare('UPDATE password_resets SET used_at = ? WHERE id = ?').run(usedAt, row.id);
   invalidateUserSessions(row.user_id);
   logAudit(req, 'AUTH_PASSWORD_RESET_COMPLETED', { email: row.email }, row.user_id);
@@ -504,14 +545,19 @@ router.post('/profile/password', requireLogin, (req, res) => {
   const { current, next1, next2 } = req.body;
   let error = null, ok = null;
   if (!bcrypt.compareSync(String(current || ''), user.password_hash)) error = 'Current password is incorrect.';
-  else if (String(next1 || '').length < 6) error = 'New password must be at least 6 characters.';
+  else if (h.validatePassword(next1)) error = h.validatePassword(next1);
   else if (next1 !== next2) error = 'The two new passwords do not match.';
   else {
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-      .run(bcrypt.hashSync(String(next1), 10), user.id);
+    const now = Date.now();
+    db.prepare('UPDATE users SET password_hash = ?, sessions_invalid_before = ? WHERE id = ?')
+      .run(bcrypt.hashSync(String(next1), 10), now, user.id);
     invalidateUserSessions(user.id, req.sessionID);
+    // Re-mint this device's session/cookie so the watermark bump above logs out
+    // every *other* device without logging out the one making the change.
+    const fresh = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(user.id);
+    setAuthSession(req, res, fresh);
     logAudit(req, 'AUTH_PASSWORD_CHANGE', null, user.id);
-    ok = 'Password updated.';
+    ok = 'Password updated. You have been signed out on all other devices.';
   }
   const me = db.prepare('SELECT id, name, email, role, phone, roll_no, branch, squad, resume_url, can_technical, can_hr, active, google_id, google_calendar_enabled FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profile', {

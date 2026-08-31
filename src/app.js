@@ -146,11 +146,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
-// Detailed health diagnostics for administrators
-app.get('/health/details', (req, res) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Access denied' });
-  }
+// Detailed health diagnostics for administrators. requireRole re-validates the
+// user against the DB every call (active flag, post-password-change watermark),
+// so a stale session role can't reach this.
+const { requireRole } = require('./auth');
+app.get('/health/details', requireRole('admin'), (req, res) => {
   res.json({
     status: 'healthy',
     uptime: Math.floor(process.uptime()),

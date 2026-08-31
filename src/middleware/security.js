@@ -106,6 +106,11 @@ function getCsrfSecret() {
 }
 
 function generateCsrfToken(userId) {
+  // Tokens are bound to the identity they were minted for: `anon` before login,
+  // the numeric user id after. verifyCsrfToken() then refuses an `anon` token on
+  // an authenticated request and a token minted for another user — so a token
+  // an attacker can freely obtain (by loading a page logged out) is useless
+  // against a logged-in victim.
   const data = `${userId || 'anon'}:${Date.now()}`;
   const sig = crypto.createHmac('sha256', getCsrfSecret()).update(data).digest('base64url');
   return Buffer.from(data).toString('base64url') + '.' + sig;
@@ -123,7 +128,7 @@ function verifyCsrfToken(token, userId) {
     return false;
   }
   const expectedSig = crypto.createHmac('sha256', getCsrfSecret()).update(raw).digest('base64url');
-  
+
   const sigBuf = Buffer.from(sig);
   const expBuf = Buffer.from(expectedSig);
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
@@ -131,10 +136,17 @@ function verifyCsrfToken(token, userId) {
   }
 
   try {
-    const [tUserId, ts] = raw.split(':');
-    // Token valid for 24 hours
-    if (Date.now() - Number(ts) > 24 * 60 * 60 * 1000) return false;
-    if (userId && tUserId !== 'anon' && String(tUserId) !== String(userId)) return false;
+    const idx = raw.indexOf(':');
+    const tUserId = raw.slice(0, idx);
+    const ts = raw.slice(idx + 1);
+    if (Date.now() - Number(ts) > 24 * 60 * 60 * 1000) return false; // 24h
+    if (userId) {
+      // Authenticated request: the token MUST be bound to this exact user.
+      if (String(tUserId) !== String(userId)) return false;
+    } else {
+      // Anonymous request: only an anon-bound token is acceptable.
+      if (tUserId !== 'anon') return false;
+    }
     return true;
   } catch (_) {
     return false;
@@ -148,10 +160,15 @@ function csrfProtection(req, res, next) {
     req.session = {};
   }
 
-  if (!req.session.csrfToken || !verifyCsrfToken(req.session.csrfToken, userId)) {
-    req.session.csrfToken = generateCsrfToken(userId);
+  let token = req.session.csrfToken;
+  if (!token || !verifyCsrfToken(token, userId)) {
+    token = generateCsrfToken(userId);
+    // Persist only for authenticated sessions. An anon token is self-verifying
+    // via its HMAC, so storing one would just create a session-store row for
+    // every unauthenticated visitor (and defeat saveUninitialized:false).
+    if (userId) req.session.csrfToken = token;
   }
-  res.locals.csrfToken = req.session.csrfToken;
+  res.locals.csrfToken = token;
 
   if (process.env.NODE_ENV === 'test') {
     return next();
@@ -163,10 +180,9 @@ function csrfProtection(req, res, next) {
       return next();
     }
     const submitted = (req.body && req.body._csrf) || req.headers['x-csrf-token'];
-    
-    // Check if matches session or is a valid HMAC-signed token
+
     const isValid = submitted && (
-      submitted === req.session.csrfToken ||
+      submitted === token ||
       verifyCsrfToken(submitted, userId)
     );
 

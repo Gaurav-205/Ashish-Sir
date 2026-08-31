@@ -3,5 +3,20 @@ data/
 npm-debug.log*
 .DS_Store
 .env
+.env.*
+!.env.example
 .neon
 scratch/
+
+# Manual-test / debugging artifacts — never commit these (they have leaked
+# session cookies and CSRF tokens in the past).
+cookies.txt
+*.cookies
+*_page.html
+*_post.html
+book_slot.html
+student_slots.html
+create_mentor.html
+query_slots.js
+test_slots.js
+*.log

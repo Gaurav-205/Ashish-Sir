@@ -66,12 +66,13 @@ function parseCookies(header) {
  * Sets both session state and a stateless backup cookie (for serverless/Vercel Lambdas).
  */
 function setAuthSession(req, res, user) {
-  const userData = { id: user.id, name: user.name, email: user.email, role: user.role };
+  const issuedAt = Date.now();
+  const userData = { id: user.id, name: user.name, email: user.email, role: user.role, iat: issuedAt };
   if (req.session) {
     req.session.user = userData;
   }
 
-  const token = signToken({ id: user.id, role: user.role, ts: Date.now() });
+  const token = signToken({ id: user.id, role: user.role, ts: issuedAt });
   const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   const maxAgeSec = Math.floor(COOKIE_MAX_AGE_MS / 1000);
 
@@ -111,10 +112,12 @@ function sessionRehydrateMiddleware(req, res, next) {
   if (!payload) return next();
 
   try {
-    const row = db.prepare('SELECT id, name, email, role, active FROM users WHERE id = ?').get(payload.id);
-    if (row && row.active) {
+    const row = db.prepare('SELECT id, name, email, role, active, sessions_invalid_before FROM users WHERE id = ?').get(payload.id);
+    const tokenTs = Number(payload.ts) || 0;
+    const staleAfterPwChange = row && row.sessions_invalid_before && tokenTs < Number(row.sessions_invalid_before);
+    if (row && row.active && !staleAfterPwChange) {
       if (!req.session) req.session = {};
-      req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role };
+      req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role, iat: tokenTs };
       res.locals.user = req.session.user;
     }
   } catch (err) {

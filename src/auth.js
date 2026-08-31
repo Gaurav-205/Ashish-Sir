@@ -11,21 +11,19 @@ function homeFor(role) {
 
 function isUserDeveloper(user) {
   if (!user) return false;
-  const email = (user.email || '').toLowerCase();
-  return Boolean(
-    user.is_developer ||
-    user.role === 'developer' ||
-    email === 'gauravkhandelwal205@gmail.com' ||
-    email === 'heramb15012006@gmail.com'
-  );
+  // Authority is the DB only. Do NOT grant developer by email string: emails
+  // are guessable / registerable (Google sign-in auto-provisions accounts), so
+  // an email allow-list here is a privilege-escalation backdoor.
+  return Boolean(user.is_developer || user.role === 'developer');
 }
 
 function isDualRoleUser(user) {
   if (!user) return false;
   if (isUserDeveloper(user)) return true;
-  const email = String(user.email || '').toLowerCase();
+  // Dual-role = an admin who is also enabled as an evaluator (Technical/HR).
+  // Derived from DB state only — no email allow-list.
   const canEval = Boolean(user.can_technical || user.can_hr);
-  return email === 'akshata.sanap@kalvium.com' || (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || email === 'akshata.sanap@kalvium.com'));
+  return user.role === 'admin' && canEval;
 }
 
 /**
@@ -60,6 +58,17 @@ function resolveCurrentUser(req, res) {
     // signed cookie that would otherwise rehydrate it on the next request.
     clearAuthSession(req, res, () => respondUnauthenticated(req, res));
     return null;
+  }
+
+  // A password change/reset bumps `sessions_invalid_before`. Any session (or
+  // stateless cookie) issued before that instant is dead — this is what makes
+  // "log out my other devices" work even on the serverless MemoryStore.
+  if (user.sessions_invalid_before) {
+    const iat = Number(req.session.user && req.session.user.iat) || 0;
+    if (iat < Number(user.sessions_invalid_before)) {
+      clearAuthSession(req, res, () => respondUnauthenticated(req, res));
+      return null;
+    }
   }
 
   const isDev = isUserDeveloper(user);
