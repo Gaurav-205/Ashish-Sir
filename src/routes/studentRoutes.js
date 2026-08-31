@@ -38,7 +38,7 @@ function safeRedirectTarget(req, fallback = '/student') {
 }
 
 router.get('/', (req, res) => {
-  const s = q.studentSummary(req.session.user.id);
+  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
@@ -52,7 +52,7 @@ router.get('/', (req, res) => {
 });
 
 router.get('/mentors', (req, res) => {
-  const s = q.studentSummary(req.session.user.id);
+  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
@@ -63,7 +63,7 @@ router.get('/mentors', (req, res) => {
 router.get('/slots', (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
   const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
-  const s = q.studentSummary(req.session.user.id);
+  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
@@ -117,7 +117,7 @@ router.get('/slots', (req, res) => {
 router.get('/api/slots/available', (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
   const mentorId = req.query.mentor ? Number(req.query.mentor) : null;
-  const s = q.studentSummary(req.session.user.id);
+  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return res.status(401).json({ ok: false, error: 'Your session is no longer valid. Please sign in again.' });
   }
@@ -292,7 +292,7 @@ router.post('/cancel/:id', validateId('id'), actionLimiter, async (req, res) => 
 });
 
 router.get('/results', (req, res) => {
-  const s = q.studentSummary(req.session.user.id);
+  const s = q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }

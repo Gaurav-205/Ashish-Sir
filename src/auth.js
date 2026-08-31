@@ -43,11 +43,18 @@ function resolveCurrentUser(req, res) {
   let user = null;
   if (req._resolvedUser && req._resolvedUser.id === req.session.user.id) {
     user = req._resolvedUser;
+  } else if (process.env.NODE_ENV !== 'test' && req.session._cachedUser && req.session._cachedUserAt && (Date.now() - req.session._cachedUserAt < 3000) && req.session._cachedUser.id === req.session.user.id) {
+    user = req.session._cachedUser;
+    req._resolvedUser = user;
   } else {
     try {
       user = db.prepare('SELECT * FROM users WHERE id = ?')
         .get(req.session.user.id);
-      if (user) req._resolvedUser = user;
+      if (user) {
+        req._resolvedUser = user;
+        req.session._cachedUser = user;
+        req.session._cachedUserAt = Date.now();
+      }
     } catch (err) {
       console.error('Auth lookup failed:', err);
     }

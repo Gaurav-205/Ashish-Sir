@@ -53,8 +53,8 @@ const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, squad, re
                         can_technical, can_hr, active, google_id, google_calendar_enabled, created_at`;
 
 /** Per-student roll-up used by student dashboard, admin reports and exports. */
-function studentSummary(studentId) {
-  const student = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ?`).get(studentId);
+function studentSummary(studentId, existingStudent = null) {
+  const student = existingStudent || db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ?`).get(studentId);
   if (!student) return null;
   const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
                                ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);

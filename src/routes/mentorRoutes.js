@@ -17,7 +17,7 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 router.get('/', (req, res) => {
   const id = req.session.user.id;
-  const mentor = db.prepare('SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=?').get(id);
+  const mentor = req._resolvedUser || db.prepare('SELECT id, name, email, role, phone, can_technical, can_hr, active FROM users WHERE id=?').get(id);
   const all = q.interviewsForMentor(id);
   const upcoming = all.filter((i) => i.status === 'booked');
   const completed = all.filter((i) => i.status === 'completed');
