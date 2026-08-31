@@ -49,8 +49,11 @@ router.post('/slots', (req, res) => {
     if (type === 'technical' && !mentor.can_technical && !isDev) throw new Error('Your profile is not enabled for Technical interviews.');
     if (type === 'hr' && !mentor.can_hr && !isDev) throw new Error('Your profile is not enabled for HR interviews.');
     
-    const cleanDate = String(slot_date || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) throw new Error('Pick a valid starting date.');
+    const selectedList = (req.body.selected_dates ? String(req.body.selected_dates).split(',') : [])
+      .map(d => d.trim())
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const cleanDate = String(slot_date || (selectedList.length ? selectedList[0] : '')).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate) && !selectedList.length) throw new Error('Pick a valid starting date.');
     const cleanStart = h.normalizeTime(start_time);
     if (!cleanStart) throw new Error('Pick a valid start time.');
 
@@ -59,7 +62,9 @@ router.post('/slots', (req, res) => {
     const cleanEndDate = String(end_date || '').trim();
     const repDays = parseInt(repeat_days || 1, 10);
 
-    if (cleanEndDate && /^\d{4}-\d{2}-\d{2}$/.test(cleanEndDate)) {
+    if (selectedList.length > 0) {
+      dates = [...new Set(selectedList)].sort();
+    } else if (cleanEndDate && /^\d{4}-\d{2}-\d{2}$/.test(cleanEndDate)) {
       if (cleanEndDate < cleanDate) throw new Error('End date must be on or after start date.');
       let cur = cleanDate;
       let safety = 0;

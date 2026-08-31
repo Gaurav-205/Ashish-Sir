@@ -899,8 +899,8 @@ const login = async (who, email) => {
 
     // Admin slot listing is paginated.
     const slotsPage = await get('admin', '/admin/slots');
-    const rowCount = (slotsPage.body.match(/\/admin\/slots\/\d+\/(reschedule|cancel|allot|reopen|release)/g) || []).length;
-    ok(slotsPage.status === 200 && rowCount > 0, 'the admin slot list renders manage controls');
+    ok(slotsPage.status === 200 && slotsPage.body.includes('openSlotManageModal') && slotsPage.body.includes('manageSlotModal'),
+       'the admin slot list renders manage controls');
     ok(/Page 1 of/.test(slotsPage.body) || db.prepare('SELECT COUNT(*) c FROM slots').get().c <= 50,
        'the admin slot list paginates once there are more than 50 slots');
   }
@@ -1033,6 +1033,24 @@ const login = async (who, email) => {
          AND start_time IN ('09:00', '09:30')
     `).get();
     ok(Number(multiDaySlots.c) === 6, 'multi-day slot creation produced exactly 6 slots across 3 days (2 per day)');
+
+    // Test explicit multi-date selection via selected_dates parameter
+    const explicitDatesRes = await post('mentor', '/mentor/slots', {
+      type: 'technical',
+      selected_dates: '2026-10-12,2026-10-14,2026-10-16',
+      start_time: '11:00',
+      duration: '30',
+      count: '1',
+      mode: 'Online',
+    });
+    ok(explicitDatesRes.status === 302, 'mentor creates slots on explicit multi-dates');
+    const explicitCount = db.prepare(`
+      SELECT count(*) as c FROM slots
+       WHERE mentor_id = (SELECT id FROM users WHERE email = 'arjun.mentor@konfident.in')
+         AND slot_date IN ('2026-10-12', '2026-10-14', '2026-10-16')
+         AND start_time = '11:00'
+    `).get();
+    ok(Number(explicitCount.c) === 3, 'explicit multi-date selection created 3 slots across chosen dates');
   }
 
   section('Arvind Admin Account & Administrative Superpowers');

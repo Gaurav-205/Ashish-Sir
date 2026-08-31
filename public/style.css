@@ -299,6 +299,101 @@ th.num, td.num { text-align: right; }
   }
 }
 
+/* ---- Multi-Date Calendar Picker ---------------------------------------- */
+.date-picker-widget {
+  background: var(--surface-alt, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.date-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.date-picker-nav-btn {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.date-picker-nav-btn:hover {
+  background: #f1f5f9;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.calendar-day-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slate, #64748b);
+  padding: 4px 0;
+  text-transform: uppercase;
+}
+.calendar-day-btn {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--line-soft, #e2e8f0);
+  border-radius: 6px;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.calendar-day-btn:hover:not(.disabled) {
+  border-color: var(--action-blue, #2563eb);
+  background: #eff6ff;
+}
+.calendar-day-btn.selected {
+  background: var(--action-blue, #2563eb) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  border-color: var(--action-blue, #2563eb) !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}
+.calendar-day-btn.disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: transparent;
+}
+.calendar-day-btn.is-weekend {
+  color: var(--slate, #64748b);
+}
+.selected-dates-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.selected-date-chip {
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.selected-date-chip .chip-remove {
+  cursor: pointer;
+  font-weight: 800;
+  margin-left: 2px;
+}
+
 /* ---- Live Interview Countdown Badge ------------------------------------ */
 .countdown-badge {
   display: inline-flex;

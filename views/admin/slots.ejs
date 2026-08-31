@@ -36,30 +36,11 @@
         <div class="hint">Only mentors enabled for that interview type are listed.</div>
       </div>
 
-      <div class="row">
-        <div class="field">
-          <label>Start Date *</label>
-          <input type="date" name="slot_date" id="adm_slot_date" value="<%= defaultDate %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required onchange="updateAdminPreview()">
-        </div>
-        <div class="field">
-          <label>Schedule Duration</label>
-          <select name="repeat_days" id="adm_repeat_days" onchange="updateAdminPreview()">
-            <option value="1">1 Day (Single date)</option>
-            <option value="3">3 Days in a row</option>
-            <option value="5">5 Days (e.g. Mon–Fri)</option>
-            <option value="7">7 Days (Full week)</option>
-            <option value="10">10 Days</option>
-            <option value="14">14 Days (2 weeks)</option>
-            <option value="30">30 Days (1 month)</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-bottom:14px">
-        <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer">
-          <input type="checkbox" name="exclude_weekends" value="1" id="adm_exclude_weekends" checked style="width:auto;margin:0" onchange="updateAdminPreview()">
-          Skip Saturdays &amp; Sundays (Weekdays only)
-        </label>
+      <div class="field">
+        <label>Select Date(s) from Calendar *</label>
+        <div id="adm_date_picker_container"></div>
+        <input type="hidden" name="selected_dates" id="adm_selected_dates" value="<%= defaultDate %>">
+        <input type="hidden" name="slot_date" id="adm_slot_date" value="<%= defaultDate %>">
       </div>
 
       <div class="row">
@@ -85,17 +66,8 @@
         </select>
       </div>
 
-      <div style="margin-top:12px;background:var(--surface-alt, #f8fafc);padding:12px 14px;border-radius:8px;border:1px solid var(--line, #e2e8f0)">
-        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;color:var(--slate, #64748b);text-transform:uppercase;letter-spacing:0.04em">Time Presets:</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" class="btn sm" onclick="applyPreset('09:00', 30, 2)">9:00 – 10:00 (2 slots)</button>
-          <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">10:00 – 12:00 (4 slots)</button>
-          <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">14:00 – 17:00 (6 slots)</button>
-          <button type="button" class="btn sm" onclick="applyPreset('18:00', 30, 4)">18:00 – 20:00 (4 slots)</button>
-        </div>
-        <div id="adm_preview_text" style="margin-top:10px;font-size:13px;font-weight:600;color:var(--action-blue, #2563eb)">
-          ⚡ Generating: 2 slots/day × 1 day = 2 total slot(s)
-        </div>
+      <div id="adm_preview_text" style="margin-top:10px;padding:10px 14px;background:var(--surface-alt);border-radius:8px;font-size:13px;font-weight:600;color:var(--action-blue, #2563eb)">
+        ⚡ Generating: 2 slots/day × 1 selected day = 2 total slot(s)
       </div>
     </div>
     <div class="modal-foot">
@@ -110,6 +82,77 @@
     <a class="btn sm primary" href="/admin/mentors">Register a mentor →</a>
   </div>
 <% } %>
+
+<!-- Manage Slot Modal Dialog -->
+<dialog id="manageSlotModal" class="modal-dialog" style="max-width:500px">
+  <div class="modal-head">
+    <h2 id="mng_title">Manage Slot</h2>
+    <button type="button" class="modal-close-btn" onclick="document.getElementById('manageSlotModal').close()" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <!-- Allotment Section (if open) -->
+    <div id="mng_allot_section" style="display:none;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line-soft)">
+      <form id="mng_allot_form" method="post" action="">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="field">
+          <label style="font-weight:600">Allot Slot to Student</label>
+          <select name="student_id" id="mng_student_id" required>
+            <option value="">— Select student —</option>
+            <% (students || []).forEach(function(st){ %>
+              <option value="<%= st.id %>"><%= st.name %> (<%= st.roll_no || st.email %>)</option>
+            <% }); %>
+          </select>
+        </div>
+        <button class="btn primary sm" style="width:100%">Allot slot to student →</button>
+      </form>
+    </div>
+
+    <!-- Reschedule / Edit Section -->
+    <div id="mng_reschedule_section">
+      <form id="mng_reschedule_form" method="post" action="">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="row">
+          <div class="field"><label>Date</label><input type="date" name="slot_date" id="mng_slot_date" required min="<%= typeof today !== 'undefined' ? today : '' %>"></div>
+          <div class="field"><label>Start</label><input type="time" name="start_time" id="mng_start_time" required step="300"></div>
+          <div class="field"><label>End</label><input type="time" name="end_time" id="mng_end_time" required step="300"></div>
+        </div>
+        <div class="field"><label>Mentor</label>
+          <select name="mentor_id" id="mng_mentor_id">
+            <% [...techMentors, ...hrMentors].forEach(function(m){ %>
+              <option value="<%= m.id %>"><%= m.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="field"><label>Mode</label>
+          <select name="mode" id="mng_mode">
+            <option value="Online">Online</option>
+            <option value="Offline">Offline</option>
+          </select>
+        </div>
+        <button class="btn primary sm" style="margin-top:8px">Save / Reschedule Slot</button>
+      </form>
+    </div>
+
+    <!-- Actions Section (Release, Cancel, Reopen) -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft);display:flex;gap:8px;flex-wrap:wrap">
+      <form id="mng_release_form" method="post" action="" style="display:none">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn sm">Release Booking</button>
+      </form>
+      <form id="mng_cancel_form" method="post" action="" style="display:none" onsubmit="return confirm('Cancel this slot?')">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn sm danger">Cancel Slot</button>
+      </form>
+      <form id="mng_reopen_form" method="post" action="" style="display:none">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn sm">Reopen Slot</button>
+      </form>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="btn" onclick="document.getElementById('manageSlotModal').close()">Close</button>
+  </div>
+</dialog>
 
 <div class="card">
   <div class="card-head">
@@ -148,58 +191,7 @@
           <td><% if (s.student_name) { %><%= s.student_name %><br><span class="faint"><%= s.roll_no || '' %></span>
               <% } else { %><span class="faint">—</span><% } %></td>
           <td class="num">
-            <details class="inline"><summary>Manage</summary>
-              <div class="panel" style="text-align:left;min-width:280px">
-                <% if (s.status === 'open') { %>
-                <form method="post" action="/admin/slots/<%= s.id %>/allot" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <div class="field">
-                    <label style="font-weight:600">Allot Slot to Student</label>
-                    <select name="student_id" required>
-                      <option value="">— Select student —</option>
-                      <% (students || []).forEach(function(st){ %>
-                        <option value="<%= st.id %>"><%= st.name %> (<%= st.roll_no || st.email %>)</option>
-                      <% }); %>
-                    </select>
-                  </div>
-                  <button class="btn primary sm" style="width:100%">Allot slot to student →</button>
-                </form>
-                <% } %>
-                <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
-                <form method="post" action="/admin/slots/<%= s.id %>/reschedule">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <div class="row">
-                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" min="<%= typeof today !== 'undefined' ? today : '' %>" required></div>
-                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" step="300" required></div>
-                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" step="300" required></div>
-                  </div>
-                  <div class="field"><label>Mentor</label>
-                    <select name="mentor_id">
-                      <% (s.type === 'hr' ? hrMentors : techMentors).forEach(function(m){ %>
-                        <option value="<%= m.id %>" <%= m.id === s.mentor_id ? 'selected' : '' %>><%= m.name %></option>
-                      <% }); %>
-                    </select></div>
-                  <div class="row">
-                    <div class="field"><label>Mode</label><select name="mode">
-                      <option <%= s.mode==='Online'?'selected':'' %>>Online</option>
-                      <option <%= s.mode==='Offline'?'selected':'' %>>Offline</option></select></div>
-                  </div>
-                  <button class="btn primary sm">Save / reschedule</button>
-                </form>
-                <% } %>
-                <div class="btn-row" style="margin-top:10px">
-                  <% if (s.status === 'booked' && s.interview_status !== 'completed') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/release"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm">Release booking</button></form>
-                  <% } %>
-                  <% if (s.status !== 'cancelled' && s.interview_status !== 'completed') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/cancel"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm danger">Cancel slot</button></form>
-                  <% } %>
-                  <% if (s.status === 'cancelled') { %>
-                    <form method="post" action="/admin/slots/<%= s.id %>/reopen"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn sm">Reopen</button></form>
-                  <% } %>
-                </div>
-              </div>
-            </details>
+            <button type="button" class="btn sm" onclick='openSlotManageModal(<%- JSON.stringify(s) %>)'>Manage</button>
           </td>
         </tr>
       <% }); %>
@@ -220,5 +212,6 @@
     <% } %>
   </div>
 </div>
+<script src="/js/multi-date-picker.js"></script>
 <script src="/js/admin-slots.js"></script>
 <%- include('../partials/foot') %>

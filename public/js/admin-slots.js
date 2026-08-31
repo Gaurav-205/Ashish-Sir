@@ -1,9 +1,11 @@
 (function () {
+  'use strict';
+
   var t = document.getElementById('typeSel');
   var m = document.getElementById('mentorSel');
-  if (!t || !m) return;
 
   function sync() {
+    if (!t || !m) return;
     var v = t.value;
     var first = null;
     Array.prototype.forEach.call(m.options, function (o) {
@@ -15,55 +17,127 @@
     if (first && (m.selectedOptions[0] || {}).hidden !== false) m.value = first.value;
   }
 
-  t.addEventListener('change', sync);
-  sync();
-
-  window.applyPreset = function (start, duration, count) {
-    var s = document.getElementById('adm_start_time') || document.querySelector('input[name="start_time"]');
-    var d = document.getElementById('adm_duration') || document.querySelector('input[name="duration"]');
-    var c = document.getElementById('adm_count') || document.querySelector('input[name="count"]');
-    if (s) s.value = start;
-    if (d) d.value = duration;
-    if (c) c.value = count;
-    window.updateAdminPreview();
-  };
+  if (t && m) {
+    t.addEventListener('change', sync);
+    sync();
+  }
 
   window.updateAdminPreview = function () {
-    var repEl = document.getElementById('adm_repeat_days');
+    var selInput = document.getElementById('adm_selected_dates');
     var countEl = document.getElementById('adm_count');
     var prevEl = document.getElementById('adm_preview_text');
-    var exEl = document.getElementById('adm_exclude_weekends');
-    var dateEl = document.getElementById('adm_slot_date');
-    if (!repEl || !countEl || !prevEl) return;
+    if (!prevEl) return;
 
-    var days = parseInt(repEl.value, 10) || 1;
-    var count = parseInt(countEl.value, 10) || 1;
-    var ex = exEl && exEl.checked;
-    var startDate = dateEl ? dateEl.value : '';
+    var count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
+    var dates = selInput && selInput.value ? selInput.value.split(',').filter(Boolean) : [];
+    var days = Math.max(dates.length, 1);
 
-    var actualDays = days;
-    if (ex && startDate && days > 1) {
-      var valid = 0;
-      for (var i = 0; i < days; i++) {
-        var dt = new Date(startDate + 'T00:00:00Z');
-        dt.setUTCDate(dt.getUTCDate() + i);
-        var day = dt.getUTCDay();
-        if (day !== 0 && day !== 6) valid++;
-      }
-      actualDays = valid;
-    }
-
-    var total = count * actualDays;
-    prevEl.textContent = '⚡ Generating: ' + count + ' slots/day × ' + actualDays + ' day(s) = ' + total + ' total slot(s)';
+    var total = count * days;
+    prevEl.textContent = '⚡ Generating: ' + count + ' slots/day × ' + days + ' selected day(s) = ' + total + ' total slot(s)';
   };
 
-  var modal = document.getElementById('createSlotModal');
-  if (modal) {
-    modal.addEventListener('click', function (e) {
-      var rect = modal.getBoundingClientRect();
-      var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
-        rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-      if (!inDialog) modal.close();
+  // Initialize multi-date calendar picker
+  if (typeof window.initMultiDatePicker === 'function' && document.getElementById('adm_date_picker_container')) {
+    window.initMultiDatePicker('adm_date_picker_container', 'adm_selected_dates', function (dates) {
+      var slotDateEl = document.getElementById('adm_slot_date');
+      if (slotDateEl && dates.length > 0) {
+        slotDateEl.value = dates[0];
+      }
+      window.updateAdminPreview();
     });
   }
+
+  // Manage Slot Modal Logic
+  window.openSlotManageModal = function (slot) {
+    var modal = document.getElementById('manageSlotModal');
+    if (!modal || !slot) return;
+
+    var titleEl = document.getElementById('mng_title');
+    if (titleEl) {
+      titleEl.textContent = 'Manage Slot — ' + (slot.type === 'hr' ? 'HR' : 'Technical') + ' (' + slot.slot_date + ' ' + slot.start_time + ')';
+    }
+
+    // Allotment form
+    var allotSec = document.getElementById('mng_allot_section');
+    var allotForm = document.getElementById('mng_allot_form');
+    if (allotSec && allotForm) {
+      if (slot.status === 'open') {
+        allotSec.style.display = 'block';
+        allotForm.action = '/admin/slots/' + slot.id + '/allot';
+      } else {
+        allotSec.style.display = 'none';
+      }
+    }
+
+    // Reschedule form
+    var reschedSec = document.getElementById('mng_reschedule_section');
+    var reschedForm = document.getElementById('mng_reschedule_form');
+    if (reschedSec && reschedForm) {
+      if (slot.status !== 'cancelled' && slot.interview_status !== 'completed') {
+        reschedSec.style.display = 'block';
+        reschedForm.action = '/admin/slots/' + slot.id + '/reschedule';
+
+        var dInput = document.getElementById('mng_slot_date');
+        var sInput = document.getElementById('mng_start_time');
+        var eInput = document.getElementById('mng_end_time');
+        var mInput = document.getElementById('mng_mentor_id');
+        var modeInput = document.getElementById('mng_mode');
+
+        if (dInput) dInput.value = slot.slot_date || '';
+        if (sInput) sInput.value = slot.start_time || '';
+        if (eInput) eInput.value = slot.end_time || '';
+        if (mInput) mInput.value = slot.mentor_id || '';
+        if (modeInput) modeInput.value = slot.mode || 'Online';
+      } else {
+        reschedSec.style.display = 'none';
+      }
+    }
+
+    // Actions
+    var relForm = document.getElementById('mng_release_form');
+    var canForm = document.getElementById('mng_cancel_form');
+    var reopForm = document.getElementById('mng_reopen_form');
+
+    if (relForm) {
+      if (slot.status === 'booked' && slot.interview_status !== 'completed') {
+        relForm.style.display = 'inline-block';
+        relForm.action = '/admin/slots/' + slot.id + '/release';
+      } else {
+        relForm.style.display = 'none';
+      }
+    }
+
+    if (canForm) {
+      if (slot.status !== 'cancelled' && slot.interview_status !== 'completed') {
+        canForm.style.display = 'inline-block';
+        canForm.action = '/admin/slots/' + slot.id + '/cancel';
+      } else {
+        canForm.style.display = 'none';
+      }
+    }
+
+    if (reopForm) {
+      if (slot.status === 'cancelled') {
+        reopForm.style.display = 'inline-block';
+        reopForm.action = '/admin/slots/' + slot.id + '/reopen';
+      } else {
+        reopForm.style.display = 'none';
+      }
+    }
+
+    modal.showModal();
+  };
+
+  // Close modals on backdrop click
+  ['createSlotModal', 'manageSlotModal'].forEach(function (id) {
+    var modal = document.getElementById(id);
+    if (modal) {
+      modal.addEventListener('click', function (e) {
+        var rect = modal.getBoundingClientRect();
+        var inDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+          rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+        if (!inDialog) modal.close();
+      });
+    }
+  });
 })();
