@@ -7,8 +7,9 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "init": "node src/seed.js --clean",
-    "seed": "node src/seed.js --dev",
-    "seed:demo": "node src/seed.js --dev",
+    "seed": "node scripts/seed-mongo.js",
+    "seed:mongo": "node scripts/seed-mongo.js",
+    "migrate:mongo": "node scripts/migrate-to-mongo.js",
     "clean-db": "node src/seed.js --clean",
     "empty-db": "node src/seed.js --empty",
     "test": "node test/e2e.js"
