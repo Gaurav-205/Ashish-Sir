@@ -73,15 +73,23 @@
 </div>
 
 <div class="card" style="margin-bottom:24px">
-  <div class="card-head" style="flex-wrap:wrap;gap:12px">
+  <div class="card-head" style="flex-wrap:wrap;gap:12px;justify-content:space-between">
     <div>
-      <h2>Student Interview Breakdown (Technical &amp; HR Lists)</h2>
-      <span class="faint">Separate Technical and HR interview records for every registered student</span>
+      <h2>Student Cohort Overview &amp; Interview Breakdown</h2>
+      <span class="faint">Comprehensive Technical and HR interview records for every candidate</span>
     </div>
-    <div style="min-width:240px">
-      <input type="text" id="adminStudentFilter" placeholder="Filter by candidate, roll no..." style="padding:6px 14px;font-size:12px;border:1px solid var(--line);border-radius:var(--radius-pill);width:100%" onkeyup="filterBreakdownTable()">
+    <div style="min-width:260px">
+      <input type="text" id="adminStudentFilter" placeholder="Filter by candidate, roll no, squad..." style="padding:7px 14px;font-size:13px;border:1px solid var(--line);border-radius:var(--radius-pill);width:100%" onkeyup="applyFilter()">
     </div>
   </div>
+
+  <div style="padding:10px 20px 0;background:var(--surface-alt);border-bottom:1px solid var(--line-soft);display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" class="filter-chip active" onclick="setCohortFilter('all', this)">All Students (<%= studentSummaries.length %>)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('incomplete', this)">Incomplete Bookings (<%= studentSummaries.filter(s => s.bookedCount < 2).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('booked', this)">Fully Booked (<%= studentSummaries.filter(s => s.bookedCount >= 2).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setCohortFilter('evaluated', this)">Evaluated (<%= studentSummaries.filter(s => s.allEvaluated).length %>)</button>
+  </div>
+
   <div class="card-body tight">
     <% if (typeof studentSummaries === 'undefined' || !studentSummaries || !studentSummaries.length) { %><div class="empty">No students registered yet.</div><% } else { %>
     <div class="table-scroll"><table id="studentBreakdownTable">
@@ -97,10 +105,11 @@
       </thead>
       <tbody>
       <% studentSummaries.forEach(function(s){ %>
-        <tr>
-          <td class="mono"><%= s.student.roll_no || '—' %></td>
+        <tr data-booked-count="<%= s.bookedCount %>" data-evaluated="<%= s.allEvaluated ? '1' : '0' %>">
+          <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
           <td>
-            <strong><%= s.student.name %></strong><br>
+            <strong><%= s.student.name %></strong>
+            <% if (s.student.squad) { %><span class="pill p-<%= s.student.squad === '116' ? 'technical' : 'hr' %>" style="font-size:10px;padding:2px 6px;margin-left:4px">Squad <%= s.student.squad %></span><% } %><br>
             <span class="faint"><%= s.student.email %><%= s.student.branch ? ' · ' + s.student.branch : '' %></span>
           </td>
           <td>
@@ -149,7 +158,7 @@
             <% } %>
           </td>
           <td class="num">
-            <a class="btn sm" href="/admin/students/<%= s.student.id %>">View</a>
+            <a class="btn sm primary" href="/admin/students/<%= s.student.id %>">View record →</a>
           </td>
         </tr>
       <% }); %>
@@ -158,35 +167,36 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-head">
-    <h2>Students with incomplete bookings</h2>
-    <span class="faint">Each candidate requires 1 Technical + 1 HR within the placement week</span>
-  </div>
-  <div class="card-body tight">
-    <% if (!notBooked.length) { %>
-      <div class="empty">Every student has booked both interviews.</div>
-    <% } else { %>
-    <div class="table-scroll"><table>
-      <thead><tr><th>Roll No</th><th>Student Name</th><th>Booking Status</th><th class="num">Action</th></tr></thead>
-      <tbody><% notBooked.forEach(function(s){ %>
-        <tr>
-          <td class="mono"><strong><%= s.roll_no || '—' %></strong></td>
-          <td><%= s.name %><br><span class="faint"><%= s.email %></span></td>
-          <td><span class="pill <%= s.booked === 0 ? 'p-cancelled' : 'p-booked' %>"><%= s.booked %> of 2 booked</span></td>
-          <td class="num"><a class="btn sm" href="/admin/students/<%= s.id %>">View record →</a></td>
-        </tr>
-      <% }); %></tbody>
-    </table></div><% } %>
-  </div>
-</div>
 <script>
-function filterBreakdownTable() {
-  const query = (document.getElementById('adminStudentFilter').value || '').toLowerCase().trim();
-  const rows = document.querySelectorAll('#studentBreakdownTable tbody tr');
-  rows.forEach(r => {
-    const text = r.textContent.toLowerCase();
-    r.style.display = text.includes(query) ? '' : 'none';
+var activeTab = 'all';
+
+function setCohortFilter(tab, btn) {
+  activeTab = tab;
+  document.querySelectorAll('.card .filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  applyFilter();
+}
+
+function applyFilter() {
+  var query = (document.getElementById('adminStudentFilter').value || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#studentBreakdownTable tbody tr');
+  
+  rows.forEach(function(r) {
+    var bookedCount = parseInt(r.getAttribute('data-booked-count') || '0', 10);
+    var evaluated = r.getAttribute('data-evaluated') === '1';
+    var text = r.textContent.toLowerCase();
+    
+    var matchesTab = true;
+    if (activeTab === 'incomplete') {
+      matchesTab = bookedCount < 2;
+    } else if (activeTab === 'booked') {
+      matchesTab = bookedCount >= 2;
+    } else if (activeTab === 'evaluated') {
+      matchesTab = evaluated;
+    }
+
+    var matchesSearch = !query || text.includes(query);
+    r.style.display = (matchesTab && matchesSearch) ? '' : 'none';
   });
 }
 </script>
