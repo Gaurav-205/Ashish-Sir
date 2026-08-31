@@ -1124,12 +1124,14 @@ const login = async (who, email) => {
     const interview = db.prepare(`SELECT * FROM interviews WHERE slot_id = ?`).get(bookedSlot.id);
     ok(!!interview && interview.status === 'booked', 'interview created with status booked');
 
-    // 4. Candidate dashboard shows Google Meet & Instant Meet buttons
+    // 4. Candidate dashboard shows single Join Google Meet button and live countdown badge
     const dashPage = await get('priya', '/student');
     ok(dashPage.body.includes('Join Google Meet') && dashPage.body.includes('lifecycle-meet-link'),
-       'student dashboard shows Join Google Meet link');
-    ok(dashPage.body.includes('Start Instant Google Meet'),
-       'student dashboard offers Instant Google Meet option');
+       'student dashboard shows single Join Google Meet button');
+    ok(dashPage.body.includes('countdown-badge') && dashPage.body.includes('countdown-label'),
+       'student dashboard displays live interview countdown badge');
+    ok(!dashPage.body.includes('Start Instant Google Meet'),
+       'student dashboard removes duplicate instant meet button');
 
     // 5. Candidate cancels the booking
     const cancelBookingRes = await post('priya', `/student/cancel/${interview.id}`, {});

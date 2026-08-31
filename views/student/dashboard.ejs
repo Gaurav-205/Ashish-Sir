@@ -88,16 +88,20 @@
           <p class="muted" style="margin-bottom:6px;font-size:13px">
             Mode: <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %>
           </p>
-          <% if (iv.location && iv.status === 'booked' && !h.isPast(iv)) { %>
-            <div style="margin-top:8px;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <a class="btn sm primary" href="<%= iv.location %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                Join Google Meet ↗
-              </a>
-              <a class="btn sm" href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer" style="font-size:11px" title="Start an instant Google Meet room">
-                Start Instant Google Meet ↗
-              </a>
+
+          <% if (iv.status === 'booked' && !h.isPast(iv)) { %>
+            <div class="countdown-badge" data-start="<%= iv.slot_date %>T<%= iv.start_time %>:00+05:30" data-end="<%= iv.slot_date %>T<%= iv.end_time %>:00+05:30">
+              <span class="pulse-dot"></span>
+              <span class="countdown-label">Calculating start time…</span>
             </div>
+            <% if (iv.location) { %>
+              <div style="margin-top:2px;margin-bottom:12px">
+                <a class="btn sm primary" href="<%= iv.location %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                  Join Google Meet ↗
+                </a>
+              </div>
+            <% } %>
           <% } %>
         </div>
 

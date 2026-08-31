@@ -297,6 +297,51 @@ th.num, td.num { text-align: right; }
   }
 }
 
+/* ---- Live Interview Countdown Badge ------------------------------------ */
+.countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-alt, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: var(--radius-pill, 32px);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #17171c);
+  font-family: var(--font-mono);
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+.countdown-badge.live {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+  font-weight: 700;
+}
+.countdown-badge .pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--action-blue, #2563eb);
+  display: inline-block;
+  animation: countdown-pulse 2s infinite;
+}
+.countdown-badge.live .pulse-dot {
+  background: #dc2626;
+  animation: live-countdown-pulse 1.2s infinite;
+}
+@keyframes countdown-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+@keyframes live-countdown-pulse {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+  70% { transform: scale(1.2); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
 /* ---- Cohere Cards ------------------------------------------------------- */
 .card {
   background: var(--surface);
