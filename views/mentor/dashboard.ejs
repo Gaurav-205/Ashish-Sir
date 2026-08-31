@@ -67,8 +67,6 @@
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
-        <div class="field"><label>Meeting link / room / calendar</label>
-          <input name="location" placeholder="Auto-generated secure meeting link if empty"></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Publish slots →</button>
@@ -99,7 +97,15 @@
             <br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span>
           </td>
           <td class="faint"><%= i.mode %><% if (i.location) { %> · <%- h.linkify(i.location) %><% } %></td>
-          <td class="num"><a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a></td>
+          <td class="num" style="white-space:nowrap">
+            <div style="display:inline-flex;gap:6px;align-items:center">
+              <a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a>
+              <form method="post" action="/mentor/slots/<%= i.slot_id %>/cancel" onsubmit="return confirm('Cancel this interview session? The candidate will be notified.')" style="margin:0">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn sm danger">Cancel</button>
+              </form>
+            </div>
+          </td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>
@@ -163,13 +169,39 @@
       <div class="empty">You have no open upcoming slots. Publish some above so students can book you.</div>
     <% } else { %>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Timing</th><th>Domain</th><th>Meeting Mode</th></tr></thead>
+      <thead><tr><th>Date</th><th>Timing</th><th>Domain</th><th>Meeting Mode</th><th class="num">Action</th></tr></thead>
       <tbody><% slots.forEach(function(s){ %>
         <tr>
           <td><%= h.fmtDate(s.slot_date) %></td>
           <td><%= h.fmtTime(s.start_time) %> – <%= h.fmtTime(s.end_time) %></td>
           <td><span class="pill p-<%= s.type %>"><%= h.titleCase(s.type) %></span></td>
           <td class="faint"><%= s.mode %><% if (s.location) { %> · <%- h.linkify(s.location) %><% } %></td>
+          <td class="num">
+            <details class="inline"><summary>Manage</summary>
+              <div class="panel" style="text-align:left;min-width:280px">
+                <form method="post" action="/mentor/slots/<%= s.id %>/edit">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <div class="row">
+                    <div class="field"><label>Date</label><input type="date" name="slot_date" value="<%= s.slot_date %>" required></div>
+                    <div class="field"><label>Start</label><input type="time" name="start_time" value="<%= s.start_time %>" required></div>
+                    <div class="field"><label>End</label><input type="time" name="end_time" value="<%= s.end_time %>" required></div>
+                  </div>
+                  <div class="row">
+                    <div class="field"><label>Mode</label><select name="mode">
+                      <option <%= s.mode==='Online'?'selected':'' %>>Online</option>
+                      <option <%= s.mode==='Offline'?'selected':'' %>>Offline</option></select></div>
+                  </div>
+                  <button class="btn primary sm" style="width:100%">Save changes</button>
+                </form>
+                <div class="btn-row" style="margin-top:10px">
+                  <form method="post" action="/mentor/slots/<%= s.id %>/cancel" onsubmit="return confirm('Cancel this open slot?')">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn sm danger" style="width:100%">Cancel slot</button>
+                  </form>
+                </div>
+              </div>
+            </details>
+          </td>
         </tr>
       <% }); %></tbody>
     </table></div><% } %>

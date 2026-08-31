@@ -32,11 +32,9 @@
         <div class="field"><label>How many slots</label><input type="number" name="count" value="4" min="1" max="20"></div>
         <div class="field"><label>Mode</label>
           <select name="mode"><option>Online</option><option>Offline</option></select></div>
-        <div class="field"><label>Link / room</label><input name="location" placeholder="Auto-generated secure meeting link if empty"></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary">Create slots</button>
-        <button type="button" class="btn sm" onclick="autoGenLink()">⚡ Auto-Gen Video Link</button>
         <span class="faint" style="font-size:12px">Quick presets:</span>
         <button type="button" class="btn sm" onclick="applyPreset('10:00', 30, 4)">Morning (10:00 - 12:00, 4 slots)</button>
         <button type="button" class="btn sm" onclick="applyPreset('14:00', 30, 6)">Afternoon (14:00 - 17:00, 6 slots)</button>
@@ -119,7 +117,6 @@
                     <div class="field"><label>Mode</label><select name="mode">
                       <option <%= s.mode==='Online'?'selected':'' %>>Online</option>
                       <option <%= s.mode==='Offline'?'selected':'' %>>Offline</option></select></div>
-                    <div class="field"><label>Link / room</label><input name="location" value="<%= s.location || '' %>"></div>
                   </div>
                   <button class="btn primary sm">Save / reschedule</button>
                 </form>

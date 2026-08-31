@@ -34,10 +34,15 @@ function interviewById(id) {
   return db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ?`).get(id);
 }
 function allInterviews(filters = {}) {
-  const where = ["i.status <> 'cancelled'"];
+  const where = [];
   const args = [];
+  if (filters.status) {
+    where.push('i.status = ?');
+    args.push(filters.status);
+  } else {
+    where.push("i.status <> 'cancelled'");
+  }
   if (filters.type)       { where.push('i.type = ?');       args.push(filters.type); }
-  if (filters.status)     { where.push('i.status = ?');     args.push(filters.status); }
   if (filters.attendance) { where.push('i.attendance = ?'); args.push(filters.attendance); }
   if (filters.mentor)     { where.push('i.mentor_id = ?');  args.push(Number(filters.mentor)); }
   return db.prepare(`${INTERVIEW_SELECT} WHERE ${where.join(' AND ')}
@@ -49,11 +54,11 @@ const USER_SAFE_COLS = `id, name, email, role, phone, roll_no, branch, squad, re
 
 /** Per-student roll-up used by student dashboard, admin reports and exports. */
 function studentSummary(studentId) {
-  const student = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ? AND role = 'student'`).get(studentId);
+  const student = db.prepare(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ?`).get(studentId);
   if (!student) return null;
-  const list = interviewsForStudent(studentId);
   const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
                                ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);
+  const list = [...history].reverse();
   const byType = { technical: null, hr: null };
   for (const iv of list) {
     if (!byType[iv.type]) {
@@ -154,23 +159,33 @@ function allStudentSummaries() {
 }
 
 function adminStats() {
-  // Postgres returns COUNT(*) as a bigint *string*; SQLite returns a number.
-  // Normalising here keeps every caller (and every `=== 0` in a view) correct
-  // on both drivers.
-  const one = (sql, ...a) => Number(db.prepare(sql).get(...a).c) || 0;
-  return {
-    students: one(`SELECT COUNT(*) c FROM users WHERE role='student'`),
-    mentors:  one(`SELECT COUNT(*) c FROM users WHERE role='mentor'`),
-    slots:    one(`SELECT COUNT(*) c FROM slots WHERE status<>'cancelled'`),
-    openSlots: one(`SELECT COUNT(*) c FROM slots WHERE status='open'`),
-    booked:   one(`SELECT COUNT(*) c FROM interviews WHERE status='booked'`),
-    completed: one(`SELECT COUNT(*) c FROM interviews WHERE status='completed'`),
-    attended:  one(`SELECT COUNT(*) c FROM interviews WHERE attendance='attended'`),
-    absent:    one(`SELECT COUNT(*) c FROM interviews WHERE attendance='absent'`),
-    evaluated: one(`SELECT COUNT(*) c FROM evaluations`),
-    fullyBooked: one(`SELECT COUNT(*) c FROM (
+  const row = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM users WHERE role='student') AS students,
+      (SELECT COUNT(*) FROM users WHERE role='mentor') AS mentors,
+      (SELECT COUNT(*) FROM slots WHERE status<>'cancelled') AS slots,
+      (SELECT COUNT(*) FROM slots WHERE status='open') AS open_slots,
+      (SELECT COUNT(*) FROM interviews WHERE status='booked') AS booked,
+      (SELECT COUNT(*) FROM interviews WHERE status='completed') AS completed,
+      (SELECT COUNT(*) FROM interviews WHERE attendance='attended') AS attended,
+      (SELECT COUNT(*) FROM interviews WHERE attendance='absent') AS absent,
+      (SELECT COUNT(*) FROM evaluations) AS evaluated,
+      (SELECT COUNT(*) FROM (
         SELECT student_id FROM interviews WHERE status<>'cancelled'
-        GROUP BY student_id HAVING COUNT(DISTINCT type) = 2) AS fully_booked`),
+        GROUP BY student_id HAVING COUNT(DISTINCT type) = 2
+      ) AS fb) AS fully_booked
+  `).get();
+  return {
+    students: Number(row ? row.students : 0) || 0,
+    mentors:  Number(row ? row.mentors : 0) || 0,
+    slots:    Number(row ? row.slots : 0) || 0,
+    openSlots: Number(row ? row.open_slots : 0) || 0,
+    booked:   Number(row ? row.booked : 0) || 0,
+    completed: Number(row ? row.completed : 0) || 0,
+    attended:  Number(row ? row.attended : 0) || 0,
+    absent:    Number(row ? row.absent : 0) || 0,
+    evaluated: Number(row ? row.evaluated : 0) || 0,
+    fullyBooked: Number(row ? row.fully_booked : 0) || 0,
   };
 }
 
@@ -184,17 +199,13 @@ function mentorsWithOpenSlots() {
   const now = h.nowMinute();
   return db.prepare(`
     SELECT m.id, m.name, m.email, m.can_technical, m.can_hr, m.active,
-      (SELECT COUNT(*) FROM slots s
-        WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'technical'
-          AND (s.slot_date || ' ' || s.start_time) > ?) AS tech_open_slots,
-      (SELECT COUNT(*) FROM slots s
-        WHERE s.mentor_id = m.id AND s.status = 'open' AND s.type = 'hr'
-          AND (s.slot_date || ' ' || s.start_time) > ?) AS hr_open_slots,
-      (SELECT COUNT(*) FROM slots s
-        WHERE s.mentor_id = m.id AND s.status = 'open'
-          AND (s.slot_date || ' ' || s.start_time) > ?) AS total_open_slots
-     FROM users m
+      COUNT(CASE WHEN s.status = 'open' AND s.type = 'technical' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS tech_open_slots,
+      COUNT(CASE WHEN s.status = 'open' AND s.type = 'hr' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS hr_open_slots,
+      COUNT(CASE WHEN s.status = 'open' AND (s.slot_date || ' ' || s.start_time) > ? THEN 1 END) AS total_open_slots
+    FROM users m
+    LEFT JOIN slots s ON s.mentor_id = m.id
     WHERE (m.role = 'mentor' OR m.can_technical = 1 OR m.can_hr = 1) AND m.active = 1
+    GROUP BY m.id, m.name, m.email, m.can_technical, m.can_hr, m.active
     ORDER BY m.name
   `).all(now, now, now).map((m) => ({
     ...m,

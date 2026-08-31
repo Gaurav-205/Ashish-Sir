@@ -22,6 +22,7 @@
         <option value="">All statuses</option>
         <option value="booked" <%= filters.status==='booked'?'selected':'' %>>Booked</option>
         <option value="completed" <%= filters.status==='completed'?'selected':'' %>>Completed</option>
+        <option value="cancelled" <%= filters.status==='cancelled'?'selected':'' %>>Cancelled</option>
       </select>
       <select name="attendance" onchange="this.form.submit()" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-pill);max-width:160px">
         <option value="">All attendance</option>
@@ -39,7 +40,7 @@
   </div>
   <div class="card-body tight">
     <div class="table-scroll"><table>
-      <thead><tr><th>When</th><th>Domain</th><th>Candidate</th><th>Assigned Mentor</th><th>Status</th><th>Attendance</th><th>Category Marks</th><th class="num">Score</th></tr></thead>
+      <thead><tr><th>When</th><th>Domain</th><th>Candidate</th><th>Assigned Mentor</th><th>Status</th><th>Attendance</th><th>Category Marks</th><th class="num">Score</th><th>Action</th></tr></thead>
       <tbody>
       <% list.forEach(function(i){ %>
         <tr>
@@ -51,9 +52,11 @@
             <% if (i.status === 'completed' && !i.eval_id) { %><br><span class="faint">awaiting score</span><% } %></td>
           <td>
             <% if (i.attendance === 'attended') { %>
-              <span class="pill p-completed">Attended</span>
+              <span class="pill p-completed">Attended (Present)</span>
             <% } else if (i.attendance === 'absent') { %>
               <span class="pill p-cancelled">Absent</span>
+            <% } else if (h.isPast(i)) { %>
+              <span class="pill p-warn" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">Slot Passed · Pending</span>
             <% } else { %>
               <span class="pill p-booked">Pending</span>
             <% } %>
@@ -63,9 +66,19 @@
               <% }); } else { %><span class="faint">—</span><% } %></td>
           <td class="num"><% if (i.eval_id) { %><strong style="font-family:var(--font-display)"><%= i.score %></strong><span class="faint">/<%= RUBRIC[i.type].total %></span>
             <% } else { %><span class="faint">—</span><% } %></td>
+          <td>
+            <% if (i.status === 'booked' && i.attendance === 'pending') { %>
+              <form method="post" action="/admin/interviews/<%= i.id %>/cancel" onsubmit="return confirm('Cancel this booking? The slot will reopen for booking.')" style="margin:0">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn sm danger">Cancel booking</button>
+              </form>
+            <% } else { %>
+              <span class="faint">—</span>
+            <% } %>
+          </td>
         </tr>
       <% }); %>
-      <% if (!list.length) { %><tr><td colspan="8" class="empty">No interview records match the selected filters.</td></tr><% } %>
+      <% if (!list.length) { %><tr><td colspan="9" class="empty">No interview records match the selected filters.</td></tr><% } %>
       </tbody>
     </table></div>
   </div>

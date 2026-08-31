@@ -1,11 +1,27 @@
 <%
 const currentPath = (typeof path === 'string') ? path : '';
-const links = {
+const activeRole = (user && user.role) ? user.role : '';
+const isDev = Boolean(typeof isDeveloper !== 'undefined' && isDeveloper);
+
+const roleLinks = {
   admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
           ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
   mentor: [['/mentor','My interviews']],
   student: [['/student','Dashboard'],['/student/mentors','Mentors'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
-}[user ? user.role : ''] || [];
+  developer: [
+    ['/admin', 'Admin Dashboard'],
+    ['/mentor', 'Mentor Desk'],
+    ['/student', 'Student View'],
+    ['/admin/slots', 'Slots'],
+    ['/admin/interviews', 'Interviews'],
+    ['/admin/reports', 'Reports'],
+  ],
+};
+
+const links = (isDev && activeRole === 'developer')
+  ? roleLinks.developer
+  : (roleLinks[activeRole] || roleLinks[user ? user.role : ''] || []);
+
 const userName = (user && user.name) ? String(user.name).trim() : '';
 const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() : '?';
 %>
@@ -24,12 +40,33 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
         <a href="<%= l[0] %>" class="<%= currentPath === l[0].split('?')[0] ? 'on' : '' %>"><%= l[1] %></a>
       <% }); %>
     </nav>
+    <% if (isDev) { %>
+      <div class="dev-role-switcher" style="display:inline-flex;align-items:center;gap:6px;margin:0 12px;background:var(--surface-hover, #f1f5f9);padding:4px 10px;border-radius:999px;border:1px solid var(--line, #e2e8f0);font-size:12px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--brand, #4f46e5);display:inline-flex;align-items:center;gap:4px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
+          Role:
+        </span>
+        <form method="post" action="/dev/switch-role" style="margin:0;display:inline-flex;align-items:center">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <select name="role" onchange="this.form.submit()" style="padding:2px 8px;font-size:12px;font-weight:600;border-radius:12px;border:1px solid #cbd5e1;background:#ffffff;cursor:pointer;color:#1e293b">
+            <option value="developer" <%= activeRole === 'developer' ? 'selected' : '' %>>⚡ Developer (All)</option>
+            <option value="admin" <%= activeRole === 'admin' ? 'selected' : '' %>>Admin</option>
+            <option value="mentor" <%= activeRole === 'mentor' ? 'selected' : '' %>>Mentor</option>
+            <option value="student" <%= activeRole === 'student' ? 'selected' : '' %>>Student</option>
+          </select>
+        </form>
+      </div>
+    <% } %>
     <div class="who">
       <a href="/profile" class="who-link" title="My profile and password settings">
         <span class="avatar"><%= initials %></span>
         <span class="name">
           <strong><%= user.name %></strong>
-          <span class="pill role-pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>"><%= user.role %></span>
+          <% if (isDev) { %>
+            <span class="pill role-pill" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:700">DEV<%= activeRole !== 'developer' ? ` : ${activeRole.toUpperCase()}` : '' %></span>
+          <% } else { %>
+            <span class="pill role-pill p-<%= user.role === 'admin' ? 'brand' : (user.role === 'mentor' ? 'hr' : 'technical') %>"><%= user.role %></span>
+          <% } %>
         </span>
       </a>
       <form method="post" action="/logout" style="margin:0">

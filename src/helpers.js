@@ -116,7 +116,25 @@ function linkify(str) {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="meet-link">${label}</a>`;
   });
 }
+
+function safeRedirectTarget(req, fallback = '/') {
+  const ref = req.headers.referer || req.headers.referrer;
+  if (!ref) return fallback;
+  try {
+    if (ref.startsWith('/') && !ref.startsWith('//')) {
+      return ref;
+    }
+    const parsed = new URL(ref);
+    const host = req.get('host');
+    if (parsed.host === host) {
+      return parsed.pathname + parsed.search;
+    }
+  } catch (_) {}
+  return fallback;
+}
+
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowStamp, nowMinute, addDays,
-  titleCase, isPast, linkify, escapeHtml, generateMeetingLink,
+  titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
 };
+

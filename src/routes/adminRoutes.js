@@ -38,16 +38,12 @@ router.get('/', (req, res) => {
       LEFT JOIN evaluations e ON e.interview_id = i.id
      WHERE i.status = 'completed' AND e.id IS NULL
      ORDER BY s.slot_date LIMIT 8`).all();
-  const notBooked = db.prepare(`
-    SELECT * FROM (
-      SELECT u.id, u.name, u.email, u.roll_no,
-        (SELECT COUNT(*) FROM interviews i WHERE i.student_id=u.id AND i.status<>'cancelled') AS booked
-        FROM users u WHERE u.role='student' AND u.active=1
-    ) AS booking_progress
-     WHERE booked < 2 ORDER BY booked, name LIMIT 10`)
-    .all()
-    .map((row) => ({ ...row, booked: Number(row.booked) || 0 }));
   const studentSummaries = q.allStudentSummaries();
+  const notBooked = studentSummaries
+    .filter((s) => s.bookedCount < 2 && s.student.active)
+    .sort((a, b) => a.bookedCount - b.bookedCount || a.student.name.localeCompare(b.student.name))
+    .slice(0, 10)
+    .map((s) => ({ ...s.student, booked: s.bookedCount }));
   res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked, studentSummaries, GRAND_TOTAL });
 });
 
@@ -357,8 +353,9 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
       if (studentClash) throw new Error('The booked student already has another interview at that time.');
     }
 
+    const loc = (location && location.trim()) ? location.trim() : (slot.location || h.generateMeetingLink(slot.type));
     db.prepare(`UPDATE slots SET slot_date=?, start_time=?, end_time=?, mentor_id=?, mode=?, location=? WHERE id=?`)
-      .run(slot_date, start_time, end_time, mentor.id, mode || 'Online', location || null, id);
+      .run(slot_date, start_time, end_time, mentor.id, mode || 'Online', loc, id);
     // keep the linked interview's mentor in sync
     db.prepare(`UPDATE interviews SET mentor_id=? WHERE slot_id=? AND status<>'cancelled'`).run(mentor.id, id);
 
@@ -400,7 +397,7 @@ router.post('/slots/:id/reopen', validateId('id'), (req, res) => {
   res.redirect('/admin/slots');
 });
 
-router.post('/slots/:id/release', validateId('id'), async (req, res) => {
+router.post(['/slots/:id/release', '/slots/:id/cancel-booking'], validateId('id'), async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
   if (!iv) { flash(req, 'err', 'That slot is not booked.'); return res.redirect('/admin/slots'); }
@@ -510,6 +507,55 @@ router.get('/interviews', (req, res) => {
     title: 'Interviews', list, filters,
     mentors: db.prepare(`SELECT id,name FROM users WHERE role='mentor' ORDER BY name`).all(),
   });
+});
+
+router.post(['/interviews/:id/cancel', '/bookings/:id/cancel'], validateId('id'), async (req, res) => {
+  const targetId = Number(req.params.id);
+  let iv = db.prepare(`SELECT * FROM interviews WHERE id=?`).get(targetId);
+  if (!iv) {
+    iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(targetId);
+  }
+  if (!iv) {
+    flash(req, 'err', 'Booking not found.');
+    return res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
+  }
+  if (iv.status === 'cancelled') {
+    flash(req, 'err', 'This booking is already cancelled.');
+    return res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
+  }
+  if (iv.status === 'completed') {
+    flash(req, 'err', 'Completed interviews cannot be cancelled.');
+    return res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
+  }
+  if (iv.attendance !== 'pending') {
+    flash(req, 'err', 'Cannot cancel an interview once attendance has been recorded.');
+    return res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
+  }
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare(`UPDATE interviews SET status='cancelled' WHERE id=?`).run(iv.id);
+    db.prepare(`UPDATE slots SET status='open' WHERE id=? AND status='booked'`).run(iv.slot_id);
+    db.exec('COMMIT');
+
+    if (iv.google_event_id) {
+      const student = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.student_id);
+      const mentor = db.prepare('SELECT id, name, email, google_calendar_enabled, google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=?').get(iv.mentor_id);
+      google.removeCalendarEvent({ eventId: iv.google_event_id, student, mentor }).catch(() => {});
+    }
+    const studentObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.student_id);
+    const mentorObj = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(iv.mentor_id);
+    const slotObj = db.prepare('SELECT * FROM slots WHERE id=?').get(iv.slot_id);
+    emailService.sendBookingCancellation({ student: studentObj, mentor: mentorObj, slot: slotObj }).catch(() => {});
+
+    logAudit(req, 'ADMIN_CANCEL_BOOKING', { interview_id: iv.id, slot_id: iv.slot_id, student_id: iv.student_id, mentor_id: iv.mentor_id });
+
+    flash(req, 'ok', 'Booking cancelled and the slot reopened.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not cancel booking: ' + e.message);
+  }
+  res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
 });
 
 /* -------------------------------- reports ------------------------------ */

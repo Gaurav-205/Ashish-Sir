@@ -70,6 +70,14 @@ const sInitials = s.student.name ? s.student.name.split(/\s+/).map(w => w[0] || 
             <% } else if (iv.status === 'completed') { %>
               <div class="faint" style="margin-top:6px">Session completed · Awaiting mentor evaluation.</div>
             <% } %>
+            <% if (iv.status === 'booked' && iv.attendance === 'pending') { %>
+              <div style="margin-top:10px">
+                <form method="post" action="/admin/interviews/<%= iv.id %>/cancel" onsubmit="return confirm('Cancel this booking? The slot will reopen for booking.')" style="margin:0">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn sm danger">Cancel booking</button>
+                </form>
+              </div>
+            <% } %>
           <% } %>
         </div>
       <% }); %>

@@ -33,13 +33,19 @@
     <div class="card-body tight">
       <% if (!upcoming.length) { %><div class="empty">Nothing booked yet.</div><% } else { %>
       <div class="table-scroll"><table>
-        <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor / Meet Link</th></tr></thead>
+        <thead><tr><th>When</th><th>Type</th><th>Student</th><th>Mentor / Meet Link</th><th>Action</th></tr></thead>
         <tbody><% upcoming.forEach(function(i){ %>
           <tr>
             <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %></span></td>
             <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
             <td><strong><%= i.student_name %></strong></td>
             <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify(i.location) %></span><% } %></td>
+            <td>
+              <form method="post" action="/admin/interviews/<%= i.id %>/cancel" onsubmit="return confirm('Cancel this booking? The slot will reopen for booking.')" style="margin:0">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn sm danger">Cancel</button>
+              </form>
+            </td>
           </tr><% }); %></tbody>
       </table></div><% } %>
     </div>
@@ -102,6 +108,13 @@
               <span class="pill p-cancelled">Not Booked</span>
             <% } else { %>
               <span class="pill p-<%= s.technical.status %>"><%= h.titleCase(s.technical.status) %></span>
+              <% if (s.technical.attendance === 'attended') { %>
+                <span class="pill p-completed" style="font-size:10px;padding:2px 6px">Attended (Present)</span>
+              <% } else if (s.technical.attendance === 'absent') { %>
+                <span class="pill p-cancelled" style="font-size:10px;padding:2px 6px">Absent</span>
+              <% } else if (h.isPast(s.technical)) { %>
+                <span class="pill" style="font-size:10px;padding:2px 6px;background:#fef3c7;color:#92400e;border:1px solid #fde68a">Slot Passed · Pending</span>
+              <% } %>
               <div class="faint" style="margin-top:4px">
                 <%= h.fmtDate(s.technical.slot_date) %> · <%= h.fmtTime(s.technical.start_time) %><br>
                 Mentor: <%= s.technical.mentor_name %>
@@ -114,6 +127,13 @@
               <span class="pill p-cancelled">Not Booked</span>
             <% } else { %>
               <span class="pill p-<%= s.hr.status %>"><%= h.titleCase(s.hr.status) %></span>
+              <% if (s.hr.attendance === 'attended') { %>
+                <span class="pill p-completed" style="font-size:10px;padding:2px 6px">Attended (Present)</span>
+              <% } else if (s.hr.attendance === 'absent') { %>
+                <span class="pill p-cancelled" style="font-size:10px;padding:2px 6px">Absent</span>
+              <% } else if (h.isPast(s.hr)) { %>
+                <span class="pill" style="font-size:10px;padding:2px 6px;background:#fef3c7;color:#92400e;border:1px solid #fde68a">Slot Passed · Pending</span>
+              <% } %>
               <div class="faint" style="margin-top:4px">
                 <%= h.fmtDate(s.hr.slot_date) %> · <%= h.fmtTime(s.hr.start_time) %><br>
                 Mentor: <%= s.hr.mentor_name %>
