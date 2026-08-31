@@ -5,7 +5,7 @@
       Student Workspace · Cohort 2025–26<%= s.student.squad ? ' · Squad ' + s.student.squad : '' %>
     </div>
     <h1>Hello, <%= (s.student.name || '').trim().split(/\s+/)[0] || 'Student' %></h1>
-    <p class="sub">Complete your mandatory <strong>Technical Interview (30 marks)</strong> and <strong>HR Interview (20 marks)</strong> this week.</p>
+    <p class="sub">Weekly Interview Cycle: <strong><%= (s.currentWeek && s.currentWeek.label) ? s.currentWeek.label : 'This Week' %></strong> · Complete your mandatory <strong>Technical (30 marks)</strong> and <strong>HR (20 marks)</strong> mock sessions.</p>
   </div>
   <% if (s.allEvaluated) { %>
     <a class="btn primary" href="/student/results">View Full Scorecard &amp; Results →</a>

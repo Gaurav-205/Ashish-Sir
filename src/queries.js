@@ -58,17 +58,23 @@ function studentSummary(studentId) {
   if (!student) return null;
   const history = db.prepare(`${INTERVIEW_SELECT} WHERE i.student_id = ? AND i.status <> 'cancelled'
                                ORDER BY s.slot_date DESC, s.start_time DESC`).all(studentId);
-  const list = [...history].reverse();
+  const currentWeek = h.getWeekRange();
+  
+  // Prioritize active or completed interviews for the current weekly cycle
+  const currentWeekIvs = history.filter((iv) => iv.slot_date >= currentWeek.start && iv.slot_date <= currentWeek.end);
   const byType = { technical: null, hr: null };
-  for (const iv of list) {
-    if (!byType[iv.type]) {
+
+  for (const iv of currentWeekIvs) {
+    if (!byType[iv.type] || (byType[iv.type].eval_id == null && iv.eval_id != null)) {
       byType[iv.type] = iv;
-    } else if (iv.eval_id != null) {
-      byType[iv.type] = iv;
-    } else if (byType[iv.type].eval_id == null && iv.attendance === 'attended') {
-      byType[iv.type] = iv;
-    } else if (byType[iv.type].eval_id == null && byType[iv.type].attendance !== 'attended') {
-      byType[iv.type] = iv;
+    }
+  }
+
+  // Fallback: If no interview in current weekly cycle, show most recent from history
+  for (const t of ['technical', 'hr']) {
+    if (!byType[t]) {
+      const latest = history.find((iv) => iv.type === t);
+      if (latest) byType[t] = latest;
     }
   }
 
@@ -83,13 +89,14 @@ function studentSummary(studentId) {
     technical: byType.technical,
     hr: byType.hr,
     history,
+    currentWeek,
     techScore, hrScore, total,
     percent: done ? Math.round((total / GRAND_TOTAL) * 1000) / 10 : null,
-    bookedCount: list.length,
-    completedCount: list.filter((i) => i.status === 'completed').length,
-    attendedCount: list.filter((i) => i.attendance === 'attended').length,
-    absentCount: list.filter((i) => i.attendance === 'absent').length,
-    evaluatedCount: list.filter((i) => i.eval_id != null).length,
+    bookedCount: history.length,
+    completedCount: history.filter((i) => i.status === 'completed').length,
+    attendedCount: history.filter((i) => i.attendance === 'attended').length,
+    absentCount: history.filter((i) => i.attendance === 'absent').length,
+    evaluatedCount: history.filter((i) => i.eval_id != null).length,
     allBooked: !!(byType.technical && byType.hr),
     allEvaluated: done,
   };

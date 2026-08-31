@@ -26,7 +26,7 @@
       <div class="card-head">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="pill p-<%= t %>"><%= t === 'hr' ? 'HR' : 'Technical' %></span>
-          <h2 style="margin:0"><%= t === 'hr' ? 'HR' : 'Technical' %> Interview (This Week)</h2>
+          <h2 style="margin:0"><%= t === 'hr' ? 'HR' : 'Technical' %> Interview (<%= (s.currentWeek && s.currentWeek.label) ? s.currentWeek.label : 'This Week' %>)</h2>
         </div>
         <% if (iv && iv.eval_id) { %>
           <strong style="font-family:var(--font-display);font-size:16px"><%= iv.score %> / <%= RUBRIC[t].total %></strong>
@@ -36,7 +36,7 @@
         <% if (!iv) { %>
           <div style="margin-bottom:12px">
             <div class="big-score" style="color:var(--muted)">—<small>/<%= RUBRIC[t].total %></small></div>
-            <p class="muted" style="margin-top:6px">Not scheduled for this week cycle. <a href="/student/slots?type=<%= t %>">Book a slot →</a></p>
+            <p class="muted" style="margin-top:6px">Not scheduled for this weekly cycle. <a href="/student/slots?type=<%= t %>">Book a slot →</a></p>
           </div>
         <% } else { %>
           <div style="margin-bottom:14px">

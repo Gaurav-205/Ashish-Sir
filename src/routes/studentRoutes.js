@@ -171,9 +171,14 @@ router.post('/book', async (req, res) => {
     if (!slot.mentor_active) throw new Error('That mentor is no longer available. Please pick another slot.');
     if (h.isPast(slot)) throw new Error('That slot is in the past.');
 
-    const existing = db.prepare(`SELECT * FROM interviews
-                                 WHERE student_id=? AND type=? AND status<>'cancelled'`).get(studentId, slot.type);
-    if (existing) throw new Error(`You have already booked your ${h.titleCase(slot.type)} interview.`);
+    const slotWeek = h.getWeekRange(slot.slot_date);
+    const existing = db.prepare(`
+      SELECT i.*, s2.slot_date FROM interviews i
+      JOIN slots s2 ON s2.id = i.slot_id
+      WHERE i.student_id = ? AND i.type = ? AND i.status <> 'cancelled'
+        AND s2.slot_date >= ? AND s2.slot_date <= ?
+    `).get(studentId, slot.type, slotWeek.start, slotWeek.end);
+    if (existing) throw new Error(`You have already booked your ${h.titleCase(slot.type)} interview for this weekly cycle (${slotWeek.label}).`);
 
     // no clashing booking at the same date/time for this student
     const clash = db.prepare(`

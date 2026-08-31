@@ -148,8 +148,30 @@ function safeRedirectTarget(req, fallback = '/') {
   return fallback;
 }
 
+/** Returns start (Mon) and end (Sun) of the week for any date in IST. */
+function getWeekRange(dateStr) {
+  const dStr = dateStr || today();
+  const dt = new Date(dStr + 'T00:00:00Z');
+  const day = dt.getUTCDay(); // 0 = Sun, 1 = Mon ...
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const monday = new Date(dt);
+  monday.setUTCDate(dt.getUTCDate() + diffToMon);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  const start = monday.toISOString().slice(0, 10);
+  const end = sunday.toISOString().slice(0, 10);
+  const label = `${monday.getUTCDate()} ${MONTHS[monday.getUTCMonth()]} – ${sunday.getUTCDate()} ${MONTHS[sunday.getUTCMonth()]} ${sunday.getUTCFullYear()}`;
+  return { start, end, label };
+}
+
+/** Returns the weekly cycle key ('YYYY-Www') based on Monday date. */
+function getWeekKey(dateStr) {
+  return getWeekRange(dateStr).start;
+}
+
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
   normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
+  getWeekRange, getWeekKey,
 };
 

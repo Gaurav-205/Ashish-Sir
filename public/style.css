@@ -286,8 +286,16 @@ th.num, td.num { text-align: right; }
 /* ---- Grid Layouts ------------------------------------------------------- */
 .grid { display: grid; gap: 20px; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.grid.three { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.grid.four { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid.four { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.grid.mentors-grid {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+@media (min-width: 980px) {
+  .grid.mentors-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 
 /* ---- Cohere Cards ------------------------------------------------------- */
 .card {
