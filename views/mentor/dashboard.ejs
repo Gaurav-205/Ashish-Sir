@@ -47,11 +47,8 @@
           <label>Slot Length (minutes)</label>
           <input type="number" name="duration" id="m_duration" value="30" min="10" max="180" onchange="updatePreview()" oninput="updatePreview()">
         </div>
-        <div class="field">
-          <label>Slots per Day</label>
-          <input type="number" name="count" id="m_count" value="2" min="1" max="30" onchange="updatePreview()" oninput="updatePreview()">
-        </div>
       </div>
+      <input type="hidden" name="count" id="m_count" value="1">
 
       <div class="field">
         <label>Mode</label>
@@ -62,7 +59,7 @@
       </div>
 
       <div id="m_preview_text" style="margin-top:10px;padding:10px 14px;background:var(--surface-alt);border-radius:8px;font-size:13px;font-weight:600;color:var(--action-blue, #2563eb)">
-        ⚡ Generating: 2 slots/day × 1 selected day = 2 total slot(s)
+        ⚡ Generating 1 slot across 1 selected day = 1 total slot
       </div>
     </div>
     <div class="modal-foot">
@@ -286,7 +283,9 @@ window.updatePreview = function () {
   var days = Math.max(dates.length, 1);
 
   var total = count * days;
-  prevEl.textContent = '⚡ Generating: ' + count + ' slots/day × ' + days + ' selected day(s) = ' + total + ' total slot(s)';
+  var timeEl = document.getElementById('m_start_time');
+  var timeVal = timeEl && timeEl.value ? (' at ' + timeEl.value) : '';
+  prevEl.textContent = '⚡ Generating 1 slot' + timeVal + ' across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
 };
 
 if (typeof window.initMultiDatePicker === 'function' && document.getElementById('m_date_picker_container')) {

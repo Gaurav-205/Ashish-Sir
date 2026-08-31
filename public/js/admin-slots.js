@@ -33,7 +33,9 @@
     var days = Math.max(dates.length, 1);
 
     var total = count * days;
-    prevEl.textContent = '⚡ Generating: ' + count + ' slots/day × ' + days + ' selected day(s) = ' + total + ' total slot(s)';
+    var timeEl = document.getElementById('adm_start_time');
+    var timeVal = timeEl && timeEl.value ? (' at ' + timeEl.value) : '';
+    prevEl.textContent = '⚡ Generating 1 slot' + timeVal + ' across ' + days + ' selected day(s) = ' + total + ' total slot(s)';
   };
 
   // Initialize multi-date calendar picker
