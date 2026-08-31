@@ -8,6 +8,12 @@
     <% if (techMentors.length || hrMentors.length) { %>
       <button type="button" class="btn primary" onclick="document.getElementById('createSlotModal').showModal()">+ Create Slots</button>
     <% } %>
+    <% if (total > 0) { %>
+      <form method="post" action="/admin/slots/delete-all" style="display:inline" onsubmit="return confirm('Are you sure you want to delete ALL slots? This cannot be undone.')">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn danger sm">Delete All Slots</button>
+      </form>
+    <% } %>
   </div>
 </div>
 

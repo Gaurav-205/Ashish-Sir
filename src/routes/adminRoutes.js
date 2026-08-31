@@ -538,6 +538,23 @@ router.post('/slots/:id/delete', validateId('id'), async (req, res) => {
   res.redirect('/admin/slots');
 });
 
+router.post('/slots/delete-all', async (req, res) => {
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare(`DELETE FROM student_feedbacks WHERE interview_id IN (SELECT id FROM interviews WHERE status <> 'completed')`).run();
+    db.prepare(`DELETE FROM evaluations WHERE interview_id IN (SELECT id FROM interviews WHERE status <> 'completed')`).run();
+    db.prepare(`DELETE FROM interviews WHERE status <> 'completed'`).run();
+    db.prepare(`DELETE FROM slots WHERE id NOT IN (SELECT slot_id FROM interviews WHERE status = 'completed')`).run();
+    db.exec('COMMIT');
+    logAudit(req, 'ADMIN_DELETE_ALL_SLOTS', {});
+    flash(req, 'ok', 'All slots have been deleted successfully.');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    flash(req, 'err', 'Could not delete all slots: ' + e.message);
+  }
+  res.redirect('/admin/slots');
+});
+
 router.post(['/slots/:id/release', '/slots/:id/cancel-booking'], validateId('id'), async (req, res) => {
   const id = Number(req.params.id);
   const iv = db.prepare(`SELECT * FROM interviews WHERE slot_id=? AND status<>'cancelled'`).get(id);
