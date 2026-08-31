@@ -99,6 +99,17 @@ function isPast(slot) {
   return startsAt <= nowMinute();
 }
 
+/**
+ * True when a DB error is a unique-constraint / duplicate-key violation.
+ * Works across drivers: node:sqlite says "UNIQUE constraint failed",
+ * Postgres says "duplicate key value violates unique constraint" and carries
+ * SQLSTATE 23505 (surfaced by pgWorker as a "[23505] " message prefix).
+ */
+function isUniqueViolation(err) {
+  const msg = String((err && err.message) || err || '');
+  return /unique constraint|duplicate key|\b23505\b/i.test(msg);
+}
+
 function generateMeetingLink(type = 'interview') {
   const letters = 'abcdefghijklmnopqrstuvwxyz';
   const randLetters = (len) => {
@@ -236,7 +247,7 @@ function isValidTime(timeStr) {
 
 module.exports = {
   fmtDate, fmtTime, fmtSlot, fmtStamp, today, nowTime, nowStamp, nowMinute, addDays,
-  normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, safeRedirectTarget,
+  normalizeTime, titleCase, isPast, linkify, escapeHtml, generateMeetingLink, isUniqueViolation, safeRedirectTarget,
   getWeekRange, getWeekKey, isStudentProfileComplete, getMissingStudentProfileFields,
   isValidEmail, isValidUrl, isValidPhone, isValidDate, isValidTime,
 };

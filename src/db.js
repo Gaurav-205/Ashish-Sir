@@ -135,8 +135,17 @@ if (usePostgres) {
     const converted = convertSql(sql);
     const problems = [];
 
+    // Transaction control only means something on the worker's pinned
+    // connection. The HTTP/subprocess fallbacks below open a fresh connection
+    // per call, so BEGIN/COMMIT/ROLLBACK there are no-ops at best and stray
+    // "no transaction in progress" errors at worst — skip them entirely once
+    // we are past the worker. Writes still land (each statement autocommits);
+    // they just are not wrapped atomically in fallback mode.
+    const isTxnControl = /^\s*(BEGIN|COMMIT|ROLLBACK|START\s+TRANSACTION|END)\b/i.test(converted);
+    const workerAvailable = Boolean(pgWorker && control && dataBuf);
+
     // Method 1: Persistent in-memory Worker Thread via SharedArrayBuffer (Fastest, ~50ms, 0 child processes)
-    if (pgWorker && control && dataBuf) {
+    if (workerAvailable) {
       try {
         const payload = Buffer.from(JSON.stringify({ sql: converted, params }), 'utf8');
         if (payload.length <= dataBuf.length) {
@@ -162,6 +171,10 @@ if (usePostgres) {
         problems.push(`PG Worker: ${workerErr.message}`);
       }
     }
+
+    // Past the worker: transaction-control statements cannot do anything useful
+    // on per-call connections, so swallow them instead of erroring.
+    if (isTxnControl) return [];
 
     // Method 2: Neon HTTP SQL endpoint (fast fallback on Lambda/serverless)
     if (DATABASE_URL.includes('@')) {
