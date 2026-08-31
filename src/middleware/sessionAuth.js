@@ -5,7 +5,7 @@ const path = require('path');
 const db = require('../db');
 
 const COOKIE_NAME = 'konfident_auth';
-const COOKIE_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const COOKIE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days long-lived persistent auth
 
 function getSecret() {
   return process.env.SESSION_SECRET || 'konfident-interview-2025-dev-secret';
@@ -117,8 +117,13 @@ function sessionRehydrateMiddleware(req, res, next) {
     const staleAfterPwChange = row && row.sessions_invalid_before && tokenTs < Number(row.sessions_invalid_before);
     if (row && row.active && !staleAfterPwChange) {
       if (!req.session) req.session = {};
-      req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role, iat: tokenTs };
+      req.session.user = { id: row.id, name: row.name, email: row.email, role: row.role, iat: tokenTs || Date.now() };
       res.locals.user = req.session.user;
+      if (typeof req.session.save === 'function') {
+        req.session.save((err) => {
+          if (err) console.warn('[session] error saving rehydrated session:', err.message);
+        });
+      }
     }
   } catch (err) {
     // Database query failed or unavailable, proceed

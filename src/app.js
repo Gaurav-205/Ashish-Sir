@@ -75,8 +75,9 @@ app.use(session({
   secret: sessionSecret || 'konfident-interview-2025-dev-secret',
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 8,
+    maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
     httpOnly: true,
     sameSite: 'lax',
     secure: 'auto',
