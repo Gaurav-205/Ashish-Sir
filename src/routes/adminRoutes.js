@@ -164,7 +164,7 @@ router.get('/mentors', (req, res) => {
       (SELECT COUNT(*) FROM slots s WHERE s.mentor_id=u.id AND s.status<>'cancelled') AS slot_count,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='booked') AS upcoming,
       (SELECT COUNT(*) FROM interviews i WHERE i.mentor_id=u.id AND i.status='completed') AS done
-      FROM users u WHERE u.role='mentor' ORDER BY u.name`)
+      FROM users u WHERE (u.role='mentor' OR u.can_technical=1 OR u.can_hr=1) ORDER BY u.name`)
     .all()
     .map((m) => ({
       ...m,
@@ -218,7 +218,7 @@ router.post('/mentors/:id/update', validateId('id'), (req, res) => {
 
   const isActive = req.body.active ? 1 : 0;
   db.prepare(`UPDATE users SET name=?, phone=?, can_technical=?, can_hr=?, active=?
-              WHERE id=? AND role='mentor'`)
+              WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1)`)
     .run(name, phone,
          req.body.can_technical ? 1 : 0, req.body.can_hr ? 1 : 0,
          isActive, Number(req.params.id));
@@ -240,7 +240,7 @@ router.post('/mentors/:id/reset-password', validateId('id'), (req, res) => {
   const pw = String(req.body.password || '');
   if (pw.length < 6) flash(req, 'err', 'Password must be at least 6 characters.');
   else {
-    db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND role='mentor'`)
+    db.prepare(`UPDATE users SET password_hash=? WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1)`)
       .run(bcrypt.hashSync(pw, 10), Number(req.params.id));
     invalidateUserSessions(req.params.id);
     logAudit(req, 'ADMIN_RESET_MENTOR_PASSWORD', { target_user_id: req.params.id });
@@ -306,7 +306,7 @@ router.post('/slots', actionLimiter, (req, res) => {
   const { type, mentor_id, slot_date, end_date, repeat_days, exclude_weekends, start_time, duration, count, mode, location } = req.body;
   try {
     if (type !== 'technical' && type !== 'hr') throw new Error('Invalid interview type. Must be technical or hr.');
-    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
+    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     if (type === 'technical' && !mentor.can_technical) throw new Error(`${mentor.name} is not enabled for Technical interviews.`);
     if (type === 'hr' && !mentor.can_hr) throw new Error(`${mentor.name} is not enabled for HR interviews.`);
@@ -441,7 +441,7 @@ router.post('/slots/:id/reschedule', validateId('id'), (req, res) => {
     }
     if (location && /<[^>]+>/.test(location)) throw new Error('Location cannot contain HTML tags.');
 
-    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND role='mentor'`).get(Number(mentor_id));
+    const mentor = db.prepare(`SELECT id, name, can_technical, can_hr FROM users WHERE id=? AND (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1`).get(Number(mentor_id));
     if (!mentor) throw new Error('Pick a mentor.');
     const col = slot.type === 'hr' ? 'can_hr' : 'can_technical';
     if (!mentor[col]) throw new Error(`${mentor.name} is not enabled for ${h.titleCase(slot.type)} interviews.`);
@@ -675,7 +675,7 @@ router.get('/interviews', (req, res) => {
   const list = q.allInterviews(filters);
   res.render('admin/interviews', {
     title: 'Interviews', list, filters,
-    mentors: db.prepare(`SELECT id,name FROM users WHERE role='mentor' ORDER BY name`).all(),
+    mentors: db.prepare(`SELECT id,name FROM users WHERE (role='mentor' OR can_technical=1 OR can_hr=1) AND active=1 ORDER BY name`).all(),
   });
 });
 

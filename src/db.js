@@ -271,7 +271,7 @@ if (usePostgres) {
     )`);
     db.exec(`ALTER TABLE slots ADD COLUMN IF NOT EXISTS google_event_id TEXT`);
     db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_developer INTEGER NOT NULL DEFAULT 0`);
-    db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'arvind@kalvium.com', 'test@user.com')`);
+    db.exec(`UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com', 'test@user.com')`);
     db.exec(`UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com'`);
     db.exec(`UPDATE users SET role = 'admin', can_hr = 1, active = 1 WHERE lower(email) = 'akshata.sanap@kalvium.com'`);
 
@@ -429,7 +429,7 @@ if (usePostgres) {
         sqliteDb.exec("ALTER TABLE users ADD COLUMN is_developer INTEGER NOT NULL DEFAULT 0;");
       } catch (_) {}
       try {
-        sqliteDb.exec("UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'arvind@kalvium.com', 'test@user.com');");
+        sqliteDb.exec("UPDATE users SET is_developer = 1, role = 'admin', can_technical = 0, can_hr = 0 WHERE lower(email) IN ('gauravkhandelwal205@gmail.com', 'heramb15012006@gmail.com', 'arvind@kalvium.com', 'test@user.com');");
       } catch (_) {}
       try {
         sqliteDb.exec("UPDATE users SET role = 'admin', active = 1 WHERE lower(email) = 'arvind@kalvium.com';");
