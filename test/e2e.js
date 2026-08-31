@@ -979,13 +979,18 @@ const login = async (who, email) => {
 
   section('Developer Role & Dynamic Role Switching');
   {
-    // Ensure Gaurav Khandelwal is present and marked as developer
+    // Ensure Gaurav Khandelwal and Heramb Inamke are present and marked as developer
     const devUser = db.prepare(`SELECT * FROM users WHERE lower(email) = 'gauravkhandelwal205@gmail.com'`).get();
     ok(!!devUser, 'gauravkhandelwal205@gmail.com account exists');
     ok(devUser.is_developer === 1, 'gauravkhandelwal205@gmail.com is marked as developer in db');
     ok(devUser.can_technical === 0 && devUser.can_hr === 0, 'gauravkhandelwal205@gmail.com is not an evaluator / mentor');
 
-    // Login as developer
+    const herambUser = db.prepare(`SELECT * FROM users WHERE lower(email) = 'heramb15012006@gmail.com'`).get();
+    ok(!!herambUser, 'heramb15012006@gmail.com account exists');
+    ok(herambUser.is_developer === 1, 'heramb15012006@gmail.com is marked as developer in db');
+    ok(herambUser.can_technical === 0 && herambUser.can_hr === 0, 'heramb15012006@gmail.com is not an evaluator / mentor');
+
+    // Login as developer (Gaurav)
     await login('devuser', 'gauravkhandelwal205@gmail.com', 'pass123');
 
     // 1. Developer can access everything across roles
@@ -1003,6 +1008,17 @@ const login = async (who, email) => {
        'developer view does not render role switcher control in navigation');
     ok(adminPage.body.includes('pill role-pill') && adminPage.body.includes('>DEV<'),
        'developer view renders clean DEV pill in navigation');
+
+    // Login as developer (Heramb)
+    await login('herambuser', 'heramb15012006@gmail.com', 'pass123');
+    const herambAdminPage = await get('herambuser', '/admin');
+    ok(herambAdminPage.status === 200 && herambAdminPage.body.includes('Admin dashboard'), 'Heramb can access /admin');
+    const herambMentorPage = await get('herambuser', '/mentor');
+    ok(herambMentorPage.status === 200 && herambMentorPage.body.includes('My interviews'), 'Heramb can access /mentor');
+    const herambStudentPage = await get('herambuser', '/student');
+    ok(herambStudentPage.status === 200 && herambStudentPage.body.includes('My interviews'), 'Heramb can access /student');
+    ok(herambAdminPage.body.includes('pill role-pill') && herambAdminPage.body.includes('>DEV<'),
+       'Heramb view renders clean DEV pill in navigation');
   }
 
   section('Mentor Slot Editing & Cancellation');

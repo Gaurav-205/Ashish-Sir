@@ -87,6 +87,7 @@ if (mode === 'dev' || mode === 'test') {
     { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Arvind', email: 'arvind@kalvium.com', can_t: 0, can_hr: 0 },
     { name: 'Gaurav Khandelwal', email: 'gauravkhandelwal205@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
+    { name: 'Heramb Inamke', email: 'heramb15012006@gmail.com', can_t: 0, can_hr: 0, is_dev: 1 },
   ];
 
   kalviumAdmins.forEach((a) => {
