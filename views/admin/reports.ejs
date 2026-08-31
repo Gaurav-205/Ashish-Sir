@@ -25,13 +25,28 @@
   <div class="stat"><div class="n"><%= stats.attended %></div><div class="l">Sessions Attended</div></div>
 </div>
 
+<div class="search-toolbar" style="margin-bottom:20px">
+  <div class="search-input-wrap">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" id="reportSearchInput" placeholder="Search report by student name, roll no, email..." onkeyup="filterReportTable()">
+  </div>
+  <div class="filter-chips">
+    <button type="button" class="filter-chip active" onclick="setReportSquadFilter('all', this)">All (<%= summaries.length %>)</button>
+    <button type="button" class="filter-chip" onclick="setReportSquadFilter('116', this)">Squad 116 (<%= summaries.filter(s => (s.student.squad === '116')).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setReportSquadFilter('115', this)">Squad 115 (<%= summaries.filter(s => (s.student.squad === '115')).length %>)</button>
+    <button type="button" class="filter-chip" onclick="setReportSquadFilter('evaluated', this)">Evaluated (<%= doneCount %>)</button>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-head">
     <h2>Comprehensive Cohort Score Sheet</h2>
-    <span class="faint"><%= summaries.length %> candidate records</span>
+    <span class="faint" id="reportCountLabel">Showing all <%= summaries.length %> candidate records</span>
   </div>
   <div class="card-body tight">
-    <div class="table-scroll"><table class="report">
+    <div class="table-scroll"><table class="report" id="reportTable">
       <thead><tr>
         <th>Roll No</th>
         <th>Student</th>
@@ -44,8 +59,10 @@
         <th>Grade &amp; Status</th>
       </tr></thead>
       <tbody>
-      <% summaries.forEach(function(s){ %>
-        <tr>
+      <% summaries.forEach(function(s){ 
+         const squadVal = s.student.squad || '';
+      %>
+        <tr data-squad="<%= squadVal %>" data-evaluated="<%= s.allEvaluated ? '1' : '0' %>">
           <td class="mono"><strong><%= s.student.roll_no || '—' %></strong></td>
           <td><a href="/admin/students/<%= s.student.id %>"><strong><%= s.student.name %></strong></a><br><span class="faint"><%= s.student.email %></span></td>
           <td>
@@ -76,4 +93,46 @@
     </table></div>
   </div>
 </div>
+
+<script>
+var currentReportSquadFilter = 'all';
+
+function setReportSquadFilter(squad, btn) {
+  currentReportSquadFilter = squad;
+  document.querySelectorAll('.search-toolbar .filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  filterReportTable();
+}
+
+function filterReportTable() {
+  var query = (document.getElementById('reportSearchInput').value || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#reportTable tbody tr');
+  var visibleCount = 0;
+
+  rows.forEach(function(r) {
+    var text = r.textContent.toLowerCase();
+    var rowSquad = r.getAttribute('data-squad') || '';
+    var isEvaluated = r.getAttribute('data-evaluated') === '1';
+
+    var matchesFilter = true;
+    if (currentReportSquadFilter === '116') matchesFilter = (rowSquad === '116');
+    else if (currentReportSquadFilter === '115') matchesFilter = (rowSquad === '115');
+    else if (currentReportSquadFilter === 'evaluated') matchesFilter = isEvaluated;
+
+    var matchesSearch = !query || text.includes(query);
+
+    if (matchesFilter && matchesSearch) {
+      r.style.display = '';
+      visibleCount++;
+    } else {
+      r.style.display = 'none';
+    }
+  });
+
+  var label = document.getElementById('reportCountLabel');
+  if (label) {
+    label.textContent = 'Showing ' + visibleCount + ' candidate record(s)';
+  }
+}
+</script>
 <%- include('../partials/foot') %>
