@@ -168,6 +168,8 @@ async function studentSummary(studentId, existingStudent = null) {
     evaluatedCount: history.filter((i) => i.eval_id != null).length,
     allBooked: !!(byType.technical && byType.hr),
     allEvaluated: done,
+    profileComplete: h.isStudentProfileComplete(student),
+    missingFields: h.getMissingStudentProfileFields(student),
   };
 }
 
@@ -221,6 +223,8 @@ async function allStudentSummaries() {
       evaluatedCount: sortedList.filter((i) => i.eval_id != null).length,
       allBooked: !!(byType.technical && byType.hr),
       allEvaluated: done,
+      profileComplete: h.isStudentProfileComplete(student),
+      missingFields: h.getMissingStudentProfileFields(student),
     };
   });
 }
