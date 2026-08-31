@@ -28,8 +28,8 @@ function logEmailAudit(toEmail, subject, details = {}) {
   try {
     db.prepare(`
       INSERT INTO audit_logs (action, details, created_at)
-      VALUES (?, ?, datetime('now','+5 hours','+30 minutes'))
-    `).run('EMAIL_NOTIFICATION_SENT', JSON.stringify({ to: toEmail, subject, ...details }));
+      VALUES (?, ?, ?)
+    `).run('EMAIL_NOTIFICATION_SENT', JSON.stringify({ to: toEmail, subject, ...details }), h.nowStamp());
   } catch (_) {}
 }
 
