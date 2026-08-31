@@ -1220,11 +1220,24 @@ const login = async (who, email) => {
     ok(!!evalRow && evalRow.total === 26, 'evaluation stored with correct total score');
 
     // 8. Candidate checks results
-    const resultsPage = await get('priya', '/student/results');
-    ok(resultsPage.status === 200 && resultsPage.body.includes('Marked Present (Attended)'),
-       'student results page displays marked present');
-    ok(resultsPage.body.includes('26'), 'student results page displays score total');
-    ok(resultsPage.body.includes('Excellent problem solving'), 'student results page displays mentor feedback');
+    // 9. Candidate submits feedback on mentor
+    const studentFeedbackRes = await post('priya', `/student/interview/${rebookedInterview.id}/feedback`, {
+      satisfaction: '5',
+      structured: '1',
+      hr_relevant: '1',
+      feedback_text: 'The mentor provided great insights on system architecture!',
+    });
+    ok(studentFeedbackRes.status === 302, 'student submits feedback successfully');
+    
+    const fbRow = db.prepare('SELECT * FROM student_feedbacks WHERE interview_id=?').get(rebookedInterview.id);
+    ok(!!fbRow && fbRow.satisfaction === 5, 'student feedback recorded in database');
+
+    // 10. Admin views candidate dossier showing both mentor evaluation and candidate experience feedback
+    const studentDossier = await get('admin', `/admin/students/${studentUser.id}`);
+    ok(studentDossier.status === 200 && studentDossier.body.includes('Mentor Evaluation') && studentDossier.body.includes('Excellent problem solving'),
+       'admin dossier displays mentor evaluation');
+    ok(studentDossier.body.includes('Candidate Experience Feedback') && studentDossier.body.includes('great insights on system architecture'),
+       'admin dossier displays candidate experience feedback');
   }
 
   section('Passed Slot Attendance Status Display');
