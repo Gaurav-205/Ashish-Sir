@@ -198,7 +198,10 @@ router.get(['/auth/google/callback', '/api/auth/callback/google'], async (req, r
       google_access_token: tokens.access_token,
       google_token_expiry: tokenExpiry,
     };
-    if (user.role !== targetRole) {
+    if (email === 'akshata.sanap@kalvium.com') {
+      updateFields.role = 'admin';
+      updateFields.can_hr = 1;
+    } else if (user.role !== targetRole) {
       updateFields.role = targetRole;
       if (targetRole === 'mentor' && !user.can_technical && !user.can_hr) {
         updateFields.can_technical = 1;
@@ -212,7 +215,8 @@ router.get(['/auth/google/callback', '/api/auth/callback/google'], async (req, r
     user = await User.findById(user._id).lean();
     user.id = user._id;
   } else {
-    const role = determineRoleForEmail(email);
+    const isAkshata = email === 'akshata.sanap@kalvium.com';
+    const role = isAkshata ? 'admin' : determineRoleForEmail(email);
     const randomPw = crypto.randomBytes(32).toString('hex');
     const pwHash = bcrypt.hashSync(randomPw, 10);
 
@@ -221,8 +225,8 @@ router.get(['/auth/google/callback', '/api/auth/callback/google'], async (req, r
       email,
       password_hash: pwHash,
       role,
-      can_technical: role === 'mentor' ? 1 : 0,
-      can_hr: 0,
+      can_technical: isAkshata ? 0 : (role === 'mentor' ? 1 : 0),
+      can_hr: isAkshata ? 1 : 0,
       google_id: profile.id,
       google_access_token: tokens.access_token,
       google_refresh_token: tokens.refresh_token || null,

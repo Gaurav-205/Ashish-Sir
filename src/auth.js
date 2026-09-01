@@ -17,8 +17,10 @@ function isUserDeveloper(user) {
 function isDualRoleUser(user) {
   if (!user) return false;
   if (isUserDeveloper(user)) return true;
+  const email = String(user.email || '').trim().toLowerCase();
+  if (email === 'akshata.sanap@kalvium.com') return true;
   const canEval = Boolean(user.can_technical || user.can_hr);
-  return user.role === 'admin' && canEval;
+  return (user.role === 'admin' && canEval) || (user.role === 'mentor' && (user.is_admin || canEval));
 }
 
 /**
