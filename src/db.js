@@ -26,29 +26,28 @@ async function connectDb() {
   connectionPromise = (async () => {
     try {
       const conn = await mongoose.connect(MONGODB_URI, {
-        serverSelectionTimeoutMS: 4000,
+        serverSelectionTimeoutMS: 5000,
         autoIndex: true,
       });
       console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
       return conn.connection;
     } catch (err) {
-      if (MONGODB_URI !== LOCAL_MONGODB_URI) {
+      connectionPromise = null;
+      if (MONGODB_URI !== LOCAL_MONGODB_URI && !process.env.VERCEL) {
         try {
           console.warn(`[db] Remote MongoDB connection failed (${err.message}). Falling back to local MongoDB at ${LOCAL_MONGODB_URI}...`);
           await mongoose.disconnect().catch(() => {});
           const conn = await mongoose.connect(LOCAL_MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 3000,
             autoIndex: true,
           });
           console.log(`[db] MongoDB connected successfully to local fallback database: ${conn.connection.host || 'localhost'}`);
           return conn.connection;
         } catch (localErr) {
           console.error('[db] Both remote and local MongoDB connection fallbacks failed:', localErr.message);
-          connectionPromise = null;
           throw err;
         }
       }
-      connectionPromise = null;
       console.error('[db] MongoDB connection error:', err.message);
       throw err;
     }

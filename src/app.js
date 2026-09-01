@@ -51,11 +51,19 @@ let sessionStore;
 try {
   if (process.env.MONGODB_URI) {
     sessionStore = MongoStore.create({
-      clientPromise: db.connectDb().then(() => db.mongoose.connection.getClient()),
+      clientPromise: db.connectDb().then(() => db.mongoose.connection.getClient()).catch((err) => {
+        console.warn('[session] MongoStore clientPromise connection error:', err.message);
+        return null;
+      }),
       collectionName: 'sessions',
       ttl: 14 * 24 * 60 * 60, // 14 days
       autoRemove: 'native',
     });
+    if (sessionStore && typeof sessionStore.on === 'function') {
+      sessionStore.on('error', (err) => {
+        console.warn('[session] MongoStore session store warning:', err.message);
+      });
+    }
   } else {
     sessionStore = new session.MemoryStore();
   }
@@ -89,9 +97,9 @@ app.use(sessionRehydrateMiddleware);
  * 500.
  */
 app.use((req, res, next) => {
-  res.locals.flash = req.session.flash || null;
-  delete req.session.flash;
-  res.locals.user = req.session.user || null;
+  res.locals.flash = (req.session && req.session.flash) ? req.session.flash : null;
+  if (req.session) delete req.session.flash;
+  res.locals.user = (req.session && req.session.user) ? req.session.user : null;
   res.locals.h = helpers;
   res.locals.RUBRIC = RUBRIC;
   res.locals.GRAND_TOTAL = GRAND_TOTAL;
@@ -136,15 +144,16 @@ app.use('/student', require('./routes/studentRoutes'));
 app.use('/mentor', require('./routes/mentorRoutes'));
 
 app.use((req, res) => {
-  res.status(404).render('error', { title: 'Not found', message: 'That page does not exist.', user: res.locals.user || null });
+  res.status(404).render('error', { title: 'Not found', message: 'That page does not exist.', user: (res.locals && res.locals.user) || null });
 });
 
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
-  console.error(err);
-  const message = process.env.NODE_ENV === 'production'
+  console.error('[App Error]', err);
+  const isDbErr = err && (err.name === 'MongooseServerSelectionError' || (err.message && err.message.includes('MongoDB')));
+  const message = process.env.NODE_ENV === 'production' && !isDbErr
     ? 'An unexpected error occurred. Please contact the administrator.'
-    : err.message;
-  res.status(500).render('error', { title: 'Something went wrong', message, user: res.locals.user || null });
+    : (isDbErr ? 'Database connection failure. Please check MONGODB_URI and MongoDB Atlas network access.' : err.message);
+  res.status(500).render('error', { title: 'Something went wrong', message, user: (res.locals && res.locals.user) || null });
 });
 
 module.exports = app;
