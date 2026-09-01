@@ -114,14 +114,35 @@
       <thead><tr><th>Date &amp; Time</th><th>Domain</th><th>Candidate</th><th>Mode &amp; Link</th><th class="num">Action</th></tr></thead>
       <tbody><% upcoming.forEach(function(i){ %>
         <tr>
-          <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
+          <td>
+            <%= h.fmtDate(i.slot_date) %><br>
+            <span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span>
+            <% if (i.slot_date && i.start_time) { %>
+              <div style="margin-top:4px">
+                <div class="countdown-badge" data-start="<%= i.slot_date %>T<%= i.start_time %>:00+05:30" data-end="<%= i.slot_date %>T<%= i.end_time %>:00+05:30">
+                  <span class="pulse-dot"></span>
+                  <span class="countdown-label">Calculating start time…</span>
+                </div>
+              </div>
+            <% } %>
+          </td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td>
             <strong><%= i.student_name %></strong>
             <% if (i.squad) { %> <span class="pill p-<%= i.squad === '116' ? 'technical' : 'hr' %>" style="font-size:10px;padding:2px 6px">Squad <%= i.squad %></span><% } %>
             <br><span class="faint"><%= i.roll_no || '' %><%= i.branch ? ' · ' + i.branch : '' %></span>
           </td>
-          <td class="faint"><%= i.mode %><% if (i.location) { %> · <%- h.linkify(i.location) %><% } %></td>
+          <td>
+            <div class="faint"><%= i.mode %></div>
+            <% if (i.location && /^https?:\/\//i.test(i.location)) { %>
+              <a class="btn sm" href="<%= i.location %>" target="_blank" rel="noopener noreferrer" style="margin-top:4px;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                Join Meet ↗
+              </a>
+            <% } else if (i.location) { %>
+              <span class="faint"><%- h.linkify(i.location) %></span>
+            <% } %>
+          </td>
           <td class="num" style="white-space:nowrap">
             <div style="display:inline-flex;gap:6px;align-items:center">
               <a class="btn sm primary" href="/mentor/interview/<%= i.id %>">Open Session →</a>

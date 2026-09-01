@@ -44,7 +44,18 @@
       <tbody>
       <% list.forEach(function(i){ %>
         <tr>
-          <td><%= h.fmtDate(i.slot_date) %><br><span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span></td>
+          <td>
+            <%= h.fmtDate(i.slot_date) %><br>
+            <span class="faint"><%= h.fmtTime(i.start_time) %> – <%= h.fmtTime(i.end_time) %></span>
+            <% if (i.status === 'booked' && i.slot_date && i.start_time) { %>
+              <div style="margin-top:4px">
+                <div class="countdown-badge" data-start="<%= i.slot_date %>T<%= i.start_time %>:00+05:30" data-end="<%= i.slot_date %>T<%= i.end_time %>:00+05:30">
+                  <span class="pulse-dot"></span>
+                  <span class="countdown-label">Calculating start time…</span>
+                </div>
+              </div>
+            <% } %>
+          </td>
           <td><span class="pill p-<%= i.type %>"><%= h.titleCase(i.type) %></span></td>
           <td><a href="/admin/students/<%= i.student_id %>"><strong><%= i.student_name %></strong></a><br><span class="faint"><%= i.roll_no || '' %></span></td>
           <td><%= i.mentor_name %><% if (i.location) { %><br><span class="faint"><%- h.linkify(i.location) %></span><% } %></td>

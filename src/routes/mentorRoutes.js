@@ -301,6 +301,8 @@ router.get('/interview/:id', validateId('id'), async (req, res) => {
     iv,
     rubric,
     mentor,
+    error: null,
+    form: {},
   });
 });
 

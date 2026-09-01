@@ -1,59 +1,85 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
 <div class="page-head">
-  <div><h1><%= iv.student_name %></h1>
-    <p class="sub"><span class="pill p-<%= iv.type %>"><%= h.titleCase(iv.type) %></span>
-      <%= h.fmtSlot(iv) %> · <%= iv.mode %><% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %></p></div>
-  <a class="btn" href="/mentor">← Back</a>
+  <div>
+    <h1><%= iv.student_name %></h1>
+    <p class="sub">
+      <span class="pill p-<%= iv.type %>"><%= h.titleCase(iv.type) %></span>
+      <%= h.fmtSlot(iv) %> · <%= iv.mode %>
+      <% if (iv.location) { %> · <%- h.linkify(iv.location) %><% } %>
+    </p>
+    <% if (iv.slot_date && iv.start_time) { %>
+      <div style="margin-top:8px">
+        <div class="countdown-badge" data-start="<%= iv.slot_date %>T<%= iv.start_time %>:00+05:30" data-end="<%= iv.slot_date %>T<%= iv.end_time %>:00+05:30">
+          <span class="pulse-dot"></span>
+          <span class="countdown-label">Calculating start time…</span>
+        </div>
+      </div>
+    <% } %>
+  </div>
+  <a class="btn" href="/mentor">← Back to Dashboard</a>
 </div>
 
 <div class="grid two">
   <div class="card">
     <div class="card-head">
-      <h2>Candidate</h2>
+      <h2>Candidate Details</h2>
       <div style="display:flex;gap:6px;align-items:center">
         <% if (iv.attendance === 'attended') { %>
-          <span class="pill p-completed">Attended</span>
+          <span class="pill p-completed">✓ Attended (Present)</span>
         <% } else if (iv.attendance === 'absent') { %>
-          <span class="pill p-cancelled">Absent / No-Show</span>
+          <span class="pill p-cancelled">✗ Absent / No-Show</span>
         <% } else { %>
           <span class="pill p-booked">Attendance Pending</span>
         <% } %>
       </div>
     </div>
     <div class="card-body">
-      <p><strong><%= iv.student_name %></strong><% if (iv.squad) { %> <span class="pill p-<%= iv.squad === '116' ? 'technical' : 'hr' %>" style="font-size:11px;margin-left:6px">Squad <%= iv.squad %></span><% } %><br>
+      <p>
+        <strong style="font-size:16px"><%= iv.student_name %></strong>
+        <% if (iv.squad) { %>
+          <span class="pill p-<%= iv.squad === '116' ? 'technical' : 'hr' %>" style="font-size:11px;margin-left:6px">Squad <%= iv.squad %></span>
+        <% } %><br>
         <span class="muted"><%= iv.student_email %></span><br>
-        <span class="muted"><%= iv.roll_no || '—' %><%= iv.squad ? ' · Squad ' + iv.squad : '' %><%= iv.branch ? ' · ' + iv.branch : '' %></span></p>
-      <% if (iv.resume_url && /^https?:\/\//i.test(iv.resume_url)) { %><p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener noreferrer">Open resume ↗</a></p>
-      <% } else { %><p class="faint">No resume link on file.</p><% } %>
+        <span class="muted"><%= iv.roll_no || '—' %><%= iv.squad ? ' · Squad ' + iv.squad : '' %><%= iv.branch ? ' · ' + iv.branch : '' %></span>
+      </p>
+
+      <% if (iv.location) { %>
+        <div style="margin:12px 0 16px">
+          <a class="btn sm primary" href="<%= iv.location %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            Join Google Meet Call ↗
+          </a>
+        </div>
+      <% } %>
+
+      <% if (iv.resume_url && /^https?:\/\//i.test(iv.resume_url)) { %>
+        <p><a class="btn sm" href="<%= iv.resume_url %>" target="_blank" rel="noopener noreferrer">Open Resume PDF ↗</a></p>
+      <% } else { %>
+        <p class="faint">No resume link on file.</p>
+      <% } %>
 
       <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
       
       <h3>Meeting Attendance</h3>
       <p class="muted" style="font-size:13px">
-        Track whether the candidate attended the meet session. Scoring is enabled once candidate attendance is confirmed.
+        Track whether the candidate joined the interview call. Scoring is unlocked when candidate attendance is confirmed.
       </p>
 
       <% if (!iv.eval_id) { %>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance" style="margin:0">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="attendance" value="attended">
             <button class="btn sm <%= iv.attendance === 'attended' ? 'primary' : '' %>" style="display:inline-flex;align-items:center;gap:6px">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              <%= iv.attendance === 'attended' ? 'Marked Attended' : 'Mark Attended (Present)' %>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <%= iv.attendance === 'attended' ? 'Marked Attended (Present)' : 'Mark Attended (Present)' %>
             </button>
           </form>
-          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance">
+          <form method="post" action="/mentor/interview/<%= iv.id %>/attendance" style="margin:0">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="attendance" value="absent">
             <button class="btn sm danger" onclick="return confirm('Mark candidate as absent / no-show?')" style="display:inline-flex;align-items:center;gap:6px">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               <%= iv.attendance === 'absent' ? 'Marked Absent' : 'Mark Absent / No-Show' %>
             </button>
           </form>
@@ -67,9 +93,14 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Evaluation</h2><span class="faint">out of <%= RUBRIC[iv.type].total %> marks</span></div>
+    <div class="card-head">
+      <h2>Rubric Evaluation</h2>
+      <span class="faint">Max <%= RUBRIC[iv.type].total %> marks</span>
+    </div>
     <div class="card-body">
-      <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+      <% const errVal = (typeof error !== 'undefined' && error) ? error : null; %>
+      <% const formVal = (typeof form !== 'undefined' && form) ? form : {}; %>
+      <% if (errVal) { %><div class="flash err"><%= errVal %></div><% } %>
 
       <% if (iv.eval_id) { %>
         <div class="table-scroll"><table>
@@ -78,19 +109,21 @@
           <% RUBRIC[iv.type].criteria.forEach(function(c){ %>
             <tr><td><%= c.label %></td><td class="num"><strong><%= iv[c.key] %></strong></td><td class="num faint"><%= c.max %></td></tr>
           <% }); %>
-            <tr><td><strong>Total</strong></td><td class="num"><strong><%= iv.score %></strong></td><td class="num faint"><%= RUBRIC[iv.type].total %></td></tr>
+            <tr><td><strong>Total Score</strong></td><td class="num"><strong style="font-size:16px"><%= iv.score %></strong></td><td class="num faint"><%= RUBRIC[iv.type].total %></td></tr>
           </tbody>
         </table></div>
-        <% if (iv.feedback) { %><div style="margin-top:14px"><div class="l faint">Feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div><% } %>
-        <p class="faint" style="margin-top:12px">Submitted <%= h.fmtStamp(iv.submitted_at) %>. Evaluations are final — contact the admin for corrections.</p>
+        <% if (iv.feedback) { %><div style="margin-top:14px"><div class="l faint">Submitted Mentor Feedback</div><p style="margin:4px 0 0">“<%= iv.feedback %>”</p></div><% } %>
+        <p class="faint" style="margin-top:12px">Submitted <%= h.fmtStamp(iv.submitted_at) %>. Evaluation is saved &amp; finalized.</p>
 
       <% } else if (iv.attendance === 'absent') { %>
         <div class="note" style="margin:0">
-          Candidate was marked as <strong>Absent / No-Show</strong>. Scores cannot be submitted for missed sessions. If the candidate joins later, mark them as Attended.
+          Candidate was marked as <strong>Absent / No-Show</strong>. Scores cannot be submitted for missed sessions. If the candidate joins later, click <strong>Mark Attended (Present)</strong> to enable scoring.
         </div>
 
       <% } else if (iv.attendance !== 'attended' && iv.status !== 'completed') { %>
-        <p class="muted">Confirm candidate attendance by clicking <strong>Mark Attended (Present)</strong> to start scoring the interview.</p>
+        <div class="note" style="margin:0">
+          Confirm candidate attendance by clicking <strong>Mark Attended (Present)</strong> above to start filling out the rubric evaluation.
+        </div>
 
       <% } else { %>
         <form method="post" action="/mentor/interview/<%= iv.id %>/evaluate" id="evalForm">
@@ -100,14 +133,16 @@
               <div class="field">
                 <label><%= c.label %> (0–<%= c.max %>) *</label>
                 <input type="number" class="mark" name="<%= c.key %>" min="0" max="<%= c.max %>" step="1"
-                       value="<%= form[c.key] || '' %>" required>
+                       value="<%= formVal[c.key] || '' %>" required>
               </div>
             <% }); %>
           </div>
-          <div class="field"><label>Feedback (optional)</label>
-            <textarea name="feedback" placeholder="Strengths, areas to improve…"><%= form.feedback || '' %></textarea></div>
-          <p><strong>Total: <span id="tot">0</span> / <%= RUBRIC[iv.type].total %></strong></p>
-          <button class="btn primary" onclick="return confirm('Submit this evaluation? It cannot be edited afterwards.')">Submit evaluation</button>
+          <div class="field">
+            <label>Detailed Feedback / Remarks (optional)</label>
+            <textarea name="feedback" placeholder="Strengths, areas of improvement, technical observations…"><%= formVal.feedback || '' %></textarea>
+          </div>
+          <p style="font-size:15px;margin:14px 0"><strong>Total Score: <span id="tot">0</span> / <%= RUBRIC[iv.type].total %></strong></p>
+          <button class="btn primary" onclick="return confirm('Submit this evaluation? Scores cannot be changed once submitted.')">Submit Evaluation →</button>
         </form>
         <script src="/js/eval-calc.js"></script>
       <% } %>
