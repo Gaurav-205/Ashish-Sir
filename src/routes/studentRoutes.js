@@ -156,7 +156,7 @@ router.post('/book', actionLimiter, async (req, res) => {
   const updatedSlot = await Slot.findOneAndUpdate(
     { _id: slot._id, status: 'open' },
     { $set: { status: 'booked' } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedSlot) {

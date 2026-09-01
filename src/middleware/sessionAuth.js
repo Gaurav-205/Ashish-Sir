@@ -146,34 +146,16 @@ async function sessionRehydrateMiddleware(req, res, next) {
  * @param {string|null} keepSessionId - session id to preserve (the caller's own).
  */
 function invalidateUserSessions(userId, keepSessionId = null) {
-  if (process.env.VERCEL || process.env.NOW_REGION) return;
-  // Deferred: express-session may still be writing the current request's row.
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
-      let DatabaseSync;
-      try { DatabaseSync = require('node:sqlite').DatabaseSync; } catch (_) { return; }
-      if (!DatabaseSync) return;
-
-      const sessionsDbPath = path.join(__dirname, '..', '..', 'data', 'sessions.db');
-      if (!fs.existsSync(sessionsDbPath)) return;
-
-      const sdb = new DatabaseSync(sessionsDbPath);
-      try {
-        sdb.exec('PRAGMA busy_timeout = 5000');
-        if (keepSessionId) {
-          sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ? AND sid <> ?")
-            .run(Number(userId), String(keepSessionId));
-        } else {
-          sdb.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user.id') = ?")
-            .run(Number(userId));
-        }
-      } finally {
-        sdb.close();
+      const { User } = require('../models');
+      if (User && userId) {
+        await User.findByIdAndUpdate(userId, { $set: { sessions_invalid_before: Date.now() } });
       }
     } catch (err) {
       console.error('Failed to invalidate sessions for user', userId, err.message);
     }
-  }, 100);
+  }, 50);
 }
 
 module.exports = {

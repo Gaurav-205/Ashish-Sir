@@ -533,7 +533,9 @@ router.post('/slots/:id/reschedule', validateId('id'), async (req, res) => {
     if (slot_date) slot.slot_date = String(slot_date).trim();
     if (start_time) slot.start_time = h.normalizeTime(start_time) || slot.start_time;
     if (end_time) slot.end_time = h.normalizeTime(end_time) || slot.end_time;
-    if (mentor_id) slot.mentor_id = mentor_id;
+    if (mentor_id && require('mongoose').Types.ObjectId.isValid(mentor_id)) {
+      slot.mentor_id = mentor_id;
+    }
     if (mode) slot.mode = mode;
 
     await slot.save();

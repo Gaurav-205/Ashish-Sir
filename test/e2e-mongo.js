@@ -72,6 +72,10 @@ const login = async (who, email, password = 'pass123', uId = null) => {
     { role: { $in: ['admin', 'mentor', 'student'] } },
     { $set: { password_hash: pwHash } }
   );
+  await User.updateMany(
+    { role: 'mentor' },
+    { $set: { can_technical: 1, can_hr: 1 } }
+  );
 
   const studentDoc = await User.findOne({ role: 'student' });
   if (studentDoc) {
@@ -82,6 +86,13 @@ const login = async (who, email, password = 'pass123', uId = null) => {
         branch: 'CSE',
         resume_url: 'https://drive.google.com/resume.pdf',
       },
+    });
+  }
+
+  const mentorDoc = await User.findOne({ role: 'mentor' });
+  if (mentorDoc) {
+    await User.findByIdAndUpdate(mentorDoc._id, {
+      $set: { can_technical: 1, can_hr: 1 },
     });
   }
 
@@ -148,6 +159,7 @@ const login = async (who, email, password = 'pass123', uId = null) => {
   // 4. Admin Slot Creation
   section('4. Slot Lifecycle: Creation, Discovery, Booking & Conflict Checks');
   const tomorrow = h.addDays(h.today(), 1);
+  await Slot.deleteMany({ mentor_id: mentorUser._id, slot_date: tomorrow });
   const createSlotResp = await post('admin', '/admin/slots', {
     mentor_id: mentorUser._id.toString(),
     type: 'technical',

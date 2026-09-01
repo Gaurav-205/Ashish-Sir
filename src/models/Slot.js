@@ -36,4 +36,13 @@ slotSchema.pre('validate', function () {
   if (this.end_time) this.end_time = normalizeTimeStr(this.end_time);
 });
 
+slotSchema.pre('insertMany', function (docs) {
+  if (Array.isArray(docs)) {
+    docs.forEach(doc => {
+      if (doc.start_time) doc.start_time = normalizeTimeStr(doc.start_time);
+      if (doc.end_time) doc.end_time = normalizeTimeStr(doc.end_time);
+    });
+  }
+});
+
 module.exports = mongoose.models.Slot || mongoose.model('Slot', slotSchema);

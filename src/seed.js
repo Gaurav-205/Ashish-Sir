@@ -16,6 +16,11 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const h = require('./helpers');
 
+if (db.driver === 'mongodb' || process.env.MONGODB_URI) {
+  require('../scripts/seed-mongo');
+  return;
+}
+
 const isCleanArg = process.argv.includes('--clean');
 const isEmptyArg = process.argv.includes('--empty');
 const isDevArg = process.argv.includes('--dev');

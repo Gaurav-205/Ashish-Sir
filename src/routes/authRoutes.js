@@ -90,7 +90,14 @@ router.post('/login', authLimiter, async (req, res) => {
     authLimiter.reset(req);
     setAuthSession(req, res, row);
     logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row._id);
-    res.redirect(redirectTo);
+    if (req.session && typeof req.session.save === 'function') {
+      req.session.save((err) => {
+        if (err) console.error('Session save error during login:', err);
+        res.redirect(redirectTo);
+      });
+    } else {
+      res.redirect(redirectTo);
+    }
   };
 
   if (typeof req.session.regenerate === 'function') {
