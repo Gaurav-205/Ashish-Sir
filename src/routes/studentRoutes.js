@@ -197,7 +197,7 @@ router.post('/book', actionLimiter, async (req, res) => {
   res.redirect('/student');
 });
 
-router.post(['/cancel', '/cancel/:id'], actionLimiter, async (req, res) => {
+async function cancelBooking(req, res) {
   const ivId = req.params.id || (req.body && req.body.interview_id);
   const studentId = req.session.user.id;
 

@@ -1,4 +1,7 @@
 <%- include('../partials/head') %><%- include('../partials/nav') %>
+<%
+const isDev = Boolean(typeof isDeveloper !== 'undefined' && isDeveloper);
+%>
 <div class="page-head">
   <div>
     <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
@@ -7,14 +10,14 @@
     <h1>Evaluator dashboard</h1>
     <p class="sub">Conduct your assigned candidate interviews, track meeting attendance, and submit rubric evaluations.</p>
   </div>
-  <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
+  <% if (mentor && (mentor.can_technical || mentor.can_hr || isDev)) { %>
     <div class="btn-row">
       <button type="button" class="btn primary" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
     </div>
   <% } %>
 </div>
 
-<% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
+<% if (mentor && (mentor.can_technical || mentor.can_hr || isDev)) { %>
 <dialog id="createSlotModal" class="modal-dialog" style="max-width:540px">
   <div class="modal-head">
     <h2>Publish New Interview Slots</h2>
@@ -26,8 +29,8 @@
       <div class="field">
         <label>Interview Domain *</label>
         <select name="type" required>
-          <% if (mentor.can_technical || isDeveloper) { %><option value="technical">Technical Mock Interview</option><% } %>
-          <% if (mentor.can_hr || isDeveloper) { %><option value="hr">HR Mock Interview</option><% } %>
+          <% if (mentor.can_technical || isDev) { %><option value="technical">Technical Mock Interview</option><% } %>
+          <% if (mentor.can_hr || isDev) { %><option value="hr">HR Mock Interview</option><% } %>
         </select>
       </div>
 
@@ -211,7 +214,7 @@
       <h2 style="margin:0">My Open Published Slots (<%= slots.length %>)</h2>
       <span class="faint">Students can book into any of these slots</span>
     </div>
-    <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
+    <% if (mentor && (mentor.can_technical || mentor.can_hr || isDev)) { %>
       <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots</button>
     <% } %>
   </div>
@@ -219,7 +222,7 @@
     <% if (!slots.length) { %>
       <div class="empty">
         You have no open upcoming slots.
-        <% if (mentor && (mentor.can_technical || mentor.can_hr || isDeveloper)) { %>
+        <% if (mentor && (mentor.can_technical || mentor.can_hr || isDev)) { %>
           <div style="margin-top:12px">
             <button type="button" class="btn primary sm" onclick="document.getElementById('createSlotModal').showModal()">+ Publish Slots Now</button>
           </div>
@@ -277,17 +280,13 @@
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        <strong style="font-size:13px;color:var(--ink)">Slot Actions</strong>
-        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancel to close booking, or permanently delete the slot.</p>
+        <strong style="font-size:13px;color:var(--ink)">Slot Action</strong>
+        <p class="faint" style="font-size:12px;margin:2px 0 0">Cancel to close booking for this slot.</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <form id="mng_slot_cancel_form" method="post" action="" onsubmit="return confirm('Cancel this interview slot?')">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <button class="btn sm">Cancel Slot</button>
-        </form>
-        <form id="mng_slot_delete_form" method="post" action="" onsubmit="return confirm('Are you sure you want to permanently delete this slot? This cannot be undone.')">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <button class="btn danger sm">Delete Permanently</button>
+          <button class="btn sm danger">Cancel Slot</button>
         </form>
       </div>
     </div>
@@ -348,11 +347,6 @@ window.openMentorSlotManageModal = function (slot) {
   var cancelForm = document.getElementById('mng_slot_cancel_form');
   if (cancelForm) {
     cancelForm.action = '/mentor/slots/' + slot.id + '/cancel';
-  }
-
-  var delForm = document.getElementById('mng_slot_delete_form');
-  if (delForm) {
-    delForm.action = '/mentor/slots/' + slot.id + '/delete';
   }
 
   var dInput = document.getElementById('mng_m_slot_date');
