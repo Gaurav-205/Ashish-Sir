@@ -101,10 +101,9 @@
       }
     }
 
-    // Actions
+    // Actions (Release Booking, Cancel Booking)
     var relForm = document.getElementById('mng_release_form');
     var canForm = document.getElementById('mng_cancel_form');
-    var reopForm = document.getElementById('mng_reopen_form');
 
     if (relForm) {
       if (slot.status === 'booked' && slot.interview_status !== 'completed') {
@@ -121,26 +120,6 @@
         canForm.action = '/admin/slots/' + slot.id + '/cancel';
       } else {
         canForm.style.display = 'none';
-      }
-    }
-
-    if (reopForm) {
-      if (slot.status === 'cancelled') {
-        reopForm.style.display = 'inline-block';
-        reopForm.action = '/admin/slots/' + slot.id + '/reopen';
-      } else {
-        reopForm.style.display = 'none';
-      }
-    }
-
-    var delForm = document.getElementById('mng_delete_form');
-
-    if (delForm) {
-      if (slot.interview_status !== 'completed') {
-        delForm.style.display = 'inline-block';
-        delForm.action = '/admin/slots/' + slot.id + '/delete';
-      } else {
-        delForm.style.display = 'none';
       }
     }
 
