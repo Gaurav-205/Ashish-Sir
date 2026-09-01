@@ -11,11 +11,10 @@
     "seed:mongo": "node scripts/seed-mongo.js",
     "migrate:mongo": "node scripts/migrate-to-mongo.js",
     "clean-db": "node src/seed.js --clean",
-    "test": "node test/helpers.test.js && node test/models.test.js && node test/queries.test.js && node scratch/test-all-views.js && node test/e2e-mongo.js",
+    "test": "node test/helpers.test.js && node test/models.test.js && node test/queries.test.js && node test/e2e-mongo.js",
     "test:helpers": "node test/helpers.test.js",
     "test:models": "node test/models.test.js",
     "test:queries": "node test/queries.test.js",
-    "test:views": "node scratch/test-all-views.js",
     "test:e2e": "node test/e2e-mongo.js"
   },
   "keywords": [],

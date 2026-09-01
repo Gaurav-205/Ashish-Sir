@@ -2,9 +2,8 @@
 require('dotenv').config();
 const assert = require('assert');
 const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
+const { connectDb, mongoose, User, Slot, Interview, Evaluation, StudentFeedback, AuditLog } = require('../src/db');
 const app = require('../src/app');
-const { User, Slot, Interview, Evaluation, StudentFeedback, AuditLog } = require('../src/models');
 const { generateCsrfToken } = require('../src/middleware/security');
 const h = require('../src/helpers');
 
@@ -66,7 +65,7 @@ const login = async (who, email, password = 'pass123', uId = null) => {
 };
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  await connectDb();
 
   const pwHash = bcrypt.hashSync('pass123', 10);
   await User.updateMany(

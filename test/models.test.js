@@ -1,8 +1,7 @@
 'use strict';
 require('dotenv').config();
 const assert = require('assert');
-const mongoose = require('mongoose');
-const { User, Slot, Interview, Evaluation, StudentFeedback, AuditLog, PasswordReset, Setting } = require('../src/models');
+const { connectDb, mongoose, User, Slot, Interview, Evaluation, StudentFeedback, AuditLog, PasswordReset, Setting } = require('../src/db');
 
 console.log('=== Running MongoDB Models Unit Tests ===');
 
@@ -19,7 +18,7 @@ async function test(name, fn) {
 }
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  await connectDb();
 
   await test('User model schema requirements and defaults', async () => {
     const userDoc = new User({

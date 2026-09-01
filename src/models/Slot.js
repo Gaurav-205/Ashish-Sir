@@ -22,4 +22,18 @@ slotSchema.index({ status: 1, type: 1, slot_date: 1, start_time: 1 });
 slotSchema.index({ mentor_id: 1, status: 1, slot_date: 1 });
 slotSchema.index({ mentor_id: 1, slot_date: 1, start_time: 1, end_time: 1 });
 
+function normalizeTimeStr(hm) {
+  if (!hm) return hm;
+  const match = String(hm).trim().match(/^(\d{1,2}):(\d{1,2})(?::\d{1,2})?$/);
+  if (!match) return hm;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+slotSchema.pre('validate', function () {
+  if (this.start_time) this.start_time = normalizeTimeStr(this.start_time);
+  if (this.end_time) this.end_time = normalizeTimeStr(this.end_time);
+});
+
 module.exports = mongoose.models.Slot || mongoose.model('Slot', slotSchema);

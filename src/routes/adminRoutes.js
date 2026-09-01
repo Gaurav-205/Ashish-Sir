@@ -530,9 +530,9 @@ router.post('/slots/:id/reschedule', validateId('id'), async (req, res) => {
     if (!slot) throw new Error('Slot not found.');
 
     const { slot_date, start_time, end_time, mentor_id, mode } = req.body;
-    slot.slot_date = slot_date;
-    slot.start_time = start_time;
-    slot.end_time = end_time;
+    if (slot_date) slot.slot_date = String(slot_date).trim();
+    if (start_time) slot.start_time = h.normalizeTime(start_time) || slot.start_time;
+    if (end_time) slot.end_time = h.normalizeTime(end_time) || slot.end_time;
     if (mentor_id) slot.mentor_id = mentor_id;
     if (mode) slot.mode = mode;
 

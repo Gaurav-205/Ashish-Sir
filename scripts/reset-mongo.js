@@ -1,13 +1,10 @@
 'use strict';
 require('dotenv').config();
-const mongoose = require('mongoose');
-const { User, Slot, Interview, Evaluation, StudentFeedback, AuditLog, PasswordReset } = require('../src/models');
-
-const MONGODB_URI = process.env.MONGODB_URI;
+const { connectDb, mongoose, User, Slot, Interview, Evaluation, StudentFeedback, AuditLog, PasswordReset } = require('../src/db');
 
 async function resetDb() {
   console.log('=== Resetting MongoDB (Clearing Operational Records) ===');
-  await mongoose.connect(MONGODB_URI);
+  await connectDb();
   console.log('✓ Connected to MongoDB Atlas');
 
   const [deletedSlots, deletedInterviews, deletedEvals, deletedFeedback] = await Promise.all([

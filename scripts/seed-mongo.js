@@ -1,14 +1,11 @@
 'use strict';
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
-const { User } = require('../src/models');
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
+const { connectDb, mongoose, User } = require('../src/db');
 
 async function seedUsersOnly() {
   console.log('=== Seeding MongoDB: Users Only (Zero Slots) ===');
-  await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  await connectDb();
   console.log('✓ Connected to MongoDB');
 
   const pwHash = bcrypt.hashSync('pass123', 10);

@@ -1,9 +1,8 @@
 'use strict';
 require('dotenv').config();
 const assert = require('assert');
-const mongoose = require('mongoose');
+const { connectDb, mongoose, User, Slot, Interview, Evaluation } = require('../src/db');
 const q = require('../src/queries');
-const { User, Slot, Interview, Evaluation } = require('../src/models');
 
 console.log('=== Running MongoDB Queries & Aggregations Unit Tests ===');
 
@@ -20,7 +19,7 @@ async function test(name, fn) {
 }
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  await connectDb();
 
   await test('mentorsList() retrieves active mentors', async () => {
     const mentors = await q.mentorsList();
