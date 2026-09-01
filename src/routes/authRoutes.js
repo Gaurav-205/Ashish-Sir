@@ -42,6 +42,10 @@ router.post('/login', authLimiter, async (req, res) => {
   let row = null;
   try {
     row = await User.findOne({ email }).lean();
+    if (!row) {
+      const safeEmailRegex = new RegExp('^' + email.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i');
+      row = await User.findOne({ email: safeEmailRegex }).lean();
+    }
   } catch (err) {
     console.error('DB error during login:', err);
   }

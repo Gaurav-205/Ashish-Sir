@@ -72,7 +72,7 @@ async function resolveCurrentUser(req, res) {
   const isDev = isUserDeveloper(user);
   const isDual = isDualRoleUser(user);
 
-  req.session.user.id = user._id;
+  req.session.user.id = String(user._id);
   req.session.user.name = user.name;
   req.session.user.email = user.email;
   req.session.user.is_developer = isDev;

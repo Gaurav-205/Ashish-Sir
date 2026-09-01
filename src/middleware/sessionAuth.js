@@ -67,12 +67,13 @@ function parseCookies(header) {
  */
 function setAuthSession(req, res, user) {
   const issuedAt = Date.now();
-  const userData = { id: user.id, name: user.name, email: user.email, role: user.role, iat: issuedAt };
+  const userIdStr = String(user.id || user._id);
+  const userData = { id: userIdStr, name: user.name, email: user.email, role: user.role, iat: issuedAt };
   if (req.session) {
     req.session.user = userData;
   }
 
-  const token = signToken({ id: user.id, role: user.role, ts: issuedAt });
+  const token = signToken({ id: userIdStr, role: user.role, ts: issuedAt });
   const isSecure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   const maxAgeSec = Math.floor(COOKIE_MAX_AGE_MS / 1000);
 
@@ -118,7 +119,7 @@ async function sessionRehydrateMiddleware(req, res, next) {
     const staleAfterPwChange = row && row.sessions_invalid_before && tokenTs < Number(row.sessions_invalid_before);
     if (row && row.active && !staleAfterPwChange) {
       if (!req.session) req.session = {};
-      req.session.user = { id: row._id, name: row.name, email: row.email, role: row.role, iat: tokenTs || Date.now() };
+      req.session.user = { id: String(row._id), name: row.name, email: row.email, role: row.role, iat: tokenTs || Date.now() };
       res.locals.user = req.session.user;
       if (typeof req.session.save === 'function') {
         req.session.save((err) => {
