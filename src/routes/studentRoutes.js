@@ -37,52 +37,65 @@ function safeRedirectTarget(req, fallback = '/student') {
 }
 
 router.get(['/', '/dashboard'], async (req, res) => {
-  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
+  const now = h.nowMinute();
+  const today = h.today();
+  const [s, openSlots] = await Promise.all([
+    q.studentSummary(req.session.user.id, req._resolvedUser),
+    Slot.find({ status: 'open', slot_date: { $gte: today } }).lean(),
+  ]);
+
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
 
-  const now = h.nowMinute();
-  const openSlots = await Slot.find({ status: 'open' }).lean();
-  const upcomingOpen = openSlots.filter(sl => (sl.slot_date + ' ' + sl.start_time) > now);
+  let technical = 0;
+  let hr = 0;
+  for (const sl of openSlots) {
+    if ((sl.slot_date + ' ' + sl.start_time) > now) {
+      if (sl.type === 'technical') technical++;
+      else if (sl.type === 'hr') hr++;
+    }
+  }
 
-  const open = {
-    technical: upcomingOpen.filter(sl => sl.type === 'technical').length,
-    hr: upcomingOpen.filter(sl => sl.type === 'hr').length,
-  };
-
-  res.render('student/dashboard', { title: 'My interviews', s, open });
+  res.render('student/dashboard', { title: 'My interviews', s, open: { technical, hr } });
 });
 
 router.get('/mentors', async (req, res) => {
-  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
+  const [s, mentors] = await Promise.all([
+    q.studentSummary(req.session.user.id, req._resolvedUser),
+    q.mentorsWithOpenSlots(),
+  ]);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));
   }
-  const mentors = await q.mentorsWithOpenSlots();
   res.render('student/mentors', { title: 'Mentors directory', mentors, s });
 });
 
 router.get('/slots', async (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
   const mentorId = req.query.mentor ? req.query.mentor : null;
-  const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
-  if (!s || !s.student) {
-    return req.session.destroy(() => res.redirect('/login'));
-  }
-  const already = type === 'hr' ? s.hr : s.technical;
-
   const now = h.nowMinute();
+  const today = h.today();
+
   const query = {
     type,
     status: 'open',
+    slot_date: { $gte: today },
     mentor_id: { $ne: req.session.user.id },
   };
   if (mentorId) {
     query.mentor_id = mentorId;
   }
 
-  const rawSlots = await Slot.find(query).populate('mentor_id', 'name email active').lean();
+  const [s, rawSlots] = await Promise.all([
+    q.studentSummary(req.session.user.id, req._resolvedUser),
+    Slot.find(query).populate('mentor_id', 'name email active').lean(),
+  ]);
+
+  if (!s || !s.student) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
+  const already = type === 'hr' ? s.hr : s.technical;
   const slots = rawSlots
     .filter(sl => sl.mentor_id && sl.mentor_id.active && (sl.slot_date + ' ' + sl.start_time) > now)
     .map(sl => ({

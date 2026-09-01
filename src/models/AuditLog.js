@@ -13,4 +13,6 @@ const auditLogSchema = new mongoose.Schema({
   toObject: { virtuals: true },
 });
 
+auditLogSchema.index({ created_at: -1 });
+
 module.exports = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);

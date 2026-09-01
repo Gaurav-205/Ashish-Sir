@@ -27,6 +27,11 @@ async function connectDb() {
     try {
       const conn = await mongoose.connect(MONGODB_URI, {
         serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+        socketTimeoutMS: 30000,
+        maxPoolSize: 20,
+        minPoolSize: 2,
+        maxIdleTimeMS: 30000,
         autoIndex: true,
       });
       console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);

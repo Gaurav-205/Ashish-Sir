@@ -37,7 +37,16 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '7d', etag: true }));
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  maxAge: '30d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.css') || filePath.endsWith('.js') || filePath.endsWith('.svg') || filePath.endsWith('.woff2')) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
+    }
+  },
+}));
 
 const sessionSecret = process.env.SESSION_SECRET || 'konfident-interview-2025-prod-fallback-secret-key-3b98f';
 if (!process.env.SESSION_SECRET) {

@@ -17,16 +17,20 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 router.get(['/', '/dashboard'], async (req, res) => {
   const id = req.session.user.id;
-  const mentor = req._resolvedUser || await User.findById(id).lean();
-  if (mentor) mentor.id = mentor._id;
+  const now = h.nowMinute();
+  const today = h.today();
 
-  const all = await q.interviewsForMentor(id);
+  const [mentorDoc, all, rawSlots] = await Promise.all([
+    req._resolvedUser ? Promise.resolve(req._resolvedUser) : User.findById(id).lean(),
+    q.interviewsForMentor(id),
+    Slot.find({ mentor_id: id, status: 'open', slot_date: { $gte: today } }).lean(),
+  ]);
+
+  const mentor = mentorDoc ? { ...mentorDoc, id: mentorDoc._id } : null;
   const upcoming = all.filter((i) => i.status === 'booked');
   const completed = all.filter((i) => i.status === 'completed');
   const pending = completed.filter((i) => i.eval_id == null);
 
-  const now = h.nowMinute();
-  const rawSlots = await Slot.find({ mentor_id: id, status: 'open' }).lean();
   const slots = rawSlots
     .filter(sl => (sl.slot_date + ' ' + sl.start_time) > now)
     .map(sl => ({ ...sl, id: sl._id }))

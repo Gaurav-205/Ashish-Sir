@@ -24,13 +24,20 @@ const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 /* ------------------------------ dashboard ------------------------------ */
 router.get(['/', '/dashboard'], async (req, res) => {
-  const stats = await q.adminStats();
-
-  const bookedIvs = await Interview.find({ status: 'booked' })
-    .populate('slot_id')
-    .populate('student_id', 'name email')
-    .populate('mentor_id', 'name email')
-    .lean();
+  const [stats, bookedIvs, completedIvs, studentSummaries] = await Promise.all([
+    q.adminStats(),
+    Interview.find({ status: 'booked' })
+      .populate('slot_id')
+      .populate('student_id', 'name email')
+      .populate('mentor_id', 'name email')
+      .lean(),
+    Interview.find({ status: 'completed' })
+      .populate('slot_id')
+      .populate('student_id', 'name email')
+      .populate('mentor_id', 'name email')
+      .lean(),
+    q.allStudentSummaries(),
+  ]);
 
   const upcoming = bookedIvs
     .filter(iv => iv.slot_id)
@@ -48,35 +55,31 @@ router.get(['/', '/dashboard'], async (req, res) => {
     .sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time))
     .slice(0, 8);
 
-  const completedIvs = await Interview.find({ status: 'completed' })
-    .populate('slot_id')
-    .populate('student_id', 'name email')
-    .populate('mentor_id', 'name email')
-    .lean();
+  const completedIvIds = completedIvs.map(iv => iv._id);
+  const existingEvals = completedIvIds.length
+    ? await Evaluation.find({ interview_id: { $in: completedIvIds } }, 'interview_id').lean()
+    : [];
+  const evalSet = new Set(existingEvals.map(e => String(e.interview_id)));
 
-  const pendingEval = [];
-  for (const iv of completedIvs) {
-    const hasEval = await Evaluation.exists({ interview_id: iv._id });
-    if (!hasEval && iv.slot_id) {
-      pendingEval.push({
-        id: iv._id,
-        type: iv.type,
-        slot_date: iv.slot_id.slot_date,
-        location: iv.slot_id.location,
-        student_name: iv.student_id ? iv.student_id.name : '',
-        mentor_name: iv.mentor_id ? iv.mentor_id.name : '',
-      });
-    }
-  }
+  const pendingEval = completedIvs
+    .filter(iv => !evalSet.has(String(iv._id)) && iv.slot_id)
+    .map(iv => ({
+      id: iv._id,
+      type: iv.type,
+      slot_date: iv.slot_id.slot_date,
+      location: iv.slot_id.location,
+      student_name: iv.student_id ? iv.student_id.name : '',
+      mentor_name: iv.mentor_id ? iv.mentor_id.name : '',
+    }))
+    .slice(0, 8);
 
-  const studentSummaries = await q.allStudentSummaries();
   const notBooked = studentSummaries
     .filter((s) => s.bookedCount < 2 && s.student.active)
     .sort((a, b) => a.bookedCount - b.bookedCount || a.student.name.localeCompare(b.student.name))
     .slice(0, 10)
     .map((s) => ({ ...s.student, booked: s.bookedCount }));
 
-  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval: pendingEval.slice(0, 8), notBooked, studentSummaries, GRAND_TOTAL });
+  res.render('admin/dashboard', { title: 'Admin dashboard', stats, upcoming, pendingEval, notBooked, studentSummaries, GRAND_TOTAL });
 });
 
 /* ------------------------------- students ------------------------------ */
@@ -339,13 +342,17 @@ router.get('/slots', async (req, res) => {
   if (typeFilter) query.type = typeFilter;
   if (statusFilter) query.status = statusFilter;
 
-  const totalCount = await Slot.countDocuments(query);
-  const rawSlots = await Slot.find(query)
-    .populate('mentor_id', 'name email')
-    .sort({ slot_date: -1, start_time: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
+  const [totalCount, rawSlots, allMentors, rawStudents] = await Promise.all([
+    Slot.countDocuments(query),
+    Slot.find(query)
+      .populate('mentor_id', 'name email')
+      .sort({ slot_date: -1, start_time: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    q.mentorsList(),
+    User.find({ role: 'student', active: 1 }).sort({ name: 1 }).lean(),
+  ]);
 
   const bookedSlotIds = rawSlots.filter(s => s.status === 'booked').map(s => s._id);
   const interviews = bookedSlotIds.length ? await Interview.find({ slot_id: { $in: bookedSlotIds }, status: 'booked' })
@@ -368,10 +375,8 @@ router.get('/slots', async (req, res) => {
     };
   });
 
-  const allMentors = await q.mentorsList();
   const technicalMentors = allMentors.filter(m => m.can_technical);
   const hrMentors = allMentors.filter(m => m.can_hr);
-  const rawStudents = await User.find({ role: 'student', active: 1 }).sort({ name: 1 }).lean();
   const students = rawStudents.map(st => ({ ...st, id: st._id }));
 
   const params = new URLSearchParams();
@@ -687,8 +692,10 @@ router.get('/interviews', async (req, res) => {
   if (req.query.attendance) filters.attendance = req.query.attendance;
   if (req.query.mentor) filters.mentor = req.query.mentor;
 
-  const list = await q.allInterviews(filters);
-  const mentors = await q.mentorsList();
+  const [list, mentors] = await Promise.all([
+    q.allInterviews(filters),
+    q.mentorsList(),
+  ]);
 
   res.render('admin/interviews', {
     title: 'Interviews roster',
@@ -746,13 +753,15 @@ router.get('/audit', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || 1, 10));
   const limit = 50;
 
-  const totalCount = await AuditLog.countDocuments();
-  const rawLogs = await AuditLog.find()
-    .populate('user_id', 'name email')
-    .sort({ created_at: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
+  const [totalCount, rawLogs] = await Promise.all([
+    AuditLog.countDocuments(),
+    AuditLog.find()
+      .populate('user_id', 'name email')
+      .sort({ created_at: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+  ]);
 
   const logs = rawLogs.map(l => ({
     ...l,
@@ -772,8 +781,10 @@ router.get('/audit', async (req, res) => {
 
 /* ------------------------------- reports ------------------------------- */
 router.get('/reports', async (req, res) => {
-  const summaries = await q.allStudentSummaries();
-  const stats = await q.adminStats();
+  const [summaries, stats] = await Promise.all([
+    q.allStudentSummaries(),
+    q.adminStats(),
+  ]);
 
   const evaluated = summaries.filter((s) => s.allEvaluated);
   const doneCount = evaluated.length;

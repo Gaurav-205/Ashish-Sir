@@ -172,8 +172,10 @@ async function studentSummary(studentId, existingStudent = null) {
 }
 
 async function allStudentSummaries() {
-  const students = await User.find({ role: 'student' }).sort({ name: 1 }).lean();
-  const allIvs = await allInterviews();
+  const [students, allIvs] = await Promise.all([
+    User.find({ role: 'student' }).sort({ name: 1 }).lean(),
+    allInterviews(),
+  ]);
 
   const ivsByStudent = {};
   for (const iv of allIvs) {
@@ -228,15 +230,25 @@ async function allStudentSummaries() {
 }
 
 async function adminStats() {
-  const [students, mentors, slots, openSlots, booked, completed, attended, absent, evaluated, fullyBookedAgg] = await Promise.all([
-    User.countDocuments({ role: 'student' }),
-    User.countDocuments({ role: 'mentor' }),
-    Slot.countDocuments({ status: { $ne: 'cancelled' } }),
-    Slot.countDocuments({ status: 'open' }),
-    Interview.countDocuments({ status: 'booked' }),
-    Interview.countDocuments({ status: 'completed' }),
-    Interview.countDocuments({ attendance: 'attended' }),
-    Interview.countDocuments({ attendance: 'absent' }),
+  const [userAgg, slotAgg, ivAgg, evalCount, fullyBookedAgg] = await Promise.all([
+    User.aggregate([
+      { $match: { role: { $in: ['student', 'mentor'] } } },
+      { $group: { _id: '$role', count: { $sum: 1 } } },
+    ]),
+    Slot.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    Interview.aggregate([
+      {
+        $facet: {
+          booked: [{ $match: { status: 'booked' } }, { $count: 'count' }],
+          completed: [{ $match: { status: 'completed' } }, { $count: 'count' }],
+          attended: [{ $match: { attendance: 'attended' } }, { $count: 'count' }],
+          absent: [{ $match: { attendance: 'absent' } }, { $count: 'count' }],
+        },
+      },
+    ]),
     Evaluation.countDocuments(),
     Interview.aggregate([
       { $match: { status: { $ne: 'cancelled' } } },
@@ -246,6 +258,25 @@ async function adminStats() {
     ]),
   ]);
 
+  let students = 0;
+  let mentors = 0;
+  for (const u of userAgg) {
+    if (u._id === 'student') students = u.count;
+    if (u._id === 'mentor') mentors = u.count;
+  }
+
+  let slots = 0;
+  let openSlots = 0;
+  for (const s of slotAgg) {
+    slots += s.count;
+    if (s._id === 'open') openSlots = s.count;
+  }
+
+  const ivFacet = (ivAgg && ivAgg[0]) || {};
+  const booked = (ivFacet.booked && ivFacet.booked[0]) ? ivFacet.booked[0].count : 0;
+  const completed = (ivFacet.completed && ivFacet.completed[0]) ? ivFacet.completed[0].count : 0;
+  const attended = (ivFacet.attended && ivFacet.attended[0]) ? ivFacet.attended[0].count : 0;
+  const absent = (ivFacet.absent && ivFacet.absent[0]) ? ivFacet.absent[0].count : 0;
   const fullyBooked = (fullyBookedAgg && fullyBookedAgg[0]) ? fullyBookedAgg[0].count : 0;
 
   return {
@@ -257,7 +288,7 @@ async function adminStats() {
     completed,
     attended,
     absent,
-    evaluated,
+    evaluated: evalCount,
     fullyBooked,
   };
 }
@@ -276,23 +307,38 @@ async function mentorsList(type) {
 
 async function mentorsWithOpenSlots() {
   const now = h.nowMinute();
-  const mentors = await mentorsList();
-  const openSlots = await Slot.find({
-    status: 'open',
-  }).lean();
+  const today = h.today();
+  const [mentors, openSlots] = await Promise.all([
+    mentorsList(),
+    Slot.find({
+      status: 'open',
+      slot_date: { $gte: today },
+    }).lean(),
+  ]);
 
   const upcomingOpen = openSlots.filter(s => (s.slot_date + ' ' + s.start_time) > now);
 
+  const slotMapByMentor = new Map();
+  for (const s of upcomingOpen) {
+    const key = String(s.mentor_id);
+    let rec = slotMapByMentor.get(key);
+    if (!rec) {
+      rec = { tech: 0, hr: 0, total: 0 };
+      slotMapByMentor.set(key, rec);
+    }
+    rec.total++;
+    if (s.type === 'technical') rec.tech++;
+    else if (s.type === 'hr') rec.hr++;
+  }
+
   return mentors.map((m) => {
-    const mSlots = upcomingOpen.filter(s => String(s.mentor_id) === String(m._id));
-    const techSlots = mSlots.filter(s => s.type === 'technical');
-    const hrSlots = mSlots.filter(s => s.type === 'hr');
+    const counts = slotMapByMentor.get(String(m._id)) || { tech: 0, hr: 0, total: 0 };
     return {
       ...m,
       id: m._id,
-      tech_open_slots: techSlots.length,
-      hr_open_slots: hrSlots.length,
-      total_open_slots: mSlots.length,
+      tech_open_slots: counts.tech,
+      hr_open_slots: counts.hr,
+      total_open_slots: counts.total,
     };
   });
 }

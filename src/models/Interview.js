@@ -16,8 +16,10 @@ const interviewSchema = new mongoose.Schema({
   toObject: { virtuals: true },
 });
 
+interviewSchema.index({ student_id: 1, status: 1 });
 interviewSchema.index({ student_id: 1, type: 1, status: 1 });
 interviewSchema.index({ mentor_id: 1, status: 1 });
 interviewSchema.index({ slot_id: 1, status: 1 });
+interviewSchema.index({ status: 1, attendance: 1 });
 
 module.exports = mongoose.models.Interview || mongoose.model('Interview', interviewSchema);

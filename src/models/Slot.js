@@ -19,8 +19,10 @@ const slotSchema = new mongoose.Schema({
 });
 
 slotSchema.index({ status: 1, type: 1, slot_date: 1, start_time: 1 });
+slotSchema.index({ status: 1, slot_date: 1, start_time: 1 });
 slotSchema.index({ mentor_id: 1, status: 1, slot_date: 1 });
 slotSchema.index({ mentor_id: 1, slot_date: 1, start_time: 1, end_time: 1 });
+slotSchema.index({ slot_date: 1, start_time: 1 });
 
 function normalizeTimeStr(hm) {
   if (!hm) return hm;
