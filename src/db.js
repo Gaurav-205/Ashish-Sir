@@ -4,9 +4,16 @@ const mongoose = require('mongoose');
 const models = require('./models');
 
 const dns = require('dns');
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (_) {}
+
+function applyDnsFallback() {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  } catch (_) {}
+}
+
+if (!process.env.VERCEL) {
+  applyDnsFallback();
+}
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 
@@ -24,11 +31,13 @@ async function connectDb() {
     console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
     return conn.connection;
   } catch (err) {
-    if (err.code === 'ESERVFAIL' || err.message.includes('querySrv')) {
+    const isDnsErr = err.code === 'ESERVFAIL' || err.code === 'EAI_AGAIN' ||
+                     (err.message && (err.message.includes('querySrv') || err.message.includes('getaddrinfo')));
+    if (isDnsErr) {
       try {
-        dns.setServers(['8.8.8.8', '1.1.1.1']);
+        applyDnsFallback();
         const conn = await mongoose.connect(MONGODB_URI, {
-          serverSelectionTimeoutMS: 8000,
+          serverSelectionTimeoutMS: 12000,
           autoIndex: true,
         });
         isConnected = true;
