@@ -115,10 +115,7 @@ router.post('/slots', async (req, res) => {
     if (Number.isNaN(numSlots) || numSlots < 1 || numSlots > 16) throw new Error('Count must be between 1 and 16 slots per day.');
 
     const cleanMode = mode === 'Offline' ? 'Offline' : 'Online';
-    let cleanLoc = String(location || '').trim();
-    if (!cleanLoc) {
-      cleanLoc = cleanMode === 'Online' ? h.generateMeetingLink(cleanStart) : 'Room 101';
-    }
+    const customLoc = String(location || '').trim();
 
     const minDate = dates[0];
     const maxDate = dates[dates.length - 1];
@@ -149,6 +146,7 @@ router.post('/slots', async (req, res) => {
                           slotsToInsert.some(s => s.slot_date === d && curStart < s.end_time && curEnd > s.start_time);
 
         if (!isOverlap) {
+          const slotLoc = customLoc || (cleanMode === 'Online' ? h.generateMeetingLink(curStart) : 'Room 101');
           slotsToInsert.push({
             mentor_id: mentorId,
             type,
@@ -156,7 +154,7 @@ router.post('/slots', async (req, res) => {
             start_time: curStart,
             end_time: curEnd,
             mode: cleanMode,
-            location: cleanLoc,
+            location: slotLoc,
             status: 'open',
           });
         }

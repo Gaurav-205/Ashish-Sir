@@ -206,8 +206,16 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   if (!student || !mentor || !slot) return null;
   const { Slot, Interview } = require('../models');
 
+  let canonicalLoc = (slot.location && /^https?:\/\//i.test(slot.location))
+    ? slot.location.trim()
+    : null;
+
+  if (!canonicalLoc && slot.mode === 'Online') {
+    canonicalLoc = h.generateMeetingLink(slot.start_time);
+  }
+
   const summary = `Konfident 2025: ${h.titleCase(slot.type)} Mock Interview`;
-  const description = `Mock Interview Session\nStudent: ${student.name} (${student.email})\nMentor: ${mentor.name} (${mentor.email})\nType: ${h.titleCase(slot.type)}\nMode: ${slot.mode}${slot.location ? `\nLocation/Meeting Link: ${slot.location}` : ''}`;
+  const description = `Mock Interview Session\nStudent: ${student.name} (${student.email})\nMentor: ${mentor.name} (${mentor.email})\nType: ${h.titleCase(slot.type)}\nMode: ${slot.mode}${canonicalLoc ? `\nMeeting Link: ${canonicalLoc}` : ''}`;
 
   const startIso = `${slot.slot_date}T${slot.start_time}:00${IST_OFFSET}`;
   const endIso = `${slot.slot_date}T${slot.end_time}:00${IST_OFFSET}`;
@@ -215,56 +223,73 @@ async function syncCalendarEvent({ student, mentor, slot, interviewId }) {
   const eventPayload = {
     summary,
     description,
-    location: slot.location || slot.mode,
+    location: canonicalLoc || slot.mode || 'Google Meet',
     start: { dateTime: new Date(startIso).toISOString(), timeZone: 'Asia/Kolkata' },
     end: { dateTime: new Date(endIso).toISOString(), timeZone: 'Asia/Kolkata' },
     attendees: [
       { email: student.email, displayName: student.name },
       { email: mentor.email, displayName: mentor.name },
     ],
-    conferenceData: {
+  };
+
+  // Only request Google to auto-create a Meet link if canonicalLoc is not already a Meet URL
+  if (!canonicalLoc || !canonicalLoc.includes('meet.google.com')) {
+    eventPayload.conferenceData = {
       createRequest: {
-        requestId: `konfident-${slot.id || slot._id || interviewId || 'iv'}-${Date.now()}`,
+        requestId: `konfident-${slot.id || slot._id || interviewId || 'iv'}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
-    },
-  };
+    };
+  }
 
   let createdEventId = null;
   let meetUrl = null;
 
-  for (const person of [student, mentor]) {
-    if (!person.google_calendar_enabled) continue;
-    const token = await getValidAccessToken(person.id || person._id);
-    if (!token) continue;
+  // Perform single event creation on primary calendar of organizer (prefer mentor, fallback student)
+  let organizerToken = null;
+  let organizerId = null;
 
+  if (mentor.google_calendar_enabled) {
+    organizerToken = await getValidAccessToken(mentor.id || mentor._id);
+    if (organizerToken) organizerId = mentor.id || mentor._id;
+  }
+  if (!organizerToken && student.google_calendar_enabled) {
+    organizerToken = await getValidAccessToken(student.id || student._id);
+    if (organizerToken) organizerId = student.id || student._id;
+  }
+
+  if (organizerToken) {
     try {
       const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${organizerToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(eventPayload),
       });
       const data = await res.json();
-      if (res.ok && data.id && !createdEventId) {
+      if (res.ok && data.id) {
         createdEventId = data.id;
         meetUrl = data.hangoutLink || (data.conferenceData && data.conferenceData.entryPoints && data.conferenceData.entryPoints[0] ? data.conferenceData.entryPoints[0].uri : null);
       }
     } catch (err) {
-      console.error(`Error adding calendar event for user ${person.id || person._id}:`, err);
+      console.error(`Error adding calendar event for organizer ${organizerId}:`, err);
     }
   }
 
-  if (createdEventId && interviewId) {
-    try {
-      await Interview.findByIdAndUpdate(interviewId, { google_event_id: createdEventId });
-      if (meetUrl && (slot.id || slot._id)) {
-        await Slot.findByIdAndUpdate(slot.id || slot._id, { location: meetUrl });
-      }
-    } catch (_) {}
-  }
+  const finalMeetLink = meetUrl || canonicalLoc || (slot.mode === 'Online' ? h.generateMeetingLink(slot.start_time) : slot.location);
+
+  try {
+    if (interviewId) {
+      const ivUpdate = {};
+      if (createdEventId) ivUpdate.google_event_id = createdEventId;
+      await Interview.findByIdAndUpdate(interviewId, ivUpdate);
+    }
+    if (finalMeetLink && (slot.id || slot._id)) {
+      await Slot.findByIdAndUpdate(slot.id || slot._id, { location: finalMeetLink });
+    }
+  } catch (_) {}
 
   return createdEventId;
 }
