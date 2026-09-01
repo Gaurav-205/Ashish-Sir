@@ -56,18 +56,19 @@ if (!sessionSecret) {
   console.warn('[security] SESSION_SECRET is not set — using the built-in development secret. Never do this outside local dev.');
 }
 
-const MongoStore = require('connect-mongo');
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
+const db = require('./db');
+const { MongoStore } = require('connect-mongo');
 
 let sessionStore;
 try {
   sessionStore = MongoStore.create({
-    mongoUrl: MONGODB_URI,
+    clientPromise: db.connectDb().then(() => db.mongoose.connection.getClient()),
     collectionName: 'sessions',
     ttl: 14 * 24 * 60 * 60, // 14 days
     autoRemove: 'native',
   });
-} catch (_) {
+} catch (e) {
+  console.warn('[session] MongoStore fallback to MemoryStore:', e.message);
   sessionStore = new session.MemoryStore();
 }
 

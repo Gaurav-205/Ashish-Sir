@@ -86,19 +86,23 @@ router.post('/login', authLimiter, async (req, res) => {
   const redirectTo = to || homeFor(row.role);
   delete req.session.redirectTo;
 
-  req.session.regenerate((err) => {
-    if (err) {
-      console.error('Session regeneration error:', err);
-      return res.status(500).render('error', {
-        title: 'Login error',
-        message: 'Could not complete login. Please try again.',
-      });
-    }
+  const finishLogin = () => {
     authLimiter.reset(req);
     setAuthSession(req, res, row);
     logAudit(req, 'AUTH_LOGIN_SUCCESS', { email: row.email, role: row.role }, row._id);
     res.redirect(redirectTo);
-  });
+  };
+
+  if (typeof req.session.regenerate === 'function') {
+    req.session.regenerate((err) => {
+      if (err) {
+        console.warn('Session regeneration warning:', err.message);
+      }
+      finishLogin();
+    });
+  } else {
+    finishLogin();
+  }
 });
 
 /* ------------------------------ Google OAuth ----------------------------- */

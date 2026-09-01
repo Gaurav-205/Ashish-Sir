@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const models = require('./models');
 
 const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {}
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 
