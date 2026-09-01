@@ -197,8 +197,8 @@ router.post('/book', actionLimiter, async (req, res) => {
   res.redirect('/student');
 });
 
-async function cancelBooking(req, res) {
-  const ivId = req.params.id || req.body.interview_id;
+router.post(['/cancel', '/cancel/:id'], actionLimiter, async (req, res) => {
+  const ivId = req.params.id || (req.body && req.body.interview_id);
   const studentId = req.session.user.id;
 
   if (ivId && !mongoose.Types.ObjectId.isValid(ivId)) {

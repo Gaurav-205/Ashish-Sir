@@ -83,6 +83,14 @@
               <%= iv.attendance === 'absent' ? 'Marked Absent' : 'Mark Absent / No-Show' %>
             </button>
           </form>
+          <% if (iv.slot_id) { %>
+            <form method="post" action="/mentor/slots/<%= iv.slot_id %>/cancel" onsubmit="return confirm('Cancel this interview booking? The candidate will be notified and you will return to your dashboard.')" style="margin:0">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn sm" style="display:inline-flex;align-items:center;gap:6px;border-color:var(--warn);color:var(--warn)">
+                Cancel Booking &amp; Return →
+              </button>
+            </form>
+          <% } %>
         </div>
       <% } else { %>
         <p class="faint" style="font-size:13px">
