@@ -16,7 +16,7 @@ const forgotLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5, mess
 
 const DUMMY_HASH = bcrypt.hashSync('timing-defence-dummy-secret', 10);
 
-router.get('/', (req, res) => {
+router.get(['/', '/dashboard', '/home'], (req, res) => {
   if (req.session && req.session.user) {
     return res.redirect(homeFor(req.session.user.role));
   }
@@ -387,7 +387,7 @@ router.get('/profile', requireLogin, async (req, res) => {
   });
 });
 
-router.post('/profile', requireLogin, async (req, res) => {
+router.post(['/profile', '/profile/update'], requireLogin, async (req, res) => {
   const me = await User.findById(req.session.user.id).lean();
   if (!me) return res.redirect('/login');
   me.id = me._id;

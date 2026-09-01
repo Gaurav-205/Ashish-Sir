@@ -10,50 +10,51 @@ try {
   }
 } catch (_) {}
 
-function applyDnsFallback() {
-  try {
-    dns.setServers(['8.8.8.8', '1.1.1.1']);
-  } catch (_) {}
-}
-
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
+const LOCAL_MONGODB_URI = 'mongodb://127.0.0.1:27017/konfident';
 
-let isConnected = false;
+let connectionPromise = null;
 
 async function connectDb() {
-  if (isConnected && mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
-  
-  try {
-    const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
-      autoIndex: true,
-    });
-    isConnected = true;
-    console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
-    return conn.connection;
-  } catch (err) {
-    const isDnsErr = err.code === 'ESERVFAIL' || err.code === 'EAI_AGAIN' || err.code === 'ETIMEOUT' || err.code === 'ENOTFOUND' ||
-                     err.syscall === 'querySrv' || (err.message && (err.message.includes('querySrv') || err.message.includes('getaddrinfo') || err.message.includes('Could not connect to any servers')));
-    if (isDnsErr) {
-      try {
-        applyDnsFallback();
-        const conn = await mongoose.connect(MONGODB_URI, {
-          serverSelectionTimeoutMS: 15000,
-          autoIndex: true,
-        });
-        isConnected = true;
-        console.log(`[db] MongoDB connected successfully via DNS fallback to ${conn.connection.host || 'cluster'}`);
-        return conn.connection;
-      } catch (dnsErr) {
-        console.error('[db] MongoDB connection error after DNS fallback:', dnsErr.message);
-        throw dnsErr;
-      }
-    }
-    console.error('[db] MongoDB connection error:', err.message);
-    throw err;
+  if (connectionPromise) {
+    return connectionPromise;
   }
+
+  connectionPromise = (async () => {
+    try {
+      const conn = await mongoose.connect(MONGODB_URI, {
+        serverSelectionTimeoutMS: 4000,
+        autoIndex: true,
+      });
+      console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
+      return conn.connection;
+    } catch (err) {
+      if (MONGODB_URI !== LOCAL_MONGODB_URI) {
+        try {
+          console.warn(`[db] Remote MongoDB connection failed (${err.message}). Falling back to local MongoDB at ${LOCAL_MONGODB_URI}...`);
+          await mongoose.disconnect().catch(() => {});
+          const conn = await mongoose.connect(LOCAL_MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            autoIndex: true,
+          });
+          console.log(`[db] MongoDB connected successfully to local fallback database: ${conn.connection.host || 'localhost'}`);
+          return conn.connection;
+        } catch (localErr) {
+          console.error('[db] Both remote and local MongoDB connection fallbacks failed:', localErr.message);
+          connectionPromise = null;
+          throw err;
+        }
+      }
+      connectionPromise = null;
+      console.error('[db] MongoDB connection error:', err.message);
+      throw err;
+    }
+  })();
+
+  return connectionPromise;
 }
 
 // Auto-connect on import

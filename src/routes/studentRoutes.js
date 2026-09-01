@@ -35,7 +35,7 @@ function safeRedirectTarget(req, fallback = '/student') {
   return fallback;
 }
 
-router.get('/', async (req, res) => {
+router.get(['/', '/dashboard'], async (req, res) => {
   const s = await q.studentSummary(req.session.user.id, req._resolvedUser);
   if (!s || !s.student) {
     return req.session.destroy(() => res.redirect('/login'));

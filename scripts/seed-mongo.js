@@ -10,27 +10,43 @@ async function seedUsersOnly() {
 
   const pwHash = bcrypt.hashSync('pass123', 10);
 
-  // 1. Ensure Root Admin
-  let admin = await User.findOne({ email: (process.env.ADMIN_EMAIL || 'utkarsha.kasar@kalvium.com').toLowerCase().trim() });
-  if (!admin) {
-    admin = await User.create({
-      name: process.env.ADMIN_NAME || 'Utkarsha Kasar',
-      email: (process.env.ADMIN_EMAIL || 'utkarsha.kasar@kalvium.com').toLowerCase().trim(),
-      password_hash: pwHash,
-      role: 'admin',
-      can_technical: 1,
-      can_hr: 1,
-      active: 1,
-    });
-    console.log('✓ Provisioned Root Admin:', admin.email);
+  // 1. Provision Admins
+  const admins = [
+    { name: 'Utkarsha Kasar', email: 'utkarsha.kasar@kalvium.com', can_t: 1, can_hr: 1 },
+    { name: 'Prachi Sharma', email: 'prachi.sharma@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Ashish Suresh', email: 'ashish.suresh@kalvium.com', can_t: 0, can_hr: 0 },
+    { name: 'Akshata Sanap', email: 'akshata.sanap@kalvium.com', can_t: 0, can_hr: 1 }, // Admin & Non-Tech Mentor
+  ];
+
+  for (const a of admins) {
+    let exists = await User.findOne({ email: a.email });
+    if (!exists) {
+      await User.create({
+        name: a.name,
+        email: a.email,
+        password_hash: pwHash,
+        role: 'admin',
+        can_technical: a.can_t,
+        can_hr: a.can_hr,
+        active: 1,
+      });
+      console.log('✓ Provisioned Admin:', a.email);
+    } else {
+      await User.updateOne({ email: a.email }, { $set: { role: 'admin', can_technical: a.can_t, can_hr: a.can_hr, active: 1 } });
+    }
   }
 
-  // 2. Provision Default Mentors
+  // 2. Provision Mentors
   const mentors = [
-    { name: 'Manav Verma', email: 'manav.verma@kalvium.com', can_t: 1, can_hr: 1 },
+    { name: 'Manav Verma', email: 'manav.verma@kalvium.com', can_t: 1, can_hr: 0 },
     { name: 'Muskan Srivastava', email: 'muskan.srivastava@kalvium.com', can_t: 0, can_hr: 1 },
     { name: 'Ritu Soni', email: 'ritu.soni@kalvium.com', can_t: 1, can_hr: 0 },
     { name: 'Shikhar Agarwal', email: 'shikhar.agarwal@kalvium.com', can_t: 1, can_hr: 0 },
+    { name: 'Shivam Shrivastava', email: 'shivam.shrivastava@kalvium.com', can_t: 1, can_hr: 0 },
+    { name: 'Aditya Kulshreshtha', email: 'aditya.kulshreshtha@kalvium.com', can_t: 1, can_hr: 0 },
+    { name: 'Hrituparno C', email: 'hrituparno.c@kalvium.com', can_t: 1, can_hr: 0 },
+    { name: 'Navaneeth V', email: 'navaneeth.v@kalvium.com', can_t: 0, can_hr: 1 },
+    { name: 'Kanishka Ragavi', email: 'kanishka.ragavi@kalvium.com', can_t: 0, can_hr: 1 },
   ];
 
   for (const m of mentors) {
@@ -46,6 +62,8 @@ async function seedUsersOnly() {
         active: 1,
       });
       console.log('✓ Provisioned Mentor:', m.email);
+    } else {
+      await User.updateOne({ email: m.email }, { $set: { can_technical: m.can_t, can_hr: m.can_hr, active: 1 } });
     }
   }
 

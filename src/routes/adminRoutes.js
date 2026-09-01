@@ -23,7 +23,7 @@ const actionLimiter = createRateLimiter({
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
 /* ------------------------------ dashboard ------------------------------ */
-router.get('/', async (req, res) => {
+router.get(['/', '/dashboard'], async (req, res) => {
   const stats = await q.adminStats();
 
   const bookedIvs = await Interview.find({ status: 'booked' })

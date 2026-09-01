@@ -15,7 +15,7 @@ router.use(requireRole('mentor'));
 
 const flash = (req, type, msg) => { req.session.flash = { type, msg }; };
 
-router.get('/', async (req, res) => {
+router.get(['/', '/dashboard'], async (req, res) => {
   const id = req.session.user.id;
   const mentor = req._resolvedUser || await User.findById(id).lean();
   if (mentor) mentor.id = mentor._id;

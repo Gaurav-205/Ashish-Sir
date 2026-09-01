@@ -14,7 +14,7 @@
     } %>
     <% if (typeof error !== 'undefined' && error) { %><div class="flash err"><%= error %></div><% } %>
     <% if (typeof ok !== 'undefined' && ok) { %><div class="flash ok"><%= ok %></div><% } %>
-    <form method="post" action="/profile/update">
+    <form method="post" action="/profile">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="field">
         <label>Full name</label>
