@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const mongoose = require('mongoose');
 const { Slot, Interview, User, StudentFeedback } = require('../models');
 const q = require('../queries');
 const h = require('../helpers');
@@ -153,6 +154,7 @@ router.post('/book', actionLimiter, async (req, res) => {
     return res.redirect('/student');
   }
 
+  // Atomic claim: only one concurrent booker flips an open slot to booked.
   const updatedSlot = await Slot.findOneAndUpdate(
     { _id: slot._id, status: 'open' },
     { $set: { status: 'booked' } },
@@ -195,9 +197,14 @@ router.post('/book', actionLimiter, async (req, res) => {
   res.redirect('/student');
 });
 
-router.post('/cancel', actionLimiter, async (req, res) => {
-  const ivId = req.body.interview_id;
+async function cancelBooking(req, res) {
+  const ivId = req.params.id || req.body.interview_id;
   const studentId = req.session.user.id;
+
+  if (ivId && !mongoose.Types.ObjectId.isValid(ivId)) {
+    flash(req, 'err', 'Active booking not found.');
+    return res.redirect('/student');
+  }
 
   const iv = await Interview.findOne({ _id: ivId, student_id: studentId, status: 'booked' }).populate('slot_id').populate('mentor_id').lean();
   if (!iv) {
@@ -241,9 +248,13 @@ router.post('/cancel', actionLimiter, async (req, res) => {
   logAudit(req, 'STUDENT_CANCEL_BOOKING', { interview_id: iv._id, slot_id: slot._id }, studentId);
   flash(req, 'ok', 'Booking cancelled. The slot has been released back for other students.');
   res.redirect('/student');
-});
+}
 
-router.post('/interview/:id/feedback', actionLimiter, validateId('id'), async (req, res) => {
+// The dashboard posts to /student/cancel/:id; keep the body-param form too.
+router.post('/cancel', actionLimiter, cancelBooking);
+router.post('/cancel/:id', actionLimiter, validateId('id'), cancelBooking);
+
+async function submitFeedback(req, res) {
   const ivId = req.params.id;
   const studentId = req.session.user.id;
 
@@ -288,6 +299,62 @@ router.post('/interview/:id/feedback', actionLimiter, validateId('id'), async (r
   logAudit(req, 'STUDENT_SUBMIT_FEEDBACK', { interview_id: iv._id, satisfaction }, studentId);
   flash(req, 'ok', 'Thank you for submitting your feedback!');
   res.redirect('/student');
+}
+
+// Templates post to /student/feedback/:id; /student/interview/:id/feedback kept for the API/tests.
+router.post('/interview/:id/feedback', actionLimiter, validateId('id'), submitFeedback);
+router.post('/feedback/:id', actionLimiter, validateId('id'), submitFeedback);
+
+/**
+ * JSON feed backing the live auto-refresh on the slot picker
+ * (public/js/student-slots.js). Returns grouped upcoming open slots for the
+ * given type plus the single earliest one and the student's booking gates.
+ */
+router.get('/api/slots/available', async (req, res) => {
+  const type = req.query.type === 'hr' ? 'hr' : 'technical';
+  const mentorId = req.query.mentor && mongoose.Types.ObjectId.isValid(req.query.mentor) ? req.query.mentor : null;
+  const studentId = req.session.user.id;
+
+  const student = req._resolvedUser || await User.findById(studentId).lean();
+  const now = h.nowMinute();
+
+  const query = { type, status: 'open', mentor_id: { $ne: studentId } };
+  if (mentorId) query.mentor_id = mentorId;
+
+  const rawSlots = await Slot.find(query).populate('mentor_id', 'name email active').lean();
+  const slots = rawSlots
+    .filter((sl) => sl.mentor_id && sl.mentor_id.active && (sl.slot_date + ' ' + sl.start_time) > now)
+    .map((sl) => ({
+      id: String(sl._id),
+      slot_date: sl.slot_date,
+      start_time: sl.start_time,
+      end_time: sl.end_time,
+      mode: sl.mode,
+      mentor_name: sl.mentor_id.name,
+      timeFormatted: `${h.fmtTime(sl.start_time)} – ${h.fmtTime(sl.end_time)}`,
+    }))
+    .sort((a, b) => (a.slot_date + ' ' + a.start_time).localeCompare(b.slot_date + ' ' + b.start_time));
+
+  const byDate = [];
+  for (const sl of slots) {
+    let g = byDate.find((x) => x.date === sl.slot_date);
+    if (!g) { g = { date: sl.slot_date, dateFormatted: h.fmtDate(sl.slot_date), slots: [] }; byDate.push(g); }
+    g.slots.push(sl);
+  }
+
+  const limitCheck = await h.checkWeeklyInterviewLimit(null, studentId, type, h.today());
+  const earliest = slots[0]
+    ? { ...slots[0], slotFormatted: `${h.fmtDate(slots[0].slot_date)} · ${slots[0].timeFormatted}` }
+    : null;
+
+  res.json({
+    byDate,
+    earliest,
+    profileComplete: h.isStudentProfileComplete(student),
+    limitReached: limitCheck.reached,
+    weeklyCount: limitCheck.count,
+    maxAllowed: limitCheck.maxAllowed,
+  });
 });
 
 router.get('/results', async (req, res) => {

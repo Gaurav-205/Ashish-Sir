@@ -172,7 +172,37 @@ router.get('/students/:id', validateId('id'), async (req, res) => {
 /* ------------------------------- mentors ------------------------------- */
 router.get('/mentors', async (req, res) => {
   const mentors = await q.mentorsWithOpenSlots();
-  res.render('admin/mentors', { title: 'Mentors', mentors, error: null });
+
+  // Enrich each mentor with the counts the roster table shows.
+  const [slotAgg, ivAgg] = await Promise.all([
+    Slot.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$mentor_id', count: { $sum: 1 } } },
+    ]),
+    Interview.aggregate([
+      { $group: { _id: { mentor_id: '$mentor_id', status: '$status' }, count: { $sum: 1 } } },
+    ]),
+  ]);
+  const slotMap = new Map(slotAgg.map((r) => [String(r._id), r.count]));
+  const upcomingMap = new Map();
+  const doneMap = new Map();
+  for (const r of ivAgg) {
+    const key = String(r._id.mentor_id);
+    if (r._id.status === 'booked') upcomingMap.set(key, (upcomingMap.get(key) || 0) + r.count);
+    if (r._id.status === 'completed') doneMap.set(key, (doneMap.get(key) || 0) + r.count);
+  }
+
+  const enriched = mentors.map((m) => {
+    const key = String(m._id || m.id);
+    return {
+      ...m,
+      slot_count: slotMap.get(key) || 0,
+      upcoming: upcomingMap.get(key) || 0,
+      done: doneMap.get(key) || 0,
+    };
+  });
+
+  res.render('admin/mentors', { title: 'Mentors', mentors: enriched, error: null });
 });
 
 router.post('/mentors', actionLimiter, async (req, res) => {
@@ -242,6 +272,44 @@ router.post('/mentors/:id/update', validateId('id'), async (req, res) => {
   flash(req, 'ok', 'Evaluator updated successfully.');
   res.redirect('/admin/mentors');
 });
+
+/**
+ * Admin-initiated password reset for a mentor or student. The admin must
+ * confirm with their own password; the target's other sessions are dropped.
+ */
+async function adminResetUserPassword(req, res, role, redirectTo) {
+  const targetId = req.params.id;
+  const adminPassword = String(req.body.admin_password || '');
+  const newPassword = String(req.body.password || '');
+
+  const fail = (msg) => { flash(req, 'err', msg); res.redirect(redirectTo(targetId)); };
+
+  const admin = await User.findById(req.session.user.id).lean();
+  if (!admin || !bcrypt.compareSync(adminPassword, admin.password_hash || '')) {
+    logAudit(req, 'ADMIN_PASSWORD_RESET_DENIED', { target_id: targetId, role });
+    return fail('Your admin password is incorrect. Password was not reset.');
+  }
+
+  const pwError = h.validatePassword(newPassword);
+  if (pwError) return fail(pwError);
+
+  const target = await User.findOne({ _id: targetId, role });
+  if (!target) return fail(`${role === 'student' ? 'Candidate' : 'Evaluator'} account not found.`);
+
+  target.password_hash = bcrypt.hashSync(newPassword, 10);
+  target.sessions_invalid_before = Date.now();
+  await target.save();
+
+  logAudit(req, 'ADMIN_RESET_USER_PASSWORD', { target_id: targetId, role }, req.session.user.id);
+  flash(req, 'ok', `Password reset for ${target.name}. They must sign in again with the new password.`);
+  res.redirect(redirectTo(targetId));
+}
+
+router.post('/mentors/:id/reset-password', validateId('id'), (req, res) =>
+  adminResetUserPassword(req, res, 'mentor', () => '/admin/mentors'));
+
+router.post('/students/:id/reset-password', validateId('id'), (req, res) =>
+  adminResetUserPassword(req, res, 'student', (id) => '/admin/students/' + id));
 
 /* -------------------------------- slots -------------------------------- */
 router.get('/slots', async (req, res) => {
@@ -629,6 +697,48 @@ router.get('/interviews', async (req, res) => {
     mentors,
     filters: req.query,
   });
+});
+
+/**
+ * Cancel a single booked interview from the admin side and reopen its slot so
+ * another candidate can take it.
+ */
+router.post('/interviews/:id/cancel', validateId('id'), async (req, res) => {
+  const ivId = req.params.id;
+  try {
+    const iv = await Interview.findById(ivId).populate('slot_id').populate('student_id').populate('mentor_id');
+    if (!iv) throw new Error('Interview not found.');
+    if (iv.status !== 'booked') throw new Error('Only an upcoming (booked) interview can be cancelled here.');
+
+    const slot = iv.slot_id;
+    iv.status = 'cancelled';
+    await iv.save();
+    if (slot && slot.status === 'booked') {
+      slot.status = 'open';
+      await slot.save();
+    }
+
+    if (iv.google_event_id) {
+      google.removeCalendarEvent({
+        eventId: iv.google_event_id,
+        student: iv.student_id,
+        mentor: iv.mentor_id,
+      }).catch(() => {});
+    }
+    emailService.sendCancellationNotice({
+      student: iv.student_id,
+      mentor: iv.mentor_id,
+      slot,
+      interview: iv,
+      cancelledBy: 'administrator',
+    }).catch(() => {});
+
+    logAudit(req, 'ADMIN_CANCEL_INTERVIEW', { interview_id: ivId, slot_id: slot ? slot._id : null });
+    flash(req, 'ok', 'Booking cancelled. The slot has been reopened for booking.');
+  } catch (e) {
+    flash(req, 'err', e.message);
+  }
+  res.redirect(h.safeRedirectTarget(req, '/admin/interviews'));
 });
 
 /* -------------------------------- audit -------------------------------- */

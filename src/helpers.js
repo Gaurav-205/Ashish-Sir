@@ -61,9 +61,17 @@ function normalizeTime(hm) {
   if (h < 0 || h > 23 || m < 0 || m > 59) return '';
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
-/** Renders a stored 'YYYY-MM-DD HH:MM:SS' timestamp for humans. */
+/** Renders a stored timestamp for humans. Accepts a Date, an ISO string, or a
+ *  plain 'YYYY-MM-DD HH:MM:SS' string, and always displays it in IST. */
 function fmtStamp(stamp) {
   if (!stamp) return '—';
+  // Date instances and ISO strings: shift into IST, then format.
+  if (stamp instanceof Date || (typeof stamp === 'string' && /T\d{2}:\d{2}/.test(stamp))) {
+    const d = new Date(stamp);
+    if (isNaN(d.getTime())) return '—';
+    const ist = new Date(d.getTime() + TZ_OFFSET_MS).toISOString();
+    return `${fmtDate(ist.slice(0, 10))} · ${fmtTime(ist.slice(11, 16))}`;
+  }
   const str = String(stamp).replace('T', ' ');
   const date = str.slice(0, 10);
   const time = str.slice(11, 16);

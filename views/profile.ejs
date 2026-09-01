@@ -62,6 +62,31 @@
   </div>
 </div>
 
+<div class="card" style="margin-top:24px" id="password">
+  <div class="card-head"><h2>Change password</h2></div>
+  <div class="card-body">
+    <p class="muted">Choose a strong password of at least <%= h.MIN_PASSWORD_LENGTH %> characters. Changing it signs you out of every other device.</p>
+    <form method="post" action="/profile/password" autocomplete="off">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="row">
+        <div class="field">
+          <label for="current_password">Current password</label>
+          <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+          <label for="new_password">New password</label>
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="<%= h.MIN_PASSWORD_LENGTH %>" required>
+        </div>
+        <div class="field">
+          <label for="confirm_password">Confirm new password</label>
+          <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="<%= h.MIN_PASSWORD_LENGTH %>" required>
+        </div>
+      </div>
+      <button class="btn primary sm">Update password</button>
+    </form>
+  </div>
+</div>
+
 <div class="card" style="margin-top:24px">
   <div class="card-head">
     <h2>Google Account &amp; Calendar Integration</h2>

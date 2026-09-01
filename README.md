@@ -2,15 +2,18 @@
 
 A complete, high-concurrency interview management platform: students browse mentors and book calendar slots with real-time auto-fetch, mentors conduct interviews, track attendance (`Attended` vs `Absent`), and submit evaluations, and administrators oversee the entire lifecycle with live telemetry, rescheduling tools, and CSV exports.
 
-Built with **Node.js 22+ (Native SQLite engine), Express 5, EJS, and the Cohere Enterprise Design System**.
+Built with **Node.js 22+, Express 5, EJS, MongoDB (Mongoose), and the Cohere Enterprise Design System**.
 
 ---
 
 ## 🚀 Setup & Installation Guide
 
 ### 1. Prerequisites
-- **Node.js 22.5.0 or newer** (Uses Node.js's built-in `node:sqlite` engine — **zero native database installation or C++ build tools required**).
+- **Node.js 22.5.0 or newer**.
 - **npm** (comes bundled with Node.js).
+- **MongoDB** — a local `mongod` (`mongodb://127.0.0.1:27017`) or a MongoDB Atlas
+  cluster. Set the connection string in `MONGODB_URI` (see below). The app data
+  and the session store both live in this database.
 
 ---
 
@@ -44,7 +47,7 @@ Open **`http://localhost:3000`** in your browser.
 - If you leave it blank, a strong password is **generated and printed once** by
   `npm run init`. Copy it before clearing your terminal — it is not recoverable.
 
-Change it at `/profile#password` after your first sign-in.
+Change it under **My profile → Change password** after your first sign-in.
 
 ### 2b. Demo / Development Dataset
 
@@ -66,10 +69,8 @@ a production database.**
 | `PORT` | HTTP port (default `3000`). |
 | `NODE_ENV` | `development`, `production` or `test`. |
 | `SESSION_SECRET` | **Required in production** — the process exits without it. Generate with `openssl rand -base64 48`. |
-| `DB_DRIVER` | `sqlite` or `postgres`. Unset means: Postgres if `DATABASE_URL` is set and `DB_PATH` is not, otherwise SQLite. The chosen driver is printed at startup. |
-| `DB_PATH` | Override the SQLite file location (default `./data/konfident.db`). |
-| `DATABASE_URL` | Neon/Postgres connection string. Required when `DB_DRIVER=postgres`. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | Root administrator created by `npm run init`. |
+| `MONGODB_URI` | MongoDB connection string for both app data and sessions. Defaults to `mongodb://127.0.0.1:27017/konfident`. Use the `mongodb+srv://…` string for Atlas. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | Root administrator created by `npm run init` / `npm run seed`. |
 | `RESET_LINK_VISIBLE` | `true`/`false`. Controls whether password-reset links are shown in the browser (see below). |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Enable Google sign-in and Calendar sync. Leave blank to disable the integration cleanly. |
 | `GOOGLE_REDIRECT_URI` | Optional. When unset the callback URL is derived from the request, which is what you want behind Vercel or a custom domain. |
@@ -140,14 +141,19 @@ can also reset any password directly from `/admin/students/:id` and `/admin/ment
 npm test
 ```
 
-The suite boots the real server against a throwaway SQLite database and drives
-it over HTTP exactly as a browser would — cookies, form posts, redirects — then
-asserts against the database. It covers security headers and CSRF, all three
-role guards, booking concurrency, the evaluation rubric boundaries, password
-change and password recovery, the audit log, and every page render.
+Requires a reachable `MONGODB_URI` (local `mongod` or Atlas). The mongo-backed
+suites upsert their own fixtures (non-destructive) so they run safely against an
+existing database.
+
+The suite boots the real server in-process and drives it over HTTP exactly as a
+browser would — cookies, form posts, redirects — then asserts against the
+database. It covers helper units, every page render, the Mongoose models and
+aggregation queries, security headers and CSRF, all three role guards, booking
+concurrency, the evaluation rubric, and the full auth lifecycle (password login,
+admin/self password reset, forgot/reset-password, logout guards).
 
 ```text
-Total: 148 assertions, 0 failed
+helpers  11 · views 19 · models 5 · queries 4 · e2e 35 · auth 33  —  107 assertions, 0 failed
 ```
 
 ---
@@ -167,22 +173,20 @@ Total: 148 assertions, 0 failed
 
 ## 🗄️ Data Layer Notes
 
-- **SQLite (default)** uses Node's built-in `node:sqlite` — no native build step.
-- **Postgres/Neon** is supported for serverless deployment. The application layer
-  is synchronous, so Postgres access goes through a blocking shim
-  (`src/db.js`) that uses Neon's HTTP SQL endpoint, falling back to `pg`.
-  Query failures throw rather than returning empty result sets, so the UI can
-  never silently disagree with the database.
-
-  Postgres does **not** self-migrate. Apply `sql/schema.postgres.sql` before the
-  first deploy and after pulling schema changes — every statement is
-  `IF NOT EXISTS` and safe to re-run:
-
-  ```bash
-  psql "$DATABASE_URL_UNPOOLED" -f sql/schema.postgres.sql
-  ```
-- **All interview times are stored as wall-clock IST** (`YYYY-MM-DD` +
-  `HH:MM`). Every "is this slot in the past" comparison — in SQL and in
-  JavaScript — goes through `src/helpers.js` (`nowMinute()`, `today()`,
+- **MongoDB via Mongoose.** Models live in `src/models/`, the connection in
+  `src/db.js`. Indexes are declared on the schemas and built on connect
+  (`autoIndex: true`). No migration step — collections and indexes are created
+  on first use.
+- **Sessions are stored in the same MongoDB** (`connect-mongo`), so they survive
+  restarts and are shared across cluster workers / serverless instances. A
+  signed `konfident_auth` cookie is the stateless backstop and is re-validated
+  against the users collection on every request.
+- **All interview times are stored as wall-clock IST** (slot dates as
+  `YYYY-MM-DD` strings, times as `HH:MM`). Every "is this slot in the past"
+  comparison goes through `src/helpers.js` (`nowMinute()`, `today()`,
   `isPast()`), so the application behaves identically on a UTC server and an
   IST one.
+- **Seeders** (`src/seed.js`): `--clean` (root admin only), `--dev` (demo
+  cohort + a week of slots), `--test` (deterministic cohort for `npm test`),
+  `--empty` (drop everything). The seeder refuses to run against a non-local
+  `MONGODB_URI` unless `SEED_ALLOW_REMOTE=1` is set.

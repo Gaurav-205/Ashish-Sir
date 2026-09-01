@@ -1,0 +1,55 @@
+<%- include('../partials/head') %><%- include('../partials/nav') %>
+<div class="page-head">
+  <div>
+    <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--slate);text-transform:uppercase;margin-bottom:4px">
+      Security &amp; Compliance · Immutable Event Log
+    </div>
+    <h1>Audit log</h1>
+    <p class="sub"><%= totalCount %> recorded event(s) — authentication, slot lifecycle, evaluations and administrative actions.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Recent activity</h2>
+    <span class="faint">Page <%= page %> of <%= totalPages %></span>
+  </div>
+  <div class="card-body tight">
+    <% if (!logs.length) { %>
+      <div class="empty" style="padding:40px 20px;text-align:center">No audit events recorded yet.</div>
+    <% } else { %>
+    <div class="table-scroll"><table>
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+      <tbody>
+      <% logs.forEach(function(l){ %>
+        <tr>
+          <td class="faint" style="white-space:nowrap"><%= h.fmtStamp(l.created_at) %></td>
+          <td>
+            <% if (l.user_name) { %>
+              <strong><%= l.user_name %></strong><br><span class="faint"><%= l.user_email %></span>
+            <% } else { %>
+              <span class="faint">— (anonymous / system)</span>
+            <% } %>
+          </td>
+          <td><span class="pill p-muted" style="font-family:var(--font-mono, monospace);font-size:11px"><%= l.action %></span></td>
+          <td style="max-width:420px;word-break:break-word">
+            <% if (l.details) { %><span class="faint" style="font-size:12px"><%= l.details %></span><% } else { %><span class="faint">—</span><% } %>
+          </td>
+          <td class="faint mono" style="font-size:12px"><%= l.ip || '—' %></td>
+        </tr>
+      <% }); %>
+      </tbody>
+    </table></div>
+    <% } %>
+    <% if (totalPages > 1) { %>
+      <nav class="pager" aria-label="Audit log pages">
+        <a class="btn sm <%= page <= 1 ? 'is-disabled' : '' %>" href="?page=<%= page - 1 %>"
+           <%= page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' %>>← Previous</a>
+        <span class="faint">Page <%= page %> of <%= totalPages %></span>
+        <a class="btn sm <%= page >= totalPages ? 'is-disabled' : '' %>" href="?page=<%= page + 1 %>"
+           <%= page >= totalPages ? 'aria-disabled="true" tabindex="-1"' : '' %>>Next →</a>
+      </nav>
+    <% } %>
+  </div>
+</div>
+<%- include('../partials/foot') %>

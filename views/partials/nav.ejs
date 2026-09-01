@@ -5,7 +5,8 @@ const isDev = Boolean(typeof isDeveloper !== 'undefined' && isDeveloper);
 
 const roleLinks = {
   admin: [['/admin','Dashboard'],['/admin/students','Students'],['/admin/mentors','Mentors'],
-          ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports']],
+          ['/admin/slots','Slots'],['/admin/interviews','Interviews'],['/admin/reports','Reports'],
+          ['/admin/audit','Audit']],
   mentor: [['/mentor','My interviews']],
   student: [['/student','Dashboard'],['/student/mentors','Mentors'],['/student/slots?type=technical','Book slots'],['/student/results','My results']],
   developer: [

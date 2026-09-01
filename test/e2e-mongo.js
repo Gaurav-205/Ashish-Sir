@@ -1,5 +1,9 @@
 'use strict';
 require('dotenv').config();
+// The suite drives the real app in-process; run it in test mode so the
+// SESSION_SECRET guard and CSRF middleware behave deterministically.
+process.env.NODE_ENV = process.env.NODE_ENV || 'test';
+process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 const assert = require('assert');
 const bcrypt = require('bcryptjs');
 const { connectDb, mongoose, User, Slot, Interview, Evaluation, StudentFeedback, AuditLog } = require('../src/db');
@@ -67,27 +71,10 @@ const login = async (who, email, password = 'pass123', uId = null) => {
 (async () => {
   await connectDb();
 
-  const pwHash = bcrypt.hashSync('pass123', 10);
-  await User.updateMany(
-    { role: { $in: ['admin', 'mentor', 'student'] } },
-    { $set: { password_hash: pwHash } }
-  );
-  await User.updateMany(
-    { role: 'mentor' },
-    { $set: { can_technical: 1, can_hr: 1 } }
-  );
-
-  const studentDoc = await User.findOne({ role: 'student' });
-  if (studentDoc) {
-    await User.findByIdAndUpdate(studentDoc._id, {
-      $set: {
-        phone: '+919876543210',
-        squad: '116',
-        branch: 'CSE',
-        resume_url: 'https://drive.google.com/resume.pdf',
-      },
-    });
-  }
+  // Provision a self-contained cohort (non-destructive upserts) so the suite
+  // runs against an empty database and never rewrites unrelated accounts.
+  const { ensureFixtures } = require('./fixtures');
+  const fx = await ensureFixtures();
 
   const mentorDoc = await User.findOne({ role: 'mentor' });
   if (mentorDoc) {
@@ -115,9 +102,9 @@ const login = async (who, email, password = 'pass123', uId = null) => {
   const unauthAdmin = await get('anon', '/admin');
   ok(unauthAdmin.location === '/login', 'Anonymous request to /admin redirects to login');
 
-  const adminUser = await User.findOne({ role: 'admin' });
-  const mentorUser = await User.findOne({ role: 'mentor' });
-  const studentUser = await User.findOne({ role: 'student' });
+  const adminUser = fx.admin;
+  const mentorUser = fx.techMentor;
+  const studentUser = fx.students[0];
 
   ok(!!adminUser, `Admin account exists (${adminUser.email})`);
   ok(!!mentorUser, `Mentor account exists (${mentorUser.email})`);
@@ -244,5 +231,6 @@ const login = async (who, email, password = 'pass123', uId = null) => {
 
   server.close();
   await mongoose.disconnect();
-  if (fail > 0) process.exit(1);
-})();
+  // The connect-mongo session store keeps its own MongoClient open; exit explicitly.
+  process.exit(fail > 0 ? 1 : 0);
+})().catch((err) => { console.error(err); process.exit(1); });

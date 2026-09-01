@@ -1,5 +1,6 @@
 'use strict';
 require('dotenv').config();
+process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 const assert = require('assert');
 const { connectDb, mongoose, User, Slot, Interview, Evaluation } = require('../src/db');
 const q = require('../src/queries');
@@ -20,6 +21,7 @@ async function test(name, fn) {
 
 (async () => {
   await connectDb();
+  await require('./fixtures').ensureFixtures();
 
   await test('mentorsList() retrieves active mentors', async () => {
     const mentors = await q.mentorsList();

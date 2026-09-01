@@ -273,6 +273,8 @@ router.get('/forgot-password', (req, res) => {
     title: 'Reset password',
     sent: false,
     error: null,
+    email: '',
+    resetUrl: null,
   });
 });
 
@@ -283,9 +285,15 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
       title: 'Reset password',
       sent: false,
       error: 'Please enter a valid email address.',
+      email: req.body.email || '',
+      resetUrl: null,
     });
   }
 
+  // Never reveal whether an account exists. The reset link is only surfaced in
+  // the browser outside production (there is no mail provider wired up); in
+  // production it is written to the server log only.
+  let resetUrl = null;
   const user = await User.findOne({ email }).lean();
   if (user && user.active) {
     const rawToken = crypto.randomBytes(32).toString('base64url');
@@ -302,12 +310,19 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${rawToken}`;
     console.log(`[password-reset] link for ${email}: ${resetLink}`);
     logAudit(req, 'AUTH_PASSWORD_RESET_REQUESTED', { email }, user._id);
+
+    const visible = process.env.RESET_LINK_VISIBLE
+      ? process.env.RESET_LINK_VISIBLE !== 'false'
+      : process.env.NODE_ENV !== 'production';
+    if (visible) resetUrl = resetLink;
   }
 
   res.render('forgot-password', {
     title: 'Reset password',
     sent: true,
     error: null,
+    email,
+    resetUrl,
   });
 });
 
@@ -330,18 +345,21 @@ router.get('/reset-password/:token', async (req, res) => {
     });
   }
 
+  const target = await User.findById(record.user_id).lean();
   res.render('reset-password', {
     title: 'Choose a new password',
     token: rawToken,
     error: null,
+    email: target ? target.email : '',
   });
 });
 
 router.post('/reset-password/:token', authLimiter, async (req, res) => {
   const rawToken = String(req.params.token || '');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const password = String(req.body.password || '');
-  const confirm = String(req.body.confirm || '');
+  // The template posts `next1`/`next2`; accept `password`/`confirm` too.
+  const password = String(req.body.next1 || req.body.password || '');
+  const confirm = String(req.body.next2 || req.body.confirm || '');
 
   const record = await PasswordReset.findOne({
     token_hash: tokenHash,
@@ -358,21 +376,17 @@ router.post('/reset-password/:token', authLimiter, async (req, res) => {
     });
   }
 
-  if (password.length < 6) {
-    return res.status(400).render('reset-password', {
-      title: 'Choose a new password',
-      token: rawToken,
-      error: 'Password must be at least 6 characters.',
-    });
-  }
+  const target = await User.findById(record.user_id).lean();
+  const rerender = (error) => res.status(400).render('reset-password', {
+    title: 'Choose a new password',
+    token: rawToken,
+    error,
+    email: target ? target.email : '',
+  });
 
-  if (password !== confirm) {
-    return res.status(400).render('reset-password', {
-      title: 'Choose a new password',
-      token: rawToken,
-      error: 'Passwords do not match.',
-    });
-  }
+  const pwError = h.validatePassword(password);
+  if (pwError) return rerender(pwError);
+  if (password !== confirm) return rerender('Passwords do not match.');
 
   const pwHash = bcrypt.hashSync(password, 10);
   const nowMs = Date.now();
@@ -474,9 +488,47 @@ router.post('/profile/google/toggle-calendar', requireLogin, async (req, res) =>
   res.redirect('/profile');
 });
 
-router.post('/profile/password', requireLogin, (req, res) => {
-  req.session.flash = { type: 'err', msg: 'Password updates are disabled. Authentication is managed via Google Sign-In.' };
-  res.redirect('/profile');
+router.post('/profile/password', requireLogin, authLimiter, async (req, res) => {
+  const me = await User.findById(req.session.user.id);
+  if (!me) return res.redirect('/login');
+
+  const current = String(req.body.current_password || req.body.current || '');
+  const next1 = String(req.body.new_password || req.body.next1 || '');
+  const next2 = String(req.body.confirm_password || req.body.next2 || '');
+
+  const fail = (msg) => {
+    req.session.flash = { type: 'err', msg };
+    res.redirect('/profile#password');
+  };
+
+  if (!bcrypt.compareSync(current, me.password_hash || '')) {
+    logAudit(req, 'AUTH_PASSWORD_CHANGE_FAILED', { reason: 'wrong current password' }, me._id);
+    return fail('Your current password is incorrect.');
+  }
+  const pwError = h.validatePassword(next1);
+  if (pwError) return fail(pwError);
+  if (next1 !== next2) return fail('New passwords do not match.');
+  if (bcrypt.compareSync(next1, me.password_hash || '')) {
+    return fail('Your new password must be different from your current one.');
+  }
+
+  const nowMs = Date.now();
+  me.password_hash = bcrypt.hashSync(next1, 10);
+  me.sessions_invalid_before = nowMs;
+  await me.save();
+
+  // Keep this device signed in: refresh the session watermark and re-issue the
+  // stateless cookie so this request's own session survives the invalidation.
+  logAudit(req, 'AUTH_PASSWORD_CHANGED', {}, me._id);
+  req.session.regenerate((err) => {
+    if (err) {
+      return res.status(500).render('error', { title: 'Error', message: 'Password changed, but the session could not be refreshed. Please sign in again.' });
+    }
+    setAuthSession(req, res, { id: me._id, name: me.name, email: me.email, role: me.role });
+    req.session.user.iat = nowMs;
+    req.session.flash = { type: 'ok', msg: 'Your password has been updated.' };
+    req.session.save(() => res.redirect('/profile'));
+  });
 });
 
 router.post('/switch-role', async (req, res) => {

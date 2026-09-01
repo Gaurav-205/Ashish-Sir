@@ -42,7 +42,8 @@
   </div>
 <% } %>
 
-<% if (typeof limitReached !== 'undefined' && limitReached) { %>
+<% const limitReached = !!(limitCheck && limitCheck.reached); %>
+<% if (limitReached) { %>
   <div class="note" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;background:#eff6ff;border-color:#bfdbfe">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
       <circle cx="12" cy="12" r="10"></circle>
@@ -50,7 +51,7 @@
       <line x1="12" y1="8" x2="12.01" y2="8"></line>
     </svg>
     <div>
-      <strong>Weekly Limit Reached:</strong> You have booked/conducted <%= weeklyCount %> of <%= maxAllowed %> allowed <%= h.titleCase(type) %> interview<%= maxAllowed > 1 ? 's' : '' %> for this weekly cycle (<%= slotWeek ? slotWeek.label : '' %>).
+      <strong>Weekly Limit Reached:</strong> You have booked <%= limitCheck.count %> of <%= limitCheck.maxAllowed %> allowed <%= h.titleCase(type) %> interview<%= limitCheck.maxAllowed > 1 ? 's' : '' %> for this weekly cycle<%= (limitCheck.week && limitCheck.week.label) ? ' (' + limitCheck.week.label + ')' : '' %>.
     </div>
   </div>
 <% } %>
@@ -96,7 +97,7 @@
       <select name="mentor" id="mentor-select" onchange="fetchLatestSlots()" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-pill);max-width:200px">
         <option value="">All mentors</option>
         <% (typeof mentors !== 'undefined' ? mentors : []).forEach(function(m){ %>
-          <option value="<%= m.id %>" <%= ((typeof selectedMentor !== 'undefined' && selectedMentor === m.id) || (typeof mentorFilter !== 'undefined' && mentorFilter === m.id)) ? 'selected' : '' %>><%= m.name %></option>
+          <option value="<%= m.id %>" <%= (String(typeof selectedMentor !== 'undefined' && selectedMentor || (typeof mentorFilter !== 'undefined' && mentorFilter) || '') === String(m.id)) ? 'selected' : '' %>><%= m.name %></option>
         <% }); %>
       </select>
       <button type="button" class="btn sm" onclick="fetchLatestSlots()" title="Refresh available slots" style="display:inline-flex;align-items:center;gap:6px">

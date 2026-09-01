@@ -1,5 +1,5 @@
 'use strict';
-const db = require('../db');
+const { AuditLog } = require('../models');
 const h = require('../helpers');
 
 let nodemailer = null;
@@ -25,12 +25,11 @@ function getTransporter() {
 }
 
 function logEmailAudit(toEmail, subject, details = {}) {
-  try {
-    db.prepare(`
-      INSERT INTO audit_logs (action, details, created_at)
-      VALUES (?, ?, ?)
-    `).run('EMAIL_NOTIFICATION_SENT', JSON.stringify({ to: toEmail, subject, ...details }), h.nowStamp());
-  } catch (_) {}
+  // Fire-and-forget: a notification-log failure must never break a booking flow.
+  AuditLog.create({
+    action: 'EMAIL_NOTIFICATION_SENT',
+    details: JSON.stringify({ to: toEmail, subject, ...details }),
+  }).catch(() => {});
 }
 
 /**
@@ -110,9 +109,10 @@ async function sendBookingConfirmation({ student, mentor, slot, meetingLink }) {
 }
 
 /**
- * Sends cancellation notification email.
+ * Sends a cancellation notification email to the student and mentor.
+ * Accepts an optional `interview` / `cancelledBy` for context; both are logged.
  */
-async function sendBookingCancellation({ student, mentor, slot }) {
+async function sendCancellationNotice({ student, mentor, slot, cancelledBy }) {
   if (!student || !mentor || !slot) return { ok: false };
 
   const domain = h.titleCase(slot.type);
@@ -121,7 +121,7 @@ async function sendBookingCancellation({ student, mentor, slot }) {
 
   const subject = `Cancelled: ${domain} Mock Interview (${formattedDate})`;
   const body = [
-    `This is a notification that the ${domain} mock interview scheduled for ${formattedDate} at ${formattedTime} has been cancelled.`,
+    `This is a notification that the ${domain} mock interview scheduled for ${formattedDate} at ${formattedTime} has been cancelled${cancelledBy ? ` by the ${cancelledBy}` : ''}.`,
     '',
     `Student: ${student.name} (${student.email})`,
     `Mentor: ${mentor.name} (${mentor.email})`,
@@ -151,5 +151,7 @@ async function sendBookingCancellation({ student, mentor, slot }) {
 module.exports = {
   isSmtpConfigured,
   sendBookingConfirmation,
-  sendBookingCancellation,
+  sendCancellationNotice,
+  // Backwards-compatible alias.
+  sendBookingCancellation: sendCancellationNotice,
 };
