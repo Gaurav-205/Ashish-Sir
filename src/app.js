@@ -1,4 +1,5 @@
 'use strict';
+require('dotenv').config();
 if (typeof process.loadEnvFile === 'function') {
   try { process.loadEnvFile(); } catch (_) {}
 }
@@ -135,7 +136,7 @@ app.use('/student', require('./routes/studentRoutes'));
 app.use('/mentor', require('./routes/mentorRoutes'));
 
 app.use((req, res) => {
-  res.status(404).render('error', { title: 'Not found', message: 'That page does not exist.' });
+  res.status(404).render('error', { title: 'Not found', message: 'That page does not exist.', user: res.locals.user || null });
 });
 
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
@@ -143,7 +144,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   const message = process.env.NODE_ENV === 'production'
     ? 'An unexpected error occurred. Please contact the administrator.'
     : err.message;
-  res.status(500).render('error', { title: 'Something went wrong', message });
+  res.status(500).render('error', { title: 'Something went wrong', message, user: res.locals.user || null });
 });
 
 module.exports = app;

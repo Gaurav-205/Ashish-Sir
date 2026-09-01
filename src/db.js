@@ -2,8 +2,13 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const models = require('./models');
-
 const dns = require('dns');
+
+try {
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (_) {}
 
 function applyDnsFallback() {
   try {
@@ -11,33 +16,31 @@ function applyDnsFallback() {
   } catch (_) {}
 }
 
-if (!process.env.VERCEL) {
-  applyDnsFallback();
-}
-
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/konfident';
 
 let isConnected = false;
 
 async function connectDb() {
-  if (isConnected) return mongoose.connection;
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
   
   try {
     const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 10000,
       autoIndex: true,
     });
     isConnected = true;
     console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
     return conn.connection;
   } catch (err) {
-    const isDnsErr = err.code === 'ESERVFAIL' || err.code === 'EAI_AGAIN' ||
-                     (err.message && (err.message.includes('querySrv') || err.message.includes('getaddrinfo')));
+    const isDnsErr = err.code === 'ESERVFAIL' || err.code === 'EAI_AGAIN' || err.code === 'ETIMEOUT' || err.code === 'ENOTFOUND' ||
+                     err.syscall === 'querySrv' || (err.message && (err.message.includes('querySrv') || err.message.includes('getaddrinfo') || err.message.includes('Could not connect to any servers')));
     if (isDnsErr) {
       try {
         applyDnsFallback();
         const conn = await mongoose.connect(MONGODB_URI, {
-          serverSelectionTimeoutMS: 12000,
+          serverSelectionTimeoutMS: 15000,
           autoIndex: true,
         });
         isConnected = true;

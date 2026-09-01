@@ -107,7 +107,7 @@ function isPast(slot) {
  */
 function isUniqueViolation(err) {
   const msg = String((err && err.message) || err || '');
-  return /unique constraint|duplicate key|\b23505\b/i.test(msg);
+  return /unique constraint|duplicate key|\b23505\b|\b11000\b/i.test(msg) || (err && err.code === 11000);
 }
 
 function generateMeetingLink(type = 'interview') {

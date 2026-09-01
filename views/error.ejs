@@ -1,11 +1,12 @@
 <%- include('partials/head') %>
-<% if (user) { %><%- include('partials/nav') %><% } else { %><main class="wrap"><% } %>
+<% const currentUser = (typeof user !== 'undefined' && user) ? user : null; %>
+<% if (currentUser) { %><%- include('partials/nav') %><% } else { %><main class="wrap"><% } %>
 <div class="card" style="max-width:640px;margin:48px auto"><div class="card-body">
   <h1><%= title %></h1>
   <p class="muted"><%= message %></p>
   <div class="btn-row" style="margin-top:18px">
     <a class="btn primary" href="<%= typeof backHref !== 'undefined' && backHref ? backHref : '/' %>"><%= typeof backLabel !== 'undefined' && backLabel ? backLabel : 'Back to home' %></a>
-    <% if (!user) { %><a class="btn" href="/login">Sign in</a><% } %>
+    <% if (!currentUser) { %><a class="btn" href="/login">Sign in</a><% } %>
   </div>
 </div></div>
 <%- include('partials/foot') %>
