@@ -29,10 +29,10 @@ async function connectDb() {
         serverSelectionTimeoutMS: 5000,
         connectTimeoutMS: 5000,
         socketTimeoutMS: 30000,
-        maxPoolSize: 20,
-        minPoolSize: 2,
-        maxIdleTimeMS: 30000,
-        autoIndex: true,
+        maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE || '50', 10),
+        minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE || '5', 10),
+        maxIdleTimeMS: 60000,
+        autoIndex: process.env.NODE_ENV !== 'production',
       });
       console.log(`[db] MongoDB connected successfully to ${conn.connection.host || 'cluster'}`);
       return conn.connection;

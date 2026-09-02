@@ -10,6 +10,7 @@ const google = require('../services/googleService');
 const emailService = require('../services/emailService');
 const { validateId, createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
+const { purgeSlotCaches } = require('../middleware/loadBalancer');
 
 const router = express.Router();
 router.use(requireRole('admin'));
@@ -543,6 +544,7 @@ router.post('/slots', actionLimiter, async (req, res) => {
     }
 
     logAudit(req, 'ADMIN_CREATE_SLOTS', { mentor_id: mentor._id, type, created_slots: createdTotal });
+    purgeSlotCaches();
     flash(req, 'ok', `Published ${createdTotal} slot(s) for ${mentor.name}.`);
   } catch (e) {
     flash(req, 'err', e.message);
@@ -639,6 +641,7 @@ router.post('/slots/:id/cancel', validateId('id'), async (req, res) => {
     await Slot.findByIdAndUpdate(slotId, { $set: { status: 'cancelled' } });
     await Interview.updateMany({ slot_id: slotId, status: 'booked' }, { $set: { status: 'cancelled' } });
     logAudit(req, 'ADMIN_CANCEL_SLOT', { slot_id: slotId });
+    purgeSlotCaches();
     flash(req, 'ok', 'Slot cancelled.');
   } catch (e) {
     flash(req, 'err', e.message);

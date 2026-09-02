@@ -9,6 +9,7 @@ const google = require('../services/googleService');
 const emailService = require('../services/emailService');
 const { validateId, createRateLimiter } = require('../middleware/security');
 const { logAudit } = require('../middleware/auditLog');
+const { microCacheMiddleware, purgeSlotCaches } = require('../middleware/loadBalancer');
 
 const router = express.Router();
 router.use(requireRole('student'));
@@ -71,7 +72,7 @@ router.get('/mentors', async (req, res) => {
   res.render('student/mentors', { title: 'Mentors directory', mentors, s });
 });
 
-router.get('/slots', async (req, res) => {
+router.get('/slots', microCacheMiddleware(3000), async (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
   const mentorId = req.query.mentor && mongoose.Types.ObjectId.isValid(req.query.mentor) ? req.query.mentor : null;
   const now = h.nowMinute();
@@ -206,6 +207,7 @@ router.post('/book', actionLimiter, async (req, res) => {
   }).catch((err) => console.error('Booking notification email failed:', err));
 
   logAudit(req, 'STUDENT_BOOK_SLOT', { slot_id: slot._id, interview_id: newIv._id, type: slot.type }, student._id);
+  purgeSlotCaches();
   flash(req, 'ok', `Booked ${h.titleCase(slot.type)} interview with ${mentor ? mentor.name : 'Mentor'} on ${h.fmtDate(slot.slot_date)} at ${h.fmtTime(slot.start_time)}.`);
   res.redirect('/student');
 });
@@ -238,6 +240,7 @@ async function cancelBooking(req, res) {
 
   await Interview.findByIdAndUpdate(iv._id, { $set: { status: 'cancelled' } });
   await Slot.findByIdAndUpdate(slot._id, { $set: { status: 'open' } });
+  purgeSlotCaches();
 
   const student = await User.findById(studentId).lean();
   const mentor = iv.mentor_id;
