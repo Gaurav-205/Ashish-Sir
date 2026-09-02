@@ -150,7 +150,7 @@ router.post('/slots', async (req, res) => {
                           slotsToInsert.some(s => s.slot_date === d && curStart < s.end_time && curEnd > s.start_time);
 
         if (!isOverlap) {
-          const slotLoc = customLoc || (cleanMode === 'Online' ? h.generateMeetingLink(curStart) : 'Room 101');
+          const slotLoc = customLoc || (cleanMode === 'Online' ? h.generateMeetingLink(type) : 'Room 101');
           slotsToInsert.push({
             mentor_id: mentorId,
             type,
@@ -261,8 +261,29 @@ router.post('/slots/:id/cancel', validateId('id'), async (req, res) => {
     const slot = await Slot.findOne({ _id: slotId, mentor_id: mentorId }).lean();
     if (!slot) throw new Error('Slot not found.');
 
+    const bookedIv = await Interview.findOne({ slot_id: slot._id, status: 'booked' })
+      .populate('student_id')
+      .populate('mentor_id');
+
     await Slot.findByIdAndUpdate(slot._id, { $set: { status: 'cancelled' } });
     await Interview.updateMany({ slot_id: slot._id, status: 'booked' }, { $set: { status: 'cancelled' } });
+
+    if (bookedIv) {
+      if (bookedIv.google_event_id) {
+        google.removeCalendarEvent({
+          eventId: bookedIv.google_event_id,
+          student: bookedIv.student_id,
+          mentor: bookedIv.mentor_id,
+        }).catch(() => {});
+      }
+      emailService.sendCancellationNotice({
+        student: bookedIv.student_id,
+        mentor: bookedIv.mentor_id,
+        slot,
+        interview: bookedIv,
+        cancelledBy: 'mentor',
+      }).catch(() => {});
+    }
 
     logAudit(req, 'MENTOR_CANCEL_SLOT', { slot_id: slot._id }, mentorId);
     flash(req, 'ok', 'Slot cancelled.');

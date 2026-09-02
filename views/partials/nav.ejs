@@ -70,4 +70,4 @@ const initials = userName ? userName.split(/\s+/).map(w => w[0] || '').slice(0, 
   </div>
 </header>
 <main class="wrap">
-<% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.msg %></div><% } %>
+<% if (flash) { %><div class="flash <%= flash.type %>"><span><%= flash.msg %></span><button type="button" class="flash-close-btn" onclick="this.parentElement.remove()" aria-label="Dismiss">&times;</button></div><% } %>

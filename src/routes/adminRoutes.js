@@ -355,8 +355,8 @@ router.get('/slots', async (req, res) => {
   ]);
 
   const bookedSlotIds = rawSlots.filter(s => s.status === 'booked').map(s => s._id);
-  const interviews = bookedSlotIds.length ? await Interview.find({ slot_id: { $in: bookedSlotIds }, status: 'booked' })
-    .populate('student_id', 'name email')
+  const interviews = bookedSlotIds.length ? await Interview.find({ slot_id: { $in: bookedSlotIds }, status: { $ne: 'cancelled' } })
+    .populate('student_id', 'name email roll_no')
     .lean() : [];
   const ivMap = new Map(interviews.map(i => [String(i.slot_id), i]));
 
@@ -370,7 +370,9 @@ router.get('/slots', async (req, res) => {
       student_name: iv && iv.student_id ? iv.student_id.name : '',
       student_email: iv && iv.student_id ? iv.student_id.email : '',
       student_id: iv && iv.student_id ? iv.student_id._id : null,
+      roll_no: iv && iv.student_id ? iv.student_id.roll_no : '',
       interview_id: iv ? iv._id : null,
+      interview_status: iv ? iv.status : null,
       attendance: iv ? iv.attendance : null,
     };
   });
@@ -500,7 +502,7 @@ router.post('/slots', actionLimiter, async (req, res) => {
                           slotsToInsert.some(s => s.slot_date === d && curStart < s.end_time && curEnd > s.start_time);
 
         if (!isOverlap) {
-          const slotLoc = customLoc || (cleanMode === 'Online' ? h.generateMeetingLink(curStart) : 'Room 101');
+          const slotLoc = customLoc || (cleanMode === 'Online' ? h.generateMeetingLink(type) : 'Room 101');
           slotsToInsert.push({
             mentor_id: mentor._id,
             type,

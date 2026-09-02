@@ -1,12 +1,29 @@
 <%- include('partials/head') %>
 <% const currentUser = (typeof user !== 'undefined' && user) ? user : null; %>
-<% if (currentUser) { %><%- include('partials/nav') %><% } else { %><main class="wrap"><% } %>
-<div class="card" style="max-width:640px;margin:48px auto"><div class="card-body">
-  <h1><%= title %></h1>
-  <p class="muted"><%= message %></p>
-  <div class="btn-row" style="margin-top:18px">
-    <a class="btn primary" href="<%= typeof backHref !== 'undefined' && backHref ? backHref : '/' %>"><%= typeof backLabel !== 'undefined' && backLabel ? backLabel : 'Back to home' %></a>
-    <% if (!currentUser) { %><a class="btn" href="/login">Sign in</a><% } %>
+<% if (currentUser) { %><%- include('partials/nav') %><% } else { %>
+  <header class="topbar">
+    <div class="topbar-in">
+      <a href="/" class="brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <rect width="24" height="24" rx="6" fill="#17171c"/>
+          <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Konfident</span>
+        <span class="brand-tag faint">SYSTEM</span>
+      </a>
+    </div>
+  </header>
+  <main class="wrap">
+<% } %>
+<div class="card" style="max-width:580px;margin:48px auto">
+  <div class="card-body">
+    <div class="mono-label" style="margin-bottom:8px;color:var(--error)">System Notification</div>
+    <h1 style="font-size:24px"><%= title %></h1>
+    <p class="muted" style="font-size:14px;line-height:1.6"><%= message %></p>
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn primary" href="<%= typeof backHref !== 'undefined' && backHref ? backHref : '/' %>"><%= typeof backLabel !== 'undefined' && backLabel ? backLabel : '← Back to dashboard' %></a>
+      <% if (!currentUser) { %><a class="btn" href="/login">Sign in →</a><% } %>
+    </div>
   </div>
-</div></div>
+</div>
 <%- include('partials/foot') %>

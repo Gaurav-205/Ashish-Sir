@@ -7,13 +7,57 @@
 (function () {
   'use strict';
 
-  // ---- 1. Form Submit Button Loading ----
+  // ---- 1. Form Validation & Submit Button Loading ----
   function attachButtonLoading(form) {
     if (!form || form.dataset.loadingAttached) return;
     form.dataset.loadingAttached = 'true';
 
+    // Real-time input error clearing
+    form.querySelectorAll('input, select, textarea').forEach(function (input) {
+      input.addEventListener('input', function () {
+        if (input.validity && input.validity.valid) {
+          input.classList.remove('is-invalid');
+          var field = input.closest('.field');
+          if (field) field.classList.remove('has-error');
+          var errMsg = field ? field.querySelector('.field-error-msg') : null;
+          if (errMsg) errMsg.remove();
+        }
+      });
+    });
+
     form.addEventListener('submit', function (e) {
-      if (form.checkValidity && !form.checkValidity()) return;
+      // Password confirmation matching check
+      var p1 = form.querySelector('input[name="next1"], input[name="newPassword"]');
+      var p2 = form.querySelector('input[name="next2"], input[name="confirmPassword"]');
+      if (p1 && p2 && p1.value && p2.value && p1.value !== p2.value) {
+        e.preventDefault();
+        p2.classList.add('is-invalid');
+        var field = p2.closest('.field');
+        if (field) {
+          field.classList.add('has-error');
+          var existing = field.querySelector('.field-error-msg');
+          if (!existing) {
+            var msg = document.createElement('div');
+            msg.className = 'field-error-msg';
+            msg.textContent = 'Passwords do not match.';
+            field.appendChild(msg);
+          }
+        }
+        p2.focus();
+        return;
+      }
+
+      if (form.checkValidity && !form.checkValidity()) {
+        e.preventDefault();
+        var firstInvalid = form.querySelector(':invalid');
+        if (firstInvalid) {
+          firstInvalid.classList.add('is-invalid');
+          var field = firstInvalid.closest('.field');
+          if (field) field.classList.add('has-error');
+          firstInvalid.focus();
+        }
+        return;
+      }
 
       var submitBtn = form.querySelector('button[type="submit"]:not([data-no-loading]), button:not([type="button"]):not([data-no-loading]), input[type="submit"]:not([data-no-loading])');
       if (!submitBtn) return;

@@ -88,6 +88,7 @@ function titleCase(s) {
   return s.toLowerCase() === 'hr' ? 'HR' : s.charAt(0).toUpperCase() + s.slice(1);
 }
 function escapeHtml(str) {
+  if (str == null) return '';
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

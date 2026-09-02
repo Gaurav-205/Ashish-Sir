@@ -134,6 +134,18 @@
       .then(function () { inFlight = false; });
   }
 
+  function showSkeletonLoading() {
+    if (!container) return;
+    var skeletonHtml = '<div class="slot-day" style="opacity:0.85">' +
+      '<div class="skeleton skeleton-title" style="width:140px;height:18px;margin-bottom:14px"></div>' +
+      '<div class="slot-list">' +
+      '<div class="slot skeleton-card" style="padding:16px"><div class="skeleton skeleton-text" style="width:70%;height:16px;margin-bottom:8px"></div><div class="skeleton skeleton-text sm" style="width:90%;margin-bottom:14px"></div><div class="skeleton skeleton-button" style="width:100%;height:32px"></div></div>' +
+      '<div class="slot skeleton-card" style="padding:16px"><div class="skeleton skeleton-text" style="width:70%;height:16px;margin-bottom:8px"></div><div class="skeleton skeleton-text sm" style="width:90%;margin-bottom:14px"></div><div class="skeleton skeleton-button" style="width:100%;height:32px"></div></div>' +
+      '<div class="slot skeleton-card" style="padding:16px"><div class="skeleton skeleton-text" style="width:70%;height:16px;margin-bottom:8px"></div><div class="skeleton skeleton-text sm" style="width:90%;margin-bottom:14px"></div><div class="skeleton skeleton-button" style="width:100%;height:32px"></div></div>' +
+      '</div></div>';
+    container.innerHTML = skeletonHtml;
+  }
+
   // Keep the chosen mentor in the URL so a refresh or a shared link keeps the filter.
   if (mentorSelect) {
     mentorSelect.addEventListener('change', function () {
@@ -142,6 +154,7 @@
       if (mentorSelect.value) url.searchParams.set('mentor', mentorSelect.value);
       else url.searchParams.delete('mentor');
       window.history.replaceState({}, '', url.toString());
+      showSkeletonLoading();
       fetchLatestSlots();
     });
   }

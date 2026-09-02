@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const evaluationSchema = new mongoose.Schema({
   interview_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Interview', required: true, unique: true, index: true },
   mentor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  type: { type: String, enum: ['technical', 'hr'], default: 'technical', index: true },
   resume_marks: { type: Number, default: 0 },
   project_marks: { type: Number, default: 0 },
   dsa_marks: { type: Number, default: 0 },
