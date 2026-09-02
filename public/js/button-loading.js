@@ -178,4 +178,28 @@
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
+
+  // ---- 4. Network Offline / Online Connectivity Indicator ----
+  window.addEventListener('offline', function () {
+    var existing = document.getElementById('offline-toast-indicator');
+    if (existing) return;
+    var toast = document.createElement('div');
+    toast.id = 'offline-toast-indicator';
+    toast.setAttribute('role', 'alert');
+    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:#991b1b;color:#ffffff;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,0.25);transition:opacity 0.3s ease';
+    toast.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#f87171;display:inline-block"></span> Connection lost · Offline mode';
+    document.body.appendChild(toast);
+  });
+
+  window.addEventListener('online', function () {
+    var toast = document.getElementById('offline-toast-indicator');
+    if (toast) {
+      toast.style.background = '#166534';
+      toast.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block"></span> Back online · Connection restored';
+      setTimeout(function () {
+        toast.style.opacity = '0';
+        setTimeout(function () { toast.remove(); }, 300);
+      }, 2500);
+    }
+  });
 })();
