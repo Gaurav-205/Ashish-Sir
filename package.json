@@ -27,6 +27,7 @@
   "license": "MIT",
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
+    "animejs": "^4.5.0",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "connect-mongo": "^6.0.0",

@@ -1,0 +1,524 @@
+<%- include('partials/head') %>
+
+<div class="landing-wrapper">
+  <!-- Top Left Brand Header -->
+  <header class="landing-header">
+    <div class="landing-container landing-header-inner">
+      <a href="/" class="landing-brand">
+        <div class="landing-logo-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="6" fill="#17171c"/>
+            <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="landing-brand-text">
+          <span class="landing-brand-title">Konfident Interview</span>
+        </div>
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="landing-hero" id="hero">
+    <!-- Ambient geometric floating particles animated via Anime.js -->
+    <div class="ambient-particle ambient-particle-1"></div>
+    <div class="ambient-particle ambient-particle-2"></div>
+    <div class="ambient-particle ambient-particle-3"></div>
+    <div class="ambient-particle ambient-particle-4"></div>
+
+    <div class="landing-container landing-hero-grid">
+      <!-- Left Column: Copy & Direct Sign In Button -->
+      <div class="landing-hero-content">
+        <div class="hero-badge hero-animate-in">
+          <span class="badge-dot-live"></span>
+          <span>Enterprise Mock Interview &amp; Evaluation Platform</span>
+        </div>
+
+        <h1 class="hero-headline hero-animate-in">
+          Ace Technical &amp; HR Interviews Before the Real Day
+        </h1>
+
+        <p class="hero-sub hero-animate-in">
+          The structured mock interview platform connecting students with industry mentors.
+          Real 20-minute live simulations, calibrated 30-point evaluation rubrics, and automated Google Calendar scheduling.
+        </p>
+
+        <div class="hero-cta-group hero-animate-in">
+          <a href="/login" class="btn primary btn-hero-signin">Sign in →</a>
+        </div>
+
+        <div class="hero-trust-strip hero-animate-in">
+          <div class="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>30-Point Calibrated Rubric</span>
+          </div>
+          <div class="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span>Google Calendar &amp; Meet Sync</span>
+          </div>
+          <div class="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span>Technical &amp; HR Dual Track</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Anime.js Animated Visual Showcase -->
+      <div class="landing-hero-visual">
+        <div class="hero-showcase-wrapper">
+          <!-- Floating Top Google Meet Badge -->
+          <div class="hero-card-float hero-card-badge-top">
+            <div class="meet-badge-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+            </div>
+            <div class="meet-badge-info">
+              <span class="meet-badge-title">Google Meet Generated</span>
+              <span class="meet-badge-sub">Auto-synced to Calendar · 20 mins</span>
+            </div>
+            <span class="pulse-dot"></span>
+          </div>
+
+          <!-- Main Interactive Scorecard Console -->
+          <div class="hero-card-float hero-card-primary">
+            <!-- Card Header -->
+            <div class="console-header">
+              <div class="console-live-pill">
+                <span class="badge-dot-live"></span>
+                <span>Live Technical Simulation</span>
+              </div>
+              <span class="console-duration-pill">20:00 Time Block</span>
+            </div>
+
+            <!-- Participant Strip -->
+            <div class="console-participants">
+              <div class="participant-box">
+                <div class="avatar-circle student-avatar">ST</div>
+                <div class="participant-meta">
+                  <span class="participant-role">Candidate</span>
+                  <strong class="participant-name">Aditya Sharma</strong>
+                </div>
+              </div>
+
+              <!-- Animated SVG Pipeline between Candidate & Mentor -->
+              <div class="pipeline-connector">
+                <svg width="64" height="24" viewBox="0 0 64 24" class="pipeline-svg">
+                  <path d="M 4 12 L 60 12" stroke="#d9d9dd" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+                  <path d="M 4 12 L 60 12" stroke="var(--action-blue)" stroke-width="2" stroke-dasharray="8 8" class="pipeline-pulse" fill="none"/>
+                </svg>
+              </div>
+
+              <div class="participant-box">
+                <div class="avatar-circle mentor-avatar">ME</div>
+                <div class="participant-meta">
+                  <span class="participant-role">Industry Evaluator</span>
+                  <strong class="participant-name">Senior SDE Lead</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Rubric Meters -->
+            <div class="console-rubric-section">
+              <div class="rubric-meter-item">
+                <div class="meter-labels">
+                  <span class="meter-name">Data Structures &amp; Algorithms</span>
+                  <span class="meter-score"><strong>10</strong> / 10</span>
+                </div>
+                <div class="rubric-progress-track">
+                  <div class="rubric-progress-fill tech-fill" data-width="100%"></div>
+                </div>
+              </div>
+
+              <div class="rubric-meter-item">
+                <div class="meter-labels">
+                  <span class="meter-name">System Architecture &amp; CS Core</span>
+                  <span class="meter-score"><strong>9</strong> / 10</span>
+                </div>
+                <div class="rubric-progress-track">
+                  <div class="rubric-progress-fill tech-fill" data-width="90%"></div>
+                </div>
+              </div>
+
+              <div class="rubric-meter-item">
+                <div class="meter-labels">
+                  <span class="meter-name">Problem Solving &amp; Optimization</span>
+                  <span class="meter-score"><strong>9</strong> / 10</span>
+                </div>
+                <div class="rubric-progress-track">
+                  <div class="rubric-progress-fill tech-fill" data-width="90%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scorecard Summary Footer -->
+            <div class="console-footer">
+              <div class="console-total-box">
+                <span class="total-caption">Total Evaluated Score</span>
+                <div class="total-value">
+                  <span id="heroLiveScore">28</span>
+                  <span class="total-denom">/ 30</span>
+                </div>
+              </div>
+              <div class="console-grade-pill">
+                <span class="grade-label">Grade A+</span>
+                <span class="grade-status">Placement Ready</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Floating Bottom Analytics Badge -->
+          <div class="hero-card-float hero-card-badge-bottom">
+            <div class="analytics-badge-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18 20V10"/>
+                <path d="M12 20V4"/>
+                <path d="M6 20v-6"/>
+              </svg>
+            </div>
+            <div class="analytics-badge-info">
+              <span class="analytics-badge-title">Zero-Bias Rubric Matrix</span>
+              <span class="analytics-badge-sub">Standardized across all cohorts</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why Section -->
+  <section class="landing-section landing-why-section" id="why">
+    <div class="landing-container">
+      <div class="section-header-center">
+        <span class="section-badge">Why Konfident</span>
+        <h2 class="section-title">Engineered to Eliminate Interview Uncertainty</h2>
+        <p class="section-subtitle">
+          Traditional mock interviews are ad-hoc, uncalibrated, and hard to schedule.
+          Konfident delivers a standardized, enterprise-grade simulation environment built for both students and mentors.
+        </p>
+      </div>
+
+      <div class="landing-why-grid">
+        <!-- For Students Card -->
+        <div class="landing-why-card student-why-card">
+          <div class="why-card-tag">For Candidates &amp; Students</div>
+          <h3 class="why-card-title">Transform Practice into Unshakable Confidence</h3>
+          <p class="why-card-desc">
+            Experience real hiring pressure in safe, calibrated conditions before facing top tech companies.
+          </p>
+
+          <ul class="why-benefits-list">
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Timed 20-Minute Live Simulations</strong>
+                <span>Experience authentic Google Meet interviews with rigorous pacing and real-time problem solving.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Transparent 30-Point Scoring Rubric</strong>
+                <span>Know exactly how your DSA syntax, system design depth, communication, and resume alignment are scored.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Actionable Feedback &amp; Gap Analysis</strong>
+                <span>Receive detailed mentor commentary immediately after the session to target your weak spots.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Dual-Track Preparedness</strong>
+                <span>Book dedicated rounds for Technical Coding (Algorithms &amp; Design) and HR Competency (Leadership &amp; Culture).</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- For Mentors Card -->
+        <div class="landing-why-card mentor-why-card">
+          <div class="why-card-tag">For Mentors &amp; Evaluators</div>
+          <h3 class="why-card-title">Zero Friction Scheduling &amp; Objective Evaluation</h3>
+          <p class="why-card-desc">
+            Focus entirely on evaluating talent without administrative friction, scheduling clashes, or subjective grading.
+          </p>
+
+          <ul class="why-benefits-list">
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>1-Click Multi-Slot Publishing</strong>
+                <span>Generate recurring or ad-hoc interview slots across morning and evening windows in seconds.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Native Google Calendar Sync</strong>
+                <span>Every booking automatically creates Google Calendar events with unique Google Meet links for both parties.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Standardized Rubric Desk</strong>
+                <span>Submit criterion scores on a structured 0-10 scale with auto-calculated aggregates, preventing scoring variance.</span>
+              </div>
+            </li>
+
+            <li class="benefit-item">
+              <div class="benefit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div class="benefit-text">
+                <strong>Automated Attendance &amp; Tracking</strong>
+                <span>Mark candidate presence with 1 click, track past evaluated batches, and seamlessly manage schedule changes.</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- KPI Strip -->
+      <div class="landing-kpi-strip" id="rubric">
+        <div class="kpi-item">
+          <span class="kpi-num">30</span>
+          <span class="kpi-label">Point Rubric Scale</span>
+          <span class="kpi-sub">Strictly standardized</span>
+        </div>
+        <div class="kpi-item">
+          <span class="kpi-num">2</span>
+          <span class="kpi-label">Specialized Tracks</span>
+          <span class="kpi-sub">Technical &amp; HR Behavioral</span>
+        </div>
+        <div class="kpi-item">
+          <span class="kpi-num">100%</span>
+          <span class="kpi-label">Google Meet Sync</span>
+          <span class="kpi-sub">Automated room links</span>
+        </div>
+        <div class="kpi-item">
+          <span class="kpi-num">20</span>
+          <span class="kpi-label">Minute Simulations</span>
+          <span class="kpi-sub">Real hiring pacing</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="landing-section landing-features-section" id="features">
+    <div class="landing-container">
+      <div class="section-header-center">
+        <span class="section-badge">Platform Capabilities</span>
+        <h2 class="section-title">End-to-End Mock Interview Infrastructure</h2>
+        <p class="section-subtitle">
+          From slot discovery and video conferencing to granular rubric scoring and cohort readiness analytics.
+        </p>
+      </div>
+
+      <div class="landing-features-grid">
+        <!-- Feature 1: Dual Track -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-tech">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Dual-Track System</div>
+          <h3 class="feature-title">Technical &amp; HR Rubrics</h3>
+          <p class="feature-desc">
+            Independent evaluation rubrics tailored specifically for Technical engineering (DSA, System Design, Code Quality) and HR competencies (Communication, Leadership, Cultural Fit).
+          </p>
+        </div>
+
+        <!-- Feature 2: Google Sync -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-google">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Calendar Integration</div>
+          <h3 class="feature-title">Live Google Calendar &amp; Meet Sync</h3>
+          <p class="feature-desc">
+            Automated Google OAuth synchronization. Confirmed slots instantly create Google Meet conference links and populate attendees' Google Calendars with zero manual configuration.
+          </p>
+        </div>
+
+        <!-- Feature 3: Smart Slots -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-calendar">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Conflict Prevention</div>
+          <h3 class="feature-title">Intelligent Slot Scheduling</h3>
+          <p class="feature-desc">
+            Multi-slot batch generation, automated duration calculations, IST timezone enforcement, and robust double-booking prevention ensuring reliable scheduling across large cohorts.
+          </p>
+        </div>
+
+        <!-- Feature 4: Scorecards -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-rubric">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Calibrated Metrics</div>
+          <h3 class="feature-title">Instant Rubric Scorecards</h3>
+          <p class="feature-desc">
+            Evaluators submit criterion marks (0-10) with immediate aggregate total calculation (30 pts max) and automated grading (Grade A+, A, B, C, F) visible in the candidate's scorecard.
+          </p>
+        </div>
+
+        <!-- Feature 5: Cohort Analytics -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-admin">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M18 20V10"/>
+              <path d="M12 20V4"/>
+              <path d="M6 20v-6"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Admin Controls</div>
+          <h3 class="feature-title">Cohort Placement Analytics</h3>
+          <p class="feature-desc">
+            Placement cell dashboards tracking batch completion rates, booking bottlenecks, attendance rollups, and one-click CSV report exports for campus recruitment drives.
+          </p>
+        </div>
+
+        <!-- Feature 6: Portfolio Hub -->
+        <div class="landing-feature-card">
+          <div class="feature-icon-box feat-profile">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="feature-badge">Candidate Hub</div>
+          <h3 class="feature-title">Resume &amp; Dossier Integration</h3>
+          <p class="feature-desc">
+            Centralized candidate profile profiles featuring verified resume links, branch and squad filtering, historical session archives, and candidate feedback mechanisms.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner -->
+  <section class="landing-cta-section">
+    <div class="landing-container">
+      <div class="landing-cta-box">
+        <div class="cta-badge">Ready to Start?</div>
+        <h2 class="cta-title">Elevate Your Interview Readiness Today</h2>
+        <p class="cta-subtitle">
+          Sign in with your enterprise credentials or Google account to access your personalized candidate or mentor dashboard.
+        </p>
+        <div class="cta-actions">
+          <a href="/login" class="btn primary btn-cta-large">Sign in to Konfident →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <div class="landing-container landing-footer-inner" style="justify-content:center;text-align:center;border-bottom:none;padding-bottom:20px;">
+      <div class="footer-brand-side" style="max-width:100%;align-items:center;">
+        <div class="footer-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="5" fill="#17171c"/>
+            <path d="M7 12L10.5 15.5L17 8.5" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="footer-brand-name">Konfident Interview 2025</span>
+        </div>
+        <p class="footer-tagline">
+          Enterprise Mock Interview &amp; Skill Evaluation Infrastructure.
+        </p>
+      </div>
+    </div>
+
+    <div class="landing-container footer-bottom" style="border-top:1px solid var(--card-border, #f2f2f2);">
+      <span>&copy; 2025–2026 Konfident Interview System. All rights reserved.</span>
+      <span class="footer-badge-mono">Enterprise v1.0 · Cohere Design Architecture</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Anime.js Core Library & Landing Animation Script -->
+<script src="/js/anime.min.js"></script>
+<script src="/js/landing.js"></script>
+
+<%- include('partials/foot-plain') %>

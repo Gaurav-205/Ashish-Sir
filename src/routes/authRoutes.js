@@ -16,7 +16,17 @@ const forgotLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5, mess
 
 const DUMMY_HASH = bcrypt.hashSync('timing-defence-dummy-secret', 10);
 
-router.get(['/', '/dashboard', '/home'], (req, res) => {
+router.get('/', (req, res) => {
+  if (req.session && req.session.user) {
+    return res.redirect(homeFor(req.session.user.role));
+  }
+  res.render('landing', {
+    title: 'Konfident · Enterprise Mock Interview Platform',
+    user: null,
+  });
+});
+
+router.get(['/dashboard', '/home'], (req, res) => {
   if (req.session && req.session.user) {
     return res.redirect(homeFor(req.session.user.role));
   }

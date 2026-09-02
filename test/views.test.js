@@ -39,6 +39,7 @@ const templatesToTest = [
   { file: 'student/mentors.ejs', data: { mentors: [], s: { student: { name: 'Test Student' } } } },
   { file: 'student/slots.ejs', data: { type: 'technical', byDate: [], already: null, s: { student: { name: 'Test Student' }, profileComplete: true, missingFields: [] }, mentors: [], selectedMentor: null, mentorFilter: null, limitCheck: { reached: false, count: 0, maxAllowed: 3, week: { label: 'This Week' } }, isComplete: true, missingFields: [] } },
   { file: 'student/results.ejs', data: { s: { student: { name: 'Test Student', roll_no: '101', branch: 'CSE' }, technical: null, hr: null, history: [], allEvaluated: false, currentWeek: { label: 'This Week' } } } },
+  { file: 'landing.ejs', data: {} },
   { file: 'login.ejs', data: { error: null, email: '', googleConfigured: true } },
   { file: 'forgot-password.ejs', data: { sent: false, error: null, email: '', resetUrl: null } },
   { file: 'reset-password.ejs', data: { token: 'abc', error: null, email: 's@test.com' } },
