@@ -73,7 +73,7 @@ router.get('/mentors', async (req, res) => {
 
 router.get('/slots', async (req, res) => {
   const type = req.query.type === 'hr' ? 'hr' : 'technical';
-  const mentorId = req.query.mentor ? req.query.mentor : null;
+  const mentorId = req.query.mentor && mongoose.Types.ObjectId.isValid(req.query.mentor) ? req.query.mentor : null;
   const now = h.nowMinute();
   const today = h.today();
 

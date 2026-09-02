@@ -337,10 +337,10 @@ router.get('/slots', async (req, res) => {
     ];
   }
 
-  if (filterDate) query.slot_date = filterDate;
-  if (mentorFilter) query.mentor_id = mentorFilter;
-  if (typeFilter) query.type = typeFilter;
-  if (statusFilter) query.status = statusFilter;
+  if (filterDate && typeof filterDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(filterDate)) query.slot_date = filterDate;
+  if (mentorFilter && mongoose.Types.ObjectId.isValid(mentorFilter)) query.mentor_id = mentorFilter;
+  if (typeFilter && ['technical', 'hr'].includes(typeFilter)) query.type = typeFilter;
+  if (statusFilter && ['open', 'booked', 'cancelled'].includes(statusFilter)) query.status = statusFilter;
 
   const [totalCount, rawSlots, allMentors, rawStudents] = await Promise.all([
     Slot.countDocuments(query),
@@ -689,10 +689,10 @@ router.post('/slots/delete-all', async (req, res) => {
 /* ------------------------------ interviews ----------------------------- */
 router.get('/interviews', async (req, res) => {
   const filters = {};
-  if (req.query.status) filters.status = req.query.status;
-  if (req.query.type) filters.type = req.query.type;
-  if (req.query.attendance) filters.attendance = req.query.attendance;
-  if (req.query.mentor) filters.mentor = req.query.mentor;
+  if (req.query.status && ['booked', 'completed', 'cancelled'].includes(req.query.status)) filters.status = req.query.status;
+  if (req.query.type && ['technical', 'hr'].includes(req.query.type)) filters.type = req.query.type;
+  if (req.query.attendance && ['pending', 'attended', 'absent'].includes(req.query.attendance)) filters.attendance = req.query.attendance;
+  if (req.query.mentor && mongoose.Types.ObjectId.isValid(req.query.mentor)) filters.mentor = req.query.mentor;
 
   const [list, mentors] = await Promise.all([
     q.allInterviews(filters),
